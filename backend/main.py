@@ -41,7 +41,7 @@ from fastapi.staticfiles import StaticFiles
 # Permite `from services import ...` sin importar desde dónde se lance uvicorn.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from services import (OpenSky, RouteService, Telegram, aclose, flight_status,
-                      geoip, haversine_km, radio_stations)
+                      geoip, haversine_km, radio_stations, webcams)
 
 load_dotenv()
 
@@ -287,6 +287,11 @@ async def api_radio(lat: float, lon: float, limit: int = 30) -> JSONResponse:
     return JSONResponse({"stations": await radio_stations(lat, lon, limit)})
 
 
+@app.get("/api/webcams")
+async def api_webcams(lat: float, lon: float, limit: int = 25) -> JSONResponse:
+    return JSONResponse({"webcams": await webcams(lat, lon, limit)})
+
+
 @app.get("/config")
 async def config() -> JSONResponse:
     return JSONResponse({
@@ -295,6 +300,7 @@ async def config() -> JSONResponse:
         "openskyAuth": opensky.has_credentials,
         "telegram": telegram.configured,
         "flightStatus": bool(os.getenv("AVIATIONSTACK_KEY", "")),
+        "webcams": bool(os.getenv("WINDY_WEBCAMS_KEY", "")),
         "pollInterval": POLL_INTERVAL,
         "thresholds": THRESHOLDS,
     })

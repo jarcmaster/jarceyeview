@@ -42,6 +42,17 @@
     .ritem.playing .rmeta { color:#ffe; }
     #np { margin-top:6px; font-size:12px; color:#ffb347; min-height:1em; }
     #np .stopbtn { cursor:pointer; color:#ffdada; margin-left:8px; }
+    #webcams { left:12px; top:172px; width:250px; max-height:34vh; display:flex; flex-direction:column; }
+    #webcams h2 { margin:0 0 4px; font-size:13px; letter-spacing:1px; color:#7fd3ff; }
+    #wc-list { overflow-y:auto; margin-top:6px; }
+    #wc-player { position:absolute; z-index:30; left:50%; transform:translateX(-50%); bottom:12px;
+      width:360px; max-width:92vw; display:none; background:rgba(6,16,26,.96);
+      border:1px solid #2a6a8f; border-radius:10px; overflow:hidden; box-shadow:0 6px 30px rgba(0,0,0,.6); }
+    #wc-player .wc-head { display:flex; justify-content:space-between; align-items:center;
+      gap:8px; padding:6px 10px; font-size:12px; color:#cfefff; }
+    #wc-player iframe, #wc-player img { width:100%; height:210px; border:0; display:block; background:#000; }
+    #wc-player a { color:#7fd3ff; text-decoration:none; }
+    #wc-player .wc-close { cursor:pointer; color:#ffdada; }
     #status { position:absolute; bottom:12px; left:12px; z-index:10; font-family:monospace;
       font-size:12px; color:#8ad; background:rgba(6,16,26,.78); padding:6px 10px; border-radius:6px; }
     #err { color:#ff9aa2; }
@@ -92,6 +103,13 @@
     <div id="radio-list"></div>
   </div>
   <audio id="player"></audio>
+
+  <div id="webcams" class="panel">
+    <h2>📷 WEBCAMS</h2>
+    <button id="btn-scanwc">🔍 Escanear webcams aquí</button>
+    <div id="wc-list"></div>
+  </div>
+  <div id="wc-player"></div>
 
   <div id="status">conectando…</div>
   <div id="overlay"></div>
@@ -273,6 +291,11 @@
         if (r) playStation(r.station, ent.id);
         return;
       }
+      if (ent && typeof ent.id === "string" && ent.id.startsWith("webcam:")) {
+        const w = webcamEntities.get(ent.id);
+        if (w) showWebcam(w.cam);
+        return;
+      }
       const e = ent && entities.get(ent.id);
       if (!e) { $("sel").style.display="none"; selected=null; selectedRoute=null; return; }
       selected = e._data; selectedRoute = null;
@@ -420,6 +443,65 @@
       document.querySelectorAll(".ritem.playing").forEach(el => el.classList.remove("playing"));
     }
     $("btn-scan").addEventListener("click", scanRadios);
+
+    // ---- Scanner de webcams en vivo (Windy) ---------------------------
+    const CAM_IMG = "data:image/svg+xml," + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24">' +
+      '<path fill="#7fd3ff" stroke="#0b1622" stroke-width="0.6" d="M9 4l-1.2 2H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.8L15 4z"/>' +
+      '<circle cx="12" cy="12.5" r="3.4" fill="#0b1622"/><circle cx="12" cy="12.5" r="2.1" fill="#7fd3ff"/></svg>');
+    const webcamEntities = new Map();   // "webcam:i" -> { entity, cam }
+    if (!cfg.webcams) $("webcams").style.display = "none";
+
+    function clearWebcams() {
+      for (const [, w] of webcamEntities) viewer.entities.remove(w.entity);
+      webcamEntities.clear();
+    }
+    async function scanWebcams() {
+      const { lat, lon } = viewCenter();
+      $("btn-scanwc").textContent = "⏳ Escaneando…";
+      let cams = [];
+      try {
+        const j = await (await fetch(`/api/webcams?lat=${lat}&lon=${lon}&limit=25`)).json();
+        cams = j.webcams || [];
+      } catch {}
+      $("btn-scanwc").textContent = "🔍 Escanear webcams aquí";
+      clearWebcams();
+      const listEl = $("wc-list");
+      if (!cams.length) { listEl.innerHTML = '<div class="rmeta">Sin webcams en esta zona.</div>'; return; }
+      listEl.innerHTML = "";
+      cams.forEach((cam, i) => {
+        const id = `webcam:${i}`;
+        const entity = viewer.entities.add({
+          id, position: Cesium.Cartesian3.fromDegrees(cam.lon, cam.lat, 0),
+          billboard: { image:CAM_IMG, width:26, height:26,
+            disableDepthTestDistance:Number.POSITIVE_INFINITY },
+          label: { text:cam.title, font:"11px sans-serif", pixelOffset:new Cesium.Cartesian2(0,-20),
+            fillColor:Cesium.Color.fromCssColorString("#7fd3ff"), showBackground:true,
+            backgroundColor:Cesium.Color.fromCssColorString("rgba(0,0,0,.55)"),
+            disableDepthTestDistance:Number.POSITIVE_INFINITY,
+            distanceDisplayCondition:new Cesium.DistanceDisplayCondition(0,200000) },
+        });
+        webcamEntities.set(id, { entity, cam });
+        const row = document.createElement("div");
+        row.className = "ritem";
+        row.innerHTML = `<span>${cam.title}</span><span class="rmeta">${cam.city||""}</span>`;
+        row.onclick = () => showWebcam(cam);
+        listEl.appendChild(row);
+      });
+    }
+    function showWebcam(cam) {
+      const p = $("wc-player");
+      p.style.display = "block";
+      const media = cam.embed ? `<iframe src="${cam.embed}" allowfullscreen loading="lazy"></iframe>`
+                  : (cam.preview ? `<img src="${cam.preview}" alt="">` : "");
+      p.innerHTML =
+        `<div class="wc-head"><span>${cam.title}</span><span class="wc-close">✖</span></div>` +
+        media +
+        `<div class="wc-head"><a href="${cam.detail}" target="_blank" rel="noopener">Ver en Windy ↗</a>` +
+        `<span>${cam.city||""} ${cam.country||""}</span></div>`;
+      p.querySelector(".wc-close").onclick = () => { p.style.display = "none"; p.innerHTML = ""; };
+    }
+    $("btn-scanwc").addEventListener("click", scanWebcams);
 
     // ---- Panel de rastreo ---------------------------------------------
     const world = { track:null };

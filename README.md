@@ -33,6 +33,8 @@ Telegram (avisos)┘
   (Radio Browser), las muestra como marcadores y en una lista; clic → **reproduce** el stream.
 - **Estado de vuelo** (AviationStack): terminal, gate, hora programada/real de aterrizaje
   y delays, en el panel de selección (botón «Horario / Gate») y en los avisos de Telegram.
+- **Webcams en vivo** 📷 (Windy): escanea webcams cercanas a la zona del mapa, marcadores
+  en el globo y lista; clic → reproductor en vivo incrustado + enlace a Windy.
 
 ## 1. Requisitos
 
