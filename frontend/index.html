@@ -110,10 +110,37 @@
         viewer.scene.primitives.add(await Cesium.createGooglePhotorealistic3DTileset());
       } catch (e) { fail(`No pude cargar Google 3D Tiles: <code>${e.message}</code>`); }
     }
-    viewer.camera.flyTo({
+    // Vista por defecto inmediata (por si tarda/falla la ubicación)
+    viewer.camera.setView({
       destination: Cesium.Cartesian3.fromDegrees(-99.13, 18.5, 300000),
-      orientation: { heading:0, pitch:Cesium.Math.toRadians(-55), roll:0 }, duration:0,
+      orientation: { heading:0, pitch:Cesium.Math.toRadians(-55), roll:0 },
     });
+
+    // Volar a MI ubicación: 1) geolocalización del navegador  2) fallback por IP
+    async function flyToMyLocation() {
+      let loc = await new Promise((resolve) => {
+        if (!navigator.geolocation) return resolve(null);
+        navigator.geolocation.getCurrentPosition(
+          p => resolve({ lat:p.coords.latitude, lon:p.coords.longitude, src:"navegador" }),
+          () => resolve(null),
+          { enableHighAccuracy:false, timeout:7000, maximumAge:600000 }
+        );
+      });
+      if (!loc) {  // fallback: ubicación por IP (desde el backend)
+        try {
+          const j = await (await fetch("/api/geoip")).json();
+          if (j && j.lat != null) loc = { lat:j.lat, lon:j.lon, src:"IP", city:j.city };
+        } catch {}
+      }
+      if (loc) {
+        viewer.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, 120000),
+          orientation: { heading:0, pitch:Cesium.Math.toRadians(-55), roll:0 },
+          duration: 2.5,   // al terminar dispara moveEnd -> carga aviones de la zona
+        });
+      }
+    }
+    flyToMyLocation();
 
     const COLOR = { ok:Cesium.Color.fromCssColorString("#5fe08a"),
                     warn:Cesium.Color.fromCssColorString("#ffcc55"),

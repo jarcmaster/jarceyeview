@@ -24,6 +24,19 @@ async def aclose() -> None:
     await _http.aclose()
 
 
+async def geoip() -> dict | None:
+    """Ubicación aproximada por IP pública (el backend corre en la máquina del usuario)."""
+    try:
+        r = await _http.get("http://ip-api.com/json/")
+        d = r.json()
+        if d.get("status") == "success":
+            return {"lat": d["lat"], "lon": d["lon"],
+                    "city": d.get("city", ""), "country": d.get("country", "")}
+    except Exception:
+        pass
+    return None
+
+
 # --------------------------------------------------------------------------
 # Geo
 # --------------------------------------------------------------------------
