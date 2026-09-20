@@ -1,4 +1,4 @@
-# God's Eye View — Rastreador de vuelos en vivo
+# JARC's EYE View — Rastreador de vuelos en vivo
 
 Panel de monitoreo en tiempo real sobre un globo 3D fotorrealista
 (**CesiumJS + Google Photorealistic 3D Tiles**), con backend en **Python (FastAPI)**
@@ -51,7 +51,7 @@ Hay **dos formas** de ver el globo:
 ### Opción A — Google Earth Pro (escritorio) ⭐ recomendada si lo tienes instalado
 
 1. Abre el **panel de control**: <http://localhost:8000/panel>
-2. Pulsa **«Abrir GodsEyeView.kml en Google Earth»** (descarga <code>GodsEyeView.kml</code>).
+2. Pulsa **«Abrir JarcsEyeView.kml en Google Earth»** (descarga <code>JarcsEyeView.kml</code>).
 3. Ábrelo con Google Earth Pro (doble clic). Aparece en *Lugares temporales*.
 4. Muévete/haz zoom: Google Earth le pide al servidor los aviones del **área que ves**
    y se refresca solo cada pocos segundos (por `NetworkLink`).
@@ -106,4 +106,13 @@ llegan los mensajes.
   paneles de selección y rastreo.
 
 Mensajes WebSocket documentados al inicio de `backend/main.py`.
-```
+
+## 8. Licencia
+
+Distribuido bajo licencia **MIT**. Ver [`LICENSE`](LICENSE).
+
+## Fuentes de datos
+
+- Posiciones ADS-B: [OpenSky Network](https://opensky-network.org)
+- Rutas de vuelo: [adsbdb](https://www.adsbdb.com)
+- Globo 3D: [CesiumJS](https://cesium.com) · Google Photorealistic 3D Tiles · Google Earth Pro

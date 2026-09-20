@@ -1,5 +1,5 @@
 """
-Servicios externos y utilidades para God's Eye View.
+Servicios externos y utilidades para JARC's EYE View.
 
 - OpenSky:  posiciones ADS-B en vivo (por bbox o por icao24).
 - Routes:   origen/destino de un vuelo a partir del callsign (hexdb.io).
@@ -17,7 +17,7 @@ from dataclasses import dataclass, asdict
 import httpx
 
 # Cliente HTTP compartido (async).
-_http = httpx.AsyncClient(timeout=15, headers={"User-Agent": "GodsEyeView/1.0"})
+_http = httpx.AsyncClient(timeout=15, headers={"User-Agent": "JarcsEyeView/1.0"})
 
 
 async def aclose() -> None:

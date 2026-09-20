@@ -1,5 +1,5 @@
 """
-God's Eye View - Backend
+JARC's EYE View - Backend
 ========================
 FastAPI + WebSocket. Aviones en vivo (OpenSky) sobre el globo, más:
   #1 estelas/interpolación (lo hace el frontend con los datos que enviamos)
@@ -245,7 +245,7 @@ async def lifespan(app: FastAPI):
     await aclose()
 
 
-app = FastAPI(title="God's Eye View", lifespan=lifespan)
+app = FastAPI(title="JARC's EYE View", lifespan=lifespan)
 
 
 @app.get("/config")
@@ -361,7 +361,7 @@ async def earth_kml(request: Request) -> Response:
     base = str(request.base_url).rstrip("/")
     kml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2"><Document>
-  <name>God's Eye View — Vuelos</name>
+  <name>JARC's EYE View — Vuelos</name>
   <NetworkLink>
     <name>Vuelos en vivo</name>
     <open>1</open>
@@ -376,7 +376,7 @@ async def earth_kml(request: Request) -> Response:
   </NetworkLink>
 </Document></kml>"""
     return Response(kml, media_type=KML_MIME, headers={
-        **NO_CACHE, "Content-Disposition": 'attachment; filename="GodsEyeView.kml"'})
+        **NO_CACHE, "Content-Disposition": 'attachment; filename="JarcsEyeView.kml"'})
 
 
 @app.get("/flights.kml")
@@ -489,7 +489,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
 
 PANEL_HTML = """<!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>God's Eye View — Control (Google Earth)</title>
+<title>JARC's EYE View — Control (Google Earth)</title>
 <style>
   body{font-family:"Segoe UI",system-ui,sans-serif;background:#0a141e;color:#dff;margin:0;padding:24px;}
   .wrap{max-width:640px;margin:0 auto;}
@@ -505,15 +505,15 @@ PANEL_HTML = """<!doctype html><html lang="es"><head><meta charset="utf-8">
     border-radius:6px;background:#08121c;color:#6b8;}
   .th.done{background:#1f6b3a;color:#bff;} .muted{color:#7a97ad;font-size:13px;} .dot{font-size:12px;}
 </style></head><body><div class="wrap">
-<h1>🛰️ GOD'S EYE VIEW — CONTROL</h1>
+<h1>🛰️ JARC'S EYE VIEW — CONTROL</h1>
 
 <div class="card">
   <b>1) Abre el globo en Google Earth</b>
   <p class="muted">Descarga y abre este archivo (una sola vez). Google Earth Pro empezará
   a mostrar los aviones del área que veas y se actualizará solo.</p>
-  <a class="btn" href="/earth.kml">⬇ Abrir GodsEyeView.kml en Google Earth</a>
+  <a class="btn" href="/earth.kml">⬇ Abrir JarcsEyeView.kml en Google Earth</a>
   <ol class="muted">
-    <li>Se descarga <code>GodsEyeView.kml</code> → ábrelo (doble clic) con Google Earth Pro.</li>
+    <li>Se descarga <code>JarcsEyeView.kml</code> → ábrelo (doble clic) con Google Earth Pro.</li>
     <li>Aparece en <b>«Lugares temporales»</b>. Muévete/haz zoom: los aviones aparecen en la vista.</li>
     <li>Deja este servidor corriendo mientras lo usas.</li>
   </ol>
