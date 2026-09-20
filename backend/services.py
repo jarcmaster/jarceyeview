@@ -38,6 +38,72 @@ async def geoip() -> dict | None:
 
 
 # --------------------------------------------------------------------------
+# Radio: emisoras de internet cercanas (Radio Browser + Nominatim)
+# --------------------------------------------------------------------------
+RADIO_SERVERS = [
+    "https://de2.api.radio-browser.info",
+    "https://nl1.api.radio-browser.info",
+    "https://at1.api.radio-browser.info",
+]
+_country_cache: dict[tuple, str | None] = {}
+
+
+async def reverse_country(lat: float, lon: float) -> str | None:
+    key = (round(lat, 1), round(lon, 1))
+    if key in _country_cache:
+        return _country_cache[key]
+    cc = None
+    try:
+        r = await _http.get(
+            "https://nominatim.openstreetmap.org/reverse",
+            params={"format": "json", "lat": lat, "lon": lon, "zoom": 3},
+            headers={"User-Agent": "JarcsEyeView/1.0 (jarcmaster@gmail.com)"},
+        )
+        cc = ((r.json().get("address") or {}).get("country_code") or "").upper() or None
+    except Exception:
+        cc = None
+    _country_cache[key] = cc
+    return cc
+
+
+async def radio_stations(lat: float, lon: float, limit: int = 30) -> list[dict]:
+    """Emisoras cercanas: país por reverse-geocode, orden por distancia real."""
+    cc = await reverse_country(lat, lon)
+    params = {"hidebroken": "true", "order": "votes", "reverse": "true", "limit": "400"}
+    if cc:
+        params["countrycode"] = cc
+        params["has_geo_info"] = "true"
+    raw: list = []
+    for base in RADIO_SERVERS:
+        try:
+            r = await _http.get(f"{base}/json/stations/search", params=params)
+            if r.status_code == 200:
+                raw = r.json()
+                break
+        except Exception:
+            continue
+    out = []
+    for s in raw:
+        url = s.get("url_resolved") or s.get("url")
+        if not url:
+            continue
+        try:
+            glat, glon = float(s["geo_lat"]), float(s["geo_long"])
+        except (TypeError, ValueError, KeyError):
+            glat = glon = None
+        out.append({
+            "name": (s.get("name") or "").strip() or "(sin nombre)",
+            "url": url, "lat": glat, "lon": glon,
+            "favicon": s.get("favicon", ""), "country": s.get("country", ""),
+            "codec": s.get("codec", ""), "bitrate": s.get("bitrate", 0),
+            "votes": s.get("votes", 0), "tags": s.get("tags", ""),
+        })
+    geo = [s for s in out if s["lat"] is not None]
+    geo.sort(key=lambda s: haversine_km(lat, lon, s["lat"], s["lon"]))
+    return (geo or out)[:limit]
+
+
+# --------------------------------------------------------------------------
 # Geo
 # --------------------------------------------------------------------------
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

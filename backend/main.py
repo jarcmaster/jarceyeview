@@ -40,7 +40,8 @@ from fastapi.staticfiles import StaticFiles
 
 # Permite `from services import ...` sin importar desde dónde se lance uvicorn.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from services import OpenSky, RouteService, Telegram, aclose, geoip, haversine_km
+from services import (OpenSky, RouteService, Telegram, aclose, geoip,
+                      haversine_km, radio_stations)
 
 load_dotenv()
 
@@ -251,6 +252,11 @@ app = FastAPI(title="JARC's EYE View", lifespan=lifespan)
 @app.get("/api/geoip")
 async def api_geoip() -> JSONResponse:
     return JSONResponse(await geoip() or {})
+
+
+@app.get("/api/radio")
+async def api_radio(lat: float, lon: float, limit: int = 30) -> JSONResponse:
+    return JSONResponse({"stations": await radio_stations(lat, lon, limit)})
 
 
 @app.get("/config")

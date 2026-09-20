@@ -31,6 +31,17 @@
     .th { display:inline-block; width:30%; text-align:center; font-size:11px; padding:3px 0; margin:2px 0;
       border-radius:5px; background:#0b1622; color:#6b8; }
     .th.done { background:#1f6b3a; color:#bff; }
+    #radio { left:12px; bottom:44px; width:250px; max-height:44vh; display:flex; flex-direction:column; }
+    #radio h2 { margin:0 0 4px; font-size:13px; letter-spacing:1px; color:#ffb347; }
+    #radio-list { overflow-y:auto; margin-top:6px; }
+    .ritem { display:flex; justify-content:space-between; gap:8px; padding:5px 6px; border-radius:6px;
+      cursor:pointer; font-size:12px; align-items:center; }
+    .ritem:hover { background:#12283a; }
+    .ritem.playing { background:#8a5a12; color:#fff; }
+    .ritem .rmeta { color:#7a97ad; font-size:10px; white-space:nowrap; }
+    .ritem.playing .rmeta { color:#ffe; }
+    #np { margin-top:6px; font-size:12px; color:#ffb347; min-height:1em; }
+    #np .stopbtn { cursor:pointer; color:#ffdada; margin-left:8px; }
     #status { position:absolute; bottom:12px; left:12px; z-index:10; font-family:monospace;
       font-size:12px; color:#8ad; background:rgba(6,16,26,.78); padding:6px 10px; border-radius:6px; }
     #err { color:#ff9aa2; }
@@ -71,6 +82,14 @@
     <div id="trk-thr" style="margin-top:6px;"></div>
     <button id="btn-untrack" class="stop">✖ Detener rastreo</button>
   </div>
+
+  <div id="radio" class="panel">
+    <h2>📻 RADIO</h2>
+    <button id="btn-scan">🔍 Escanear emisoras aquí</button>
+    <div id="np"></div>
+    <div id="radio-list"></div>
+  </div>
+  <audio id="player"></audio>
 
   <div id="status">conectando…</div>
   <div id="overlay"></div>
@@ -247,6 +266,11 @@
     let selected = null;        // datos del avión seleccionado (se refresca en vivo)
     let selectedRoute = null;   // ruta cacheada del seleccionado
     viewer.selectedEntityChanged.addEventListener((ent) => {
+      if (ent && typeof ent.id === "string" && ent.id.startsWith("radio:")) {
+        const r = radioEntities.get(ent.id);
+        if (r) playStation(r.station, ent.id);
+        return;
+      }
       const e = ent && entities.get(ent.id);
       if (!e) { $("sel").style.display="none"; selected=null; selectedRoute=null; return; }
       selected = e._data; selectedRoute = null;
@@ -290,6 +314,86 @@
       if (!cfg.telegram) alert("Telegram no está configurado en el backend (.env). Se rastreará igual, pero sin notificaciones.");
       ws.send(JSON.stringify({ type:"track", id:selected.id, callsign:selected.name }));
     });
+
+    // ---- Scanner de radios (emisoras cercanas) ------------------------
+    const RADIO_IMG = "data:image/svg+xml," + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24">' +
+      '<path fill="#ffb347" stroke="#0b1622" stroke-width="0.6" d="M12 7a2 2 0 0 0-1 3.73V21h2V10.73A2 2 0 0 0 12 7z"/>' +
+      '<path fill="none" stroke="#ffb347" stroke-width="1.5" stroke-linecap="round" ' +
+      'd="M8.5 5.5a6 6 0 0 0 0 8M15.5 5.5a6 6 0 0 1 0 8M10.4 7.6a3 3 0 0 0 0 3.8M13.6 7.6a3 3 0 0 1 0 3.8"/></svg>');
+    const radioEntities = new Map();   // "radio:i" -> { entity, station }
+    const player = $("player");
+    let playingId = null;
+
+    function viewCenter() {
+      const r = viewer.camera.computeViewRectangle();
+      if (r) return { lat: Cesium.Math.toDegrees((r.south + r.north) / 2),
+                      lon: Cesium.Math.toDegrees((r.west + r.east) / 2) };
+      const c = viewer.camera.positionCartographic;
+      return { lat: Cesium.Math.toDegrees(c.latitude), lon: Cesium.Math.toDegrees(c.longitude) };
+    }
+
+    function clearRadios() {
+      for (const [, r] of radioEntities) viewer.entities.remove(r.entity);
+      radioEntities.clear();
+    }
+
+    async function scanRadios() {
+      const { lat, lon } = viewCenter();
+      $("btn-scan").textContent = "⏳ Escaneando…";
+      let stations = [];
+      try {
+        const j = await (await fetch(`/api/radio?lat=${lat}&lon=${lon}&limit=25`)).json();
+        stations = j.stations || [];
+      } catch { /* red */ }
+      $("btn-scan").textContent = "🔍 Escanear emisoras aquí";
+      clearRadios();
+      const listEl = $("radio-list");
+      if (!stations.length) { listEl.innerHTML = '<div class="rmeta">Sin emisoras en esta zona.</div>'; return; }
+      listEl.innerHTML = "";
+      stations.forEach((st, i) => {
+        const id = `radio:${i}`;
+        if (st.lat != null) {
+          const entity = viewer.entities.add({
+            id, position: Cesium.Cartesian3.fromDegrees(st.lon, st.lat, 0),
+            billboard: { image:RADIO_IMG, width:26, height:26,
+              disableDepthTestDistance:Number.POSITIVE_INFINITY },
+            label: { text:st.name, font:"11px sans-serif", pixelOffset:new Cesium.Cartesian2(0,-20),
+              fillColor:Cesium.Color.fromCssColorString("#ffb347"), showBackground:true,
+              backgroundColor:Cesium.Color.fromCssColorString("rgba(0,0,0,.55)"),
+              disableDepthTestDistance:Number.POSITIVE_INFINITY,
+              distanceDisplayCondition:new Cesium.DistanceDisplayCondition(0,300000) },
+          });
+          radioEntities.set(id, { entity, station: st });
+        }
+        const row = document.createElement("div");
+        row.className = "ritem"; row.dataset.id = id;
+        row.innerHTML = `<span>${st.name}</span>` +
+          `<span class="rmeta">${st.codec||""} ${st.bitrate||0}k</span>`;
+        row.onclick = () => playStation(st, id);
+        listEl.appendChild(row);
+      });
+    }
+
+    function playStation(st, id) {
+      if (!st.url) return;
+      player.src = st.url;
+      player.play().then(() => {
+        playingId = id;
+        $("np").innerHTML = `▶ <b>${st.name}</b> <span class="stopbtn">⏹ detener</span>`;
+        $("np").querySelector(".stopbtn").onclick = stopStation;
+        document.querySelectorAll(".ritem").forEach(el =>
+          el.classList.toggle("playing", el.dataset.id === id));
+      }).catch(() => {
+        $("np").innerHTML = `⚠ No se pudo reproducir <b>${st.name}</b> (stream no compatible).`;
+      });
+    }
+    function stopStation() {
+      player.pause(); player.removeAttribute("src"); player.load(); playingId = null;
+      $("np").textContent = "";
+      document.querySelectorAll(".ritem.playing").forEach(el => el.classList.remove("playing"));
+    }
+    $("btn-scan").addEventListener("click", scanRadios);
 
     // ---- Panel de rastreo ---------------------------------------------
     const world = { track:null };

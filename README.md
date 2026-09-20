@@ -28,6 +28,9 @@ Telegram (avisos)┘
 - **Rastreo de un vuelo**: selecciona un avión → "Rastrear + Telegram".
   Recibes avisos a **30, 20, 15, 10 y 5 min** del aterrizaje y **al aterrizar**.
   Se dibuja el aeropuerto destino y una línea hacia él, con ETA en vivo.
+- **Vuela a tu ubicación** al abrir (geolocalización del navegador, con respaldo por IP).
+- **Scanner de radios** 📻: escanea emisoras de internet cercanas a la zona del mapa
+  (Radio Browser), las muestra como marcadores y en una lista; clic → **reproduce** el stream.
 
 ## 1. Requisitos
 
