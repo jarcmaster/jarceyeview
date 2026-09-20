@@ -9,53 +9,76 @@
   <style>
     html, body, #cesiumContainer { width:100%; height:100%; margin:0; overflow:hidden; background:#000;
       font-family:"Segoe UI", system-ui, sans-serif; }
-    .panel { position:absolute; z-index:10; color:#dff; background:rgba(6,16,26,.78);
-      border:1px solid rgba(80,180,255,.35); border-radius:10px; padding:12px 14px;
-      backdrop-filter:blur(6px); box-shadow:0 4px 24px rgba(0,0,0,.5); }
-    #hud { top:12px; left:12px; min-width:230px; }
-    #hud h1 { margin:0 0 8px; font-size:15px; letter-spacing:2px; color:#7fd3ff; }
+    .panel { color:#dff; background:rgba(6,16,26,.82);
+      border:1px solid rgba(80,180,255,.28); border-radius:12px; padding:12px 14px;
+      backdrop-filter:blur(8px); box-shadow:0 6px 26px rgba(0,0,0,.5); }
+    svg.ic { width:16px; height:16px; vertical-align:-3px; fill:none; stroke:currentColor;
+      stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:0 0 auto; }
+
+    /* Columnas: nada se encima */
+    #left-col { position:absolute; top:12px; left:12px; bottom:44px; width:254px; z-index:10;
+      display:flex; flex-direction:column; gap:10px; overflow-y:auto; padding-right:4px; }
+    #right-col { position:absolute; top:52px; right:12px; width:238px; z-index:10;
+      display:flex; flex-direction:column; gap:10px; max-height:calc(100vh - 64px); overflow-y:auto; }
+
+    .panel h1, .panel h2 { display:flex; align-items:center; gap:7px; margin:0 0 8px;
+      font-size:14px; letter-spacing:1px; color:#7fd3ff; font-weight:600; }
+    #hud h1 { font-size:15px; letter-spacing:2px; }
+    #radio h2 { color:#ffb347; }
     .row { display:flex; justify-content:space-between; font-size:13px; margin:3px 0; }
     .air{color:#5fe08a;} .ground{color:#ffcc55;} .emerg{color:#ff5c6c;}
-    #filters { top:52px; right:12px; width:210px; font-size:13px; }
-    #filters h2, #sel h2, #trk h2 { margin:0 0 8px; font-size:13px; letter-spacing:1px; color:#7fd3ff; }
-    #filters label { display:block; margin:6px 0 2px; color:#9cc; font-size:12px; }
-    #filters input { width:100%; box-sizing:border-box; background:#0b1622; color:#dff;
-      border:1px solid #2a4a63; border-radius:6px; padding:4px 6px; font-size:12px; }
-    #filters .chk { display:flex; align-items:center; gap:6px; margin-top:8px; color:#dff; }
-    #sel { right:12px; top:380px; width:230px; display:none; }
-    #trk { right:12px; bottom:12px; width:230px; display:none; }
-    button { cursor:pointer; background:#134; color:#cfefff; border:1px solid #2a6a8f;
-      border-radius:6px; padding:6px 10px; font-size:12px; margin-top:8px; width:100%; }
+
+    /* Filtros */
+    #filters label { display:block; margin:8px 0 2px; color:#9cc; font-size:12px; }
+    #filters input[type=text], #filters input[type=number] { width:100%; box-sizing:border-box;
+      background:#0b1622; color:#dff; border:1px solid #2a4a63; border-radius:7px; padding:6px 8px; font-size:12px; }
+    #filters input:focus { outline:none; border-color:#3aa0ff; }
+    .chk { display:flex; align-items:center; gap:8px; margin:9px 0 0; color:#dff; font-size:12px; cursor:pointer; }
+    .chk input { width:15px; height:15px; flex:0 0 auto; accent-color:#3aa0ff; margin:0; cursor:pointer; }
+
+    /* Botones */
+    button { cursor:pointer; background:#123449; color:#cfefff; border:1px solid #2a6a8f;
+      border-radius:8px; padding:8px 10px; font-size:12px; margin-top:8px; width:100%;
+      display:inline-flex; align-items:center; justify-content:center; gap:7px; transition:background .15s; }
+    button:hover { background:#18465f; }
     button.stop { background:#5a1420; border-color:#8a2a3a; color:#ffdada; }
-    .kv { display:flex; justify-content:space-between; font-size:12px; margin:2px 0; color:#cde; }
-    .th { display:inline-block; width:30%; text-align:center; font-size:11px; padding:3px 0; margin:2px 0;
-      border-radius:5px; background:#0b1622; color:#6b8; }
+    button.stop:hover { background:#6f1a28; }
+
+    .kv { display:flex; justify-content:space-between; gap:10px; font-size:12px; margin:3px 0; color:#cde; }
+    .kv span:last-child { text-align:right; }
+    .dot { font-size:10px; vertical-align:1px; }
+
+    /* Umbrales rastreo */
+    .th { display:inline-flex; align-items:center; justify-content:center; width:30%; gap:4px; font-size:11px;
+      padding:4px 0; margin:2px 0; border-radius:6px; background:#0b1622; color:#6b8; }
     .th.done { background:#1f6b3a; color:#bff; }
-    #radio { left:12px; bottom:44px; width:250px; max-height:44vh; display:flex; flex-direction:column; }
-    #radio h2 { margin:0 0 4px; font-size:13px; letter-spacing:1px; color:#ffb347; }
-    #radio-list { overflow-y:auto; margin-top:6px; }
-    .ritem { display:flex; justify-content:space-between; gap:8px; padding:5px 6px; border-radius:6px;
+
+    /* Listas radio / webcams */
+    #radio, #webcams { display:flex; flex-direction:column; min-height:0; }
+    #radio-list, #wc-list { overflow-y:auto; margin-top:6px; max-height:26vh; }
+    .ritem { display:flex; justify-content:space-between; gap:8px; padding:6px 8px; border-radius:7px;
       cursor:pointer; font-size:12px; align-items:center; }
     .ritem:hover { background:#12283a; }
     .ritem.playing { background:#8a5a12; color:#fff; }
     .ritem .rmeta { color:#7a97ad; font-size:10px; white-space:nowrap; }
     .ritem.playing .rmeta { color:#ffe; }
-    #np { margin-top:6px; font-size:12px; color:#ffb347; min-height:1em; }
-    #np .stopbtn { cursor:pointer; color:#ffdada; margin-left:8px; }
-    #webcams { left:12px; top:172px; width:250px; max-height:34vh; display:flex; flex-direction:column; }
-    #webcams h2 { margin:0 0 4px; font-size:13px; letter-spacing:1px; color:#7fd3ff; }
-    #webcams .chk { display:flex; align-items:center; gap:6px; margin:2px 0 4px; color:#dff; font-size:12px; }
-    #wc-list { overflow-y:auto; margin-top:6px; }
+    #np { margin-top:6px; font-size:12px; color:#ffb347; min-height:1em; display:flex; align-items:center; gap:6px; }
+    #np .stopbtn { cursor:pointer; color:#ffdada; margin-left:auto; display:inline-flex; align-items:center; gap:4px; }
+
+    /* Reproductor webcam */
     #wc-player { position:absolute; z-index:30; left:50%; transform:translateX(-50%); bottom:12px;
       width:360px; max-width:92vw; display:none; background:rgba(6,16,26,.96);
-      border:1px solid #2a6a8f; border-radius:10px; overflow:hidden; box-shadow:0 6px 30px rgba(0,0,0,.6); }
+      border:1px solid #2a6a8f; border-radius:12px; overflow:hidden; box-shadow:0 8px 34px rgba(0,0,0,.6); }
     #wc-player .wc-head { display:flex; justify-content:space-between; align-items:center;
-      gap:8px; padding:6px 10px; font-size:12px; color:#cfefff; }
+      gap:8px; padding:8px 12px; font-size:12px; color:#cfefff; }
     #wc-player iframe, #wc-player img { width:100%; height:210px; border:0; display:block; background:#000; }
-    #wc-player a { color:#7fd3ff; text-decoration:none; }
-    #wc-player .wc-close { cursor:pointer; color:#ffdada; }
-    #status { position:absolute; bottom:12px; left:12px; z-index:10; font-family:monospace;
-      font-size:12px; color:#8ad; background:rgba(6,16,26,.78); padding:6px 10px; border-radius:6px; }
+    #wc-player a { color:#7fd3ff; text-decoration:none; display:inline-flex; align-items:center; gap:5px; }
+    #wc-player .wc-close { cursor:pointer; color:#ffdada; display:inline-flex; }
+
+    #sel, #trk { display:none; }
+    #status { position:absolute; bottom:12px; left:12px; z-index:11; font-family:monospace;
+      font-size:12px; color:#8ad; background:rgba(6,16,26,.82); padding:6px 10px; border-radius:8px;
+      display:flex; align-items:center; gap:6px; }
     #err { color:#ff9aa2; }
     #overlay { position:absolute; inset:0; z-index:20; display:none; align-items:center; justify-content:center;
       background:rgba(0,0,0,.85); color:#fdd; text-align:center; padding:24px; }
@@ -65,52 +88,57 @@
 <body>
   <div id="cesiumContainer"></div>
 
-  <div id="hud" class="panel">
-    <h1>JARC'S EYE — VUELOS</h1>
-    <div class="row"><span>A la vista</span><span id="count">0</span></div>
-    <div class="row"><span class="air">En vuelo</span><span id="n-air">0</span></div>
-    <div class="row"><span class="ground">En tierra</span><span id="n-ground">0</span></div>
-    <div class="row"><span class="emerg">Emergencia</span><span id="n-emerg">0</span></div>
-  </div>
+  <div id="left-col">
+    <div id="hud" class="panel">
+      <h1><span data-ic="plane"></span> JARC'S EYE — VUELOS</h1>
+      <div class="row"><span>A la vista</span><span id="count">0</span></div>
+      <div class="row"><span class="air">En vuelo</span><span id="n-air">0</span></div>
+      <div class="row"><span class="ground">En tierra</span><span id="n-ground">0</span></div>
+      <div class="row"><span class="emerg">Emergencia</span><span id="n-emerg">0</span></div>
+    </div>
 
-  <div id="filters" class="panel">
-    <h2>FILTROS</h2>
-    <label>País contiene</label><input id="f-country" placeholder="p.ej. Mexico" />
-    <label>Aerolínea / callsign empieza con</label><input id="f-airline" placeholder="p.ej. AAL, IBE" />
-    <label>Altitud mínima (m)</label><input id="f-alt" type="number" placeholder="0" />
-    <label class="chk"><input type="checkbox" id="f-emerg" /> Solo emergencias</label>
-    <label class="chk"><input type="checkbox" id="f-trails" checked /> Mostrar estelas</label>
-  </div>
+    <div id="filters" class="panel">
+      <h2><span data-ic="filter"></span> FILTROS</h2>
+      <label>País contiene</label><input type="text" id="f-country" placeholder="p.ej. Mexico" />
+      <label>Aerolínea / callsign empieza con</label><input type="text" id="f-airline" placeholder="p.ej. AAL, IBE" />
+      <label>Altitud mínima (m)</label><input id="f-alt" type="number" placeholder="0" />
+      <label class="chk"><input type="checkbox" id="f-emerg" /> Solo emergencias</label>
+      <label class="chk"><input type="checkbox" id="f-trails" checked /> Mostrar estelas</label>
+    </div>
 
-  <div id="sel" class="panel">
-    <h2>SELECCIÓN</h2>
-    <div id="sel-body"></div>
-    <div id="sel-status"></div>
-    <button id="btn-status">📋 Horario / Gate</button>
-    <button id="btn-track">🛰️ Rastrear + avisar por Telegram</button>
-  </div>
+    <div id="webcams" class="panel">
+      <h2><span data-ic="camera"></span> WEBCAMS</h2>
+      <label class="chk"><input type="checkbox" id="wc-traffic" /> <span data-ic="car"></span> Solo cámaras de tráfico</label>
+      <button id="btn-scanwc"><span data-ic="search"></span> Escanear webcams aquí</button>
+      <div id="wc-list"></div>
+    </div>
 
-  <div id="trk" class="panel">
-    <h2>RASTREO ACTIVO</h2>
-    <div id="trk-body"></div>
-    <div id="trk-thr" style="margin-top:6px;"></div>
-    <button id="btn-untrack" class="stop">✖ Detener rastreo</button>
-  </div>
-
-  <div id="radio" class="panel">
-    <h2>📻 RADIO</h2>
-    <button id="btn-scan">🔍 Escanear emisoras aquí</button>
-    <div id="np"></div>
-    <div id="radio-list"></div>
+    <div id="radio" class="panel">
+      <h2><span data-ic="radio"></span> RADIO</h2>
+      <button id="btn-scan"><span data-ic="search"></span> Escanear emisoras aquí</button>
+      <div id="np"></div>
+      <div id="radio-list"></div>
+    </div>
   </div>
   <audio id="player"></audio>
 
-  <div id="webcams" class="panel">
-    <h2>📷 WEBCAMS</h2>
-    <label class="chk"><input type="checkbox" id="wc-traffic" /> 🚦 Solo cámaras de tráfico</label>
-    <button id="btn-scanwc">🔍 Escanear webcams aquí</button>
-    <div id="wc-list"></div>
+  <div id="right-col">
+    <div id="sel" class="panel">
+      <h2><span data-ic="plane"></span> SELECCIÓN</h2>
+      <div id="sel-body"></div>
+      <div id="sel-status"></div>
+      <button id="btn-status"><span data-ic="clipboard"></span> Horario / Gate</button>
+      <button id="btn-track"><span data-ic="target"></span> Rastrear + Telegram</button>
+    </div>
+
+    <div id="trk" class="panel">
+      <h2><span data-ic="target"></span> RASTREO ACTIVO</h2>
+      <div id="trk-body"></div>
+      <div id="trk-thr" style="margin-top:6px;"></div>
+      <button id="btn-untrack" class="stop"><span data-ic="x"></span> Detener rastreo</button>
+    </div>
   </div>
+
   <div id="wc-player"></div>
 
   <div id="status">conectando…</div>
@@ -120,6 +148,24 @@
     const $ = (id) => document.getElementById(id);
     const statusEl = $("status");
     const fail = (m) => { const o=$("overlay"); o.style.display="flex"; o.innerHTML=m; };
+
+    // Iconos SVG modernos (estilo Lucide, currentColor)
+    const IC = {
+      plane:'<svg class="ic" viewBox="0 0 24 24"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.9.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg>',
+      filter:'<svg class="ic" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.5 10 19 14 21 14 12.5 22 3"/></svg>',
+      camera:'<svg class="ic" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>',
+      radio:'<svg class="ic" viewBox="0 0 24 24"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></svg>',
+      search:'<svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
+      target:'<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.6"/></svg>',
+      clipboard:'<svg class="ic" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6"/><path d="M9 16h6"/></svg>',
+      x:'<svg class="ic" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
+      stop:'<svg class="ic" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
+      play:'<svg class="ic" viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>',
+      car:'<svg class="ic" viewBox="0 0 24 24"><path d="M5 13l1.4-4.2A2 2 0 0 1 8.3 7h7.4a2 2 0 0 1 1.9 1.3L19 13"/><path d="M4 13h16v4a1 1 0 0 1-1 1h-1"/><path d="M6 18H5a1 1 0 0 1-1-1v-4"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/></svg>',
+      external:'<svg class="ic" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
+    };
+    const icon = (n) => IC[n] || "";
+    document.querySelectorAll("[data-ic]").forEach(e => { e.innerHTML = icon(e.dataset.ic); });
 
     const PLANE_SVG =
       '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24">' +
@@ -309,7 +355,9 @@
     const fmt = (v) => (v==null || v==="") ? "—" : v;
     function renderSelection(d, route) {
       const kmh = d.speed ? (d.speed*3.6).toFixed(0) : "0";
-      const estado = d.status==="alert" ? "🔴 Emergencia" : d.on_ground ? "🟡 En tierra" : "🟢 En vuelo";
+      const estado = d.status==="alert" ? '<span class="dot" style="color:#ff5c6c">●</span> Emergencia'
+                   : d.on_ground ? '<span class="dot" style="color:#ffcc55">●</span> En tierra'
+                   : '<span class="dot" style="color:#5fe08a">●</span> En vuelo';
       let ruta = `<div class="kv"><span>Ruta</span><span>buscando…</span></div>`;
       if (route) {
         const o = route.origin ? `${route.origin.icao} · ${route.origin.name}` : "¿?";
@@ -391,13 +439,13 @@
 
     async function scanRadios() {
       const { lat, lon } = viewCenter();
-      $("btn-scan").textContent = "⏳ Escaneando…";
+      $("btn-scan").innerHTML = icon("search") + " Escaneando…";
       let stations = [];
       try {
         const j = await (await fetch(`/api/radio?lat=${lat}&lon=${lon}&limit=25`)).json();
         stations = j.stations || [];
       } catch { /* red */ }
-      $("btn-scan").textContent = "🔍 Escanear emisoras aquí";
+      $("btn-scan").innerHTML = icon("search") + " Escanear emisoras aquí";
       clearRadios();
       const listEl = $("radio-list");
       if (!stations.length) { listEl.innerHTML = '<div class="rmeta">Sin emisoras en esta zona.</div>'; return; }
@@ -431,7 +479,7 @@
       player.src = st.url;
       player.play().then(() => {
         playingId = id;
-        $("np").innerHTML = `▶ <b>${st.name}</b> <span class="stopbtn">⏹ detener</span>`;
+        $("np").innerHTML = `${icon("play")} <b>${st.name}</b><span class="stopbtn">${icon("stop")} detener</span>`;
         $("np").querySelector(".stopbtn").onclick = stopStation;
         document.querySelectorAll(".ritem").forEach(el =>
           el.classList.toggle("playing", el.dataset.id === id));
@@ -460,14 +508,14 @@
     }
     async function scanWebcams() {
       const { lat, lon } = viewCenter();
-      $("btn-scanwc").textContent = "⏳ Escaneando…";
+      $("btn-scanwc").innerHTML = icon("search") + " Escaneando…";
       const cat = $("wc-traffic").checked ? "&category=traffic" : "";
       let cams = [];
       try {
         const j = await (await fetch(`/api/webcams?lat=${lat}&lon=${lon}&limit=25${cat}`)).json();
         cams = j.webcams || [];
       } catch {}
-      $("btn-scanwc").textContent = "🔍 Escanear webcams aquí";
+      $("btn-scanwc").innerHTML = icon("search") + " Escanear webcams aquí";
       clearWebcams();
       const listEl = $("wc-list");
       if (!cams.length) { listEl.innerHTML = '<div class="rmeta">Sin webcams en esta zona.</div>'; return; }
@@ -498,9 +546,9 @@
       const media = cam.embed ? `<iframe src="${cam.embed}" allowfullscreen loading="lazy"></iframe>`
                   : (cam.preview ? `<img src="${cam.preview}" alt="">` : "");
       p.innerHTML =
-        `<div class="wc-head"><span>${cam.title}</span><span class="wc-close">✖</span></div>` +
+        `<div class="wc-head"><span>${cam.title}</span><span class="wc-close">${icon("x")}</span></div>` +
         media +
-        `<div class="wc-head"><a href="${cam.detail}" target="_blank" rel="noopener">Ver en Windy ↗</a>` +
+        `<div class="wc-head"><a href="${cam.detail}" target="_blank" rel="noopener">${icon("external")} Ver en Windy</a>` +
         `<span>${cam.city||""} ${cam.country||""}</span></div>`;
       p.querySelector(".wc-close").onclick = () => { p.style.display = "none"; p.innerHTML = ""; };
     }
@@ -521,14 +569,14 @@
          <div class="kv"><span>Ruta</span><span>${o} → ${t}</span></div>
          <div class="kv"><span>Distancia</span><span>${dist}</span></div>
          <div class="kv"><span>ETA</span><span>${eta}</span></div>
-         <div class="kv"><span>Estado</span><span>${msg.phase==="landed"?"🛬 aterrizó":msg.phase==="lost"?"sin señal":"en vuelo"}</span></div>`
+         <div class="kv"><span>Estado</span><span>${msg.phase==="landed"?"aterrizó":msg.phase==="lost"?"sin señal":"en vuelo"}</span></div>`
         + (msg.fs ? (() => { const f=msg.fs, ft=(i)=>(i&&i.length>=16)?i.slice(11,16):"—";
             return `<div class="kv"><span>Terminal / Gate</span><span>${f.arr_terminal||"—"} / ${f.arr_gate||"—"}</span></div>
              <div class="kv"><span>Aterrizaje prog.</span><span>${ft(f.arr_scheduled)}</span></div>
              <div class="kv"><span>Retraso</span><span>${f.arr_delay?f.arr_delay+" min":"—"}</span></div>`; })() : "");
       const fired = new Set(msg.fired||[]);
       $("trk-thr").innerHTML = ["30","20","15","10","5","landed"].map(k =>
-        `<span class="th ${fired.has(k)?"done":""}">${k==="landed"?"🛬":k+"m"}</span>`).join("");
+        `<span class="th ${fired.has(k)?"done":""}">${k==="landed"?icon("plane"):k+"m"}</span>`).join("");
       // marcar destino y línea al destino
       if (msg.dest && msg.aircraft) drawDest(msg.aircraft, msg.dest);
     }
