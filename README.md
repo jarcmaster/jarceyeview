@@ -35,6 +35,7 @@ Telegram (avisos)┘
   y delays, en el panel de selección (botón «Horario / Gate») y en los avisos de Telegram.
 - **Webcams en vivo** 📷 (Windy): escanea webcams cercanas a la zona del mapa, marcadores
   en el globo y lista; clic → reproductor en vivo incrustado + enlace a Windy.
+  Incluye toggle **«🚦 Solo cámaras de tráfico»** (cámaras de carretera en vivo).
 
 ## 1. Requisitos
 

@@ -158,16 +158,19 @@ async def flight_status(callsign: str) -> dict | None:
 # --------------------------------------------------------------------------
 # Webcams en vivo cercanas -> Windy Webcams API v3
 # --------------------------------------------------------------------------
-async def webcams(lat: float, lon: float, limit: int = 25, radius: int = 100) -> list[dict]:
+async def webcams(lat: float, lon: float, limit: int = 25, radius: int = 100,
+                  category: str = "") -> list[dict]:
     key = os.getenv("WINDY_WEBCAMS_KEY", "")
     if not key:
         return []
+    params = {"nearby": f"{lat},{lon},{radius}", "limit": limit,
+              "include": "images,location,player,urls"}
+    if category:
+        params["categories"] = category   # p.ej. "traffic" (cámaras de carretera)
     try:
         r = await _http.get(
             "https://api.windy.com/webcams/api/v3/webcams",
-            params={"nearby": f"{lat},{lon},{radius}", "limit": limit,
-                    "include": "images,location,player,urls"},
-            headers={"x-windy-api-key": key},
+            params=params, headers={"x-windy-api-key": key},
         )
         cams = (r.json() or {}).get("webcams") or []
     except Exception:

@@ -44,6 +44,7 @@
     #np .stopbtn { cursor:pointer; color:#ffdada; margin-left:8px; }
     #webcams { left:12px; top:172px; width:250px; max-height:34vh; display:flex; flex-direction:column; }
     #webcams h2 { margin:0 0 4px; font-size:13px; letter-spacing:1px; color:#7fd3ff; }
+    #webcams .chk { display:flex; align-items:center; gap:6px; margin:2px 0 4px; color:#dff; font-size:12px; }
     #wc-list { overflow-y:auto; margin-top:6px; }
     #wc-player { position:absolute; z-index:30; left:50%; transform:translateX(-50%); bottom:12px;
       width:360px; max-width:92vw; display:none; background:rgba(6,16,26,.96);
@@ -106,6 +107,7 @@
 
   <div id="webcams" class="panel">
     <h2>📷 WEBCAMS</h2>
+    <label class="chk"><input type="checkbox" id="wc-traffic" /> 🚦 Solo cámaras de tráfico</label>
     <button id="btn-scanwc">🔍 Escanear webcams aquí</button>
     <div id="wc-list"></div>
   </div>
@@ -459,9 +461,10 @@
     async function scanWebcams() {
       const { lat, lon } = viewCenter();
       $("btn-scanwc").textContent = "⏳ Escaneando…";
+      const cat = $("wc-traffic").checked ? "&category=traffic" : "";
       let cams = [];
       try {
-        const j = await (await fetch(`/api/webcams?lat=${lat}&lon=${lon}&limit=25`)).json();
+        const j = await (await fetch(`/api/webcams?lat=${lat}&lon=${lon}&limit=25${cat}`)).json();
         cams = j.webcams || [];
       } catch {}
       $("btn-scanwc").textContent = "🔍 Escanear webcams aquí";

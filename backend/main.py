@@ -288,8 +288,9 @@ async def api_radio(lat: float, lon: float, limit: int = 30) -> JSONResponse:
 
 
 @app.get("/api/webcams")
-async def api_webcams(lat: float, lon: float, limit: int = 25) -> JSONResponse:
-    return JSONResponse({"webcams": await webcams(lat, lon, limit)})
+async def api_webcams(lat: float, lon: float, limit: int = 25,
+                      category: str = "") -> JSONResponse:
+    return JSONResponse({"webcams": await webcams(lat, lon, limit, category=category)})
 
 
 @app.get("/config")
