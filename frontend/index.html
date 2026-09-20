@@ -90,17 +90,18 @@
     try { cfg = await (await fetch("/config")).json(); }
     catch { fail("No pude leer <code>/config</code>. ¿Está corriendo el backend?"); throw new Error("no config"); }
 
-    if (!cfg.googleApiKey) {
-      fail(`Falta <code>GOOGLE_MAPS_API_KEY</code> (Map Tiles API). Se usa el globo base de Cesium.<br><br>
-        <button style="width:auto" onclick="this.closest('#overlay').style.display='none'">Continuar</button>`);
-    }
+    // La key de Google es opcional: sin ella se usa el globo base de Cesium (no es error).
     if (cfg.cesiumIonToken) Cesium.Ion.defaultAccessToken = cfg.cesiumIonToken;
 
-    const viewer = new Cesium.Viewer("cesiumContainer", {
-      baseLayer:false, baseLayerPicker:false, geocoder:true, homeButton:false,
+    const viewerOpts = {
+      baseLayerPicker:false, geocoder:true, homeButton:false,
       timeline:false, animation:false, sceneModePicker:false, navigationHelpButton:false,
       infoBox:false, selectionIndicator:true,
-    });
+    };
+    // Con Google 3D Tiles quitamos la capa base; sin ella, dejamos la imaginería
+    // por defecto de Cesium ion (requiere CESIUM_ION_TOKEN) para que el globo se vea.
+    if (cfg.googleApiKey) viewerOpts.baseLayer = false;
+    const viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
     viewer.scene.skyAtmosphere.show = true;
 
     if (cfg.googleApiKey) {
