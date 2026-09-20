@@ -40,8 +40,8 @@ from fastapi.staticfiles import StaticFiles
 
 # Permite `from services import ...` sin importar desde dónde se lance uvicorn.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from services import (OpenSky, RouteService, Telegram, aclose, geoip,
-                      haversine_km, radio_stations)
+from services import (OpenSky, RouteService, Telegram, aclose, flight_status,
+                      geoip, haversine_km, radio_stations)
 
 load_dotenv()
 
@@ -76,6 +76,7 @@ class Track:
     hdg: float = 0
     eta: float | None = None
     dist: float | None = None
+    fs: dict | None = None   # estado de vuelo (terminal, gate, horarios, delay)
 
 
 class World:
@@ -152,6 +153,30 @@ def _eta_minutes(a: dict, dest: dict | None) -> tuple[float | None, float | None
     return dist, (dist / kmh) * 60.0
 
 
+def _fmt_time(iso: str | None) -> str | None:
+    """'2026-09-21T08:10:00+00:00' -> '08:10' (hora local del aeropuerto)."""
+    return iso[11:16] if iso and len(iso) >= 16 else None
+
+
+def _fs_summary(fs: dict | None) -> str:
+    """Línea con terminal/gate/hora/delay para Telegram."""
+    if not fs:
+        return ""
+    parts = []
+    if fs.get("arr_terminal"):
+        parts.append(f"Terminal {fs['arr_terminal']}")
+    if fs.get("arr_gate"):
+        parts.append(f"Gate {fs['arr_gate']}")
+    sched, est = _fmt_time(fs.get("arr_scheduled")), _fmt_time(fs.get("arr_estimated"))
+    if sched:
+        parts.append(f"Llegada prog. {sched}")
+    if est and est != sched:
+        parts.append(f"est. {est}")
+    if fs.get("arr_delay"):
+        parts.append(f"⏰ {fs['arr_delay']} min retraso")
+    return ("\n" + " · ".join(parts)) if parts else ""
+
+
 async def _notify_track(t: Track, text: str) -> None:
     await telegram.send(text)
 
@@ -168,13 +193,15 @@ async def tracker() -> None:
             r = await routes.route(t.callsign)
             if r:
                 t.origin, t.dest = r.get("origin"), r.get("dest")
+            t.fs = await flight_status(t.callsign)
             t.resolved = True
             org = t.origin["name"] if t.origin else "¿?"
             dst = t.dest["name"] if t.dest else "¿?"
-            await telegram.send(
-                f"🛰️ Rastreando <b>{t.callsign}</b>\nRuta: {org} → {dst}"
-                + ("" if t.dest else "\n⚠️ Destino desconocido: avisaré solo del aterrizaje.")
-            )
+            msg = f"🛰️ Rastreando <b>{t.callsign}</b>\nRuta: {org} → {dst}"
+            if not t.dest:
+                msg += "\n⚠️ Destino desconocido: avisaré solo del aterrizaje."
+            msg += _fs_summary(t.fs)
+            await telegram.send(msg)
 
         # Posición actual del avión rastreado
         try:
@@ -212,8 +239,9 @@ async def tracker() -> None:
         if landed and "landed" not in t.fired:
             t.fired.add("landed")
             t.done = True
+            t.fs = await flight_status(t.callsign) or t.fs  # refresca gate/hora final
             await telegram.send(f"🛬 <b>{t.callsign}</b> ha aterrizado" +
-                                (f" en {t.dest['name']}." if t.dest else "."))
+                                (f" en {t.dest['name']}." if t.dest else ".") + _fs_summary(t.fs))
 
         # Umbrales de tiempo restante
         if eta is not None:
@@ -232,7 +260,7 @@ async def tracker() -> None:
             "aircraft": a,
             "origin": t.origin, "dest": t.dest,
             "dist_km": dist, "eta_min": eta,
-            "fired": sorted(t.fired),
+            "fired": sorted(t.fired), "fs": t.fs,
         })
         await asyncio.sleep(POLL_INTERVAL)
 
@@ -266,6 +294,7 @@ async def config() -> JSONResponse:
         "cesiumIonToken": os.getenv("CESIUM_ION_TOKEN", ""),
         "openskyAuth": opensky.has_credentials,
         "telegram": telegram.configured,
+        "flightStatus": bool(os.getenv("AVIATIONSTACK_KEY", "")),
         "pollInterval": POLL_INTERVAL,
         "thresholds": THRESHOLDS,
     })
@@ -469,6 +498,11 @@ async def _handle_route_request(ws: WebSocket, callsign: str) -> None:
     }))
 
 
+async def _handle_status_request(ws: WebSocket, callsign: str) -> None:
+    fs = await flight_status(callsign)
+    await ws.send_text(json.dumps({"type": "status", "callsign": callsign, "fs": fs}))
+
+
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket) -> None:
     await ws.accept()
@@ -488,6 +522,8 @@ async def ws_endpoint(ws: WebSocket) -> None:
                     world.bbox = bbox
             elif kind == "route":
                 asyncio.create_task(_handle_route_request(ws, msg.get("callsign", "")))
+            elif kind == "status":
+                asyncio.create_task(_handle_status_request(ws, msg.get("callsign", "")))
             elif kind == "track":
                 world.track = Track(icao24=(msg.get("id") or "").lower(),
                                     callsign=(msg.get("callsign") or "").strip())

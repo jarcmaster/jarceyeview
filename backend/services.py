@@ -104,6 +104,58 @@ async def radio_stations(lat: float, lon: float, limit: int = 30) -> list[dict]:
 
 
 # --------------------------------------------------------------------------
+# Estado de vuelo (terminal, gate, hora de aterrizaje, delays) -> AviationStack
+# --------------------------------------------------------------------------
+_status_cache: dict[str, tuple[float, dict | None]] = {}
+
+
+def _pick_flight(data: list) -> dict:
+    """Prefiere el vuelo activo, luego aterrizado, si no el primero."""
+    for want in ("active", "landed"):
+        for f in data:
+            if f.get("flight_status") == want:
+                return f
+    return data[0]
+
+
+async def flight_status(callsign: str) -> dict | None:
+    """Terminal, gate, horarios y delays por callsign (ICAO). Cache 10 min (cuota baja)."""
+    key = os.getenv("AVIATIONSTACK_KEY", "")
+    cs = (callsign or "").strip().upper()
+    if not key or not cs:
+        return None
+    now = time.monotonic()
+    hit = _status_cache.get(cs)
+    if hit and now - hit[0] < 600:
+        return hit[1]
+    result = None
+    try:
+        r = await _http.get(
+            "http://api.aviationstack.com/v1/flights",
+            params={"access_key": key, "flight_icao": cs},
+        )
+        data = (r.json() or {}).get("data") or []
+        if data:
+            f = _pick_flight(data)
+            dep, arr = f.get("departure") or {}, f.get("arrival") or {}
+            result = {
+                "status": f.get("flight_status"),
+                "airline": (f.get("airline") or {}).get("name"),
+                "flight": (f.get("flight") or {}).get("iata") or cs,
+                "dep_airport": dep.get("iata"), "dep_terminal": dep.get("terminal"),
+                "dep_gate": dep.get("gate"), "dep_delay": dep.get("delay"),
+                "arr_airport": arr.get("iata"), "arr_terminal": arr.get("terminal"),
+                "arr_gate": arr.get("gate"), "arr_baggage": arr.get("baggage"),
+                "arr_scheduled": arr.get("scheduled"), "arr_estimated": arr.get("estimated"),
+                "arr_actual": arr.get("actual"), "arr_delay": arr.get("delay"),
+            }
+    except Exception:
+        result = None
+    _status_cache[cs] = (now, result)
+    return result
+
+
+# --------------------------------------------------------------------------
 # Geo
 # --------------------------------------------------------------------------
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

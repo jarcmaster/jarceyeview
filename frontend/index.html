@@ -73,6 +73,8 @@
   <div id="sel" class="panel">
     <h2>SELECCIÓN</h2>
     <div id="sel-body"></div>
+    <div id="sel-status"></div>
+    <button id="btn-status">📋 Horario / Gate</button>
     <button id="btn-track">🛰️ Rastrear + avisar por Telegram</button>
   </div>
 
@@ -275,6 +277,7 @@
       if (!e) { $("sel").style.display="none"; selected=null; selectedRoute=null; return; }
       selected = e._data; selectedRoute = null;
       $("sel").style.display="block";
+      $("sel-status").innerHTML = "";
       renderSelection(selected, null);
       ws?.send(JSON.stringify({ type:"route", callsign:selected.name }));
     });
@@ -313,6 +316,29 @@
       if (!selected) return;
       if (!cfg.telegram) alert("Telegram no está configurado en el backend (.env). Se rastreará igual, pero sin notificaciones.");
       ws.send(JSON.stringify({ type:"track", id:selected.id, callsign:selected.name }));
+    });
+
+    // ---- Estado de vuelo: terminal, gate, hora de aterrizaje, delay ----
+    if (!cfg.flightStatus) $("btn-status").style.display = "none";
+    const fmtTime = (iso) => (iso && iso.length >= 16) ? iso.slice(11, 16) : "—";
+    function renderFs(fs, el) {
+      if (!fs) { el.innerHTML = `<div class="rmeta" style="color:#7a97ad">Sin datos de horario para este vuelo.</div>`; return; }
+      const est = { scheduled:"programado", active:"en vuelo", landed:"aterrizado",
+                    cancelled:"cancelado", incident:"incidente", diverted:"desviado" }[fs.status] || fs.status || "—";
+      const delay = fs.arr_delay ? `<span style="color:#ffcc55">${fs.arr_delay} min</span>` : "—";
+      el.innerHTML =
+        `<div class="kv"><span>Estado vuelo</span><span>${est}</span></div>
+         <div class="kv"><span>Terminal</span><span>${fs.arr_terminal||"—"}</span></div>
+         <div class="kv"><span>Gate</span><span>${fs.arr_gate||"—"}</span></div>
+         <div class="kv"><span>Cinta equipaje</span><span>${fs.arr_baggage||"—"}</span></div>
+         <div class="kv"><span>Aterrizaje prog.</span><span>${fmtTime(fs.arr_scheduled)}</span></div>
+         <div class="kv"><span>Estimado</span><span>${fmtTime(fs.arr_estimated)}</span></div>
+         <div class="kv"><span>Retraso llegada</span><span>${delay}</span></div>`;
+    }
+    $("btn-status").addEventListener("click", () => {
+      if (!selected) return;
+      $("sel-status").innerHTML = `<div class="rmeta" style="color:#7fd3ff">Consultando horario…</div>`;
+      ws.send(JSON.stringify({ type:"status", callsign:selected.name }));
     });
 
     // ---- Scanner de radios (emisoras cercanas) ------------------------
@@ -410,7 +436,11 @@
          <div class="kv"><span>Ruta</span><span>${o} → ${t}</span></div>
          <div class="kv"><span>Distancia</span><span>${dist}</span></div>
          <div class="kv"><span>ETA</span><span>${eta}</span></div>
-         <div class="kv"><span>Estado</span><span>${msg.phase==="landed"?"🛬 aterrizó":msg.phase==="lost"?"sin señal":"en vuelo"}</span></div>`;
+         <div class="kv"><span>Estado</span><span>${msg.phase==="landed"?"🛬 aterrizó":msg.phase==="lost"?"sin señal":"en vuelo"}</span></div>`
+        + (msg.fs ? (() => { const f=msg.fs, ft=(i)=>(i&&i.length>=16)?i.slice(11,16):"—";
+            return `<div class="kv"><span>Terminal / Gate</span><span>${f.arr_terminal||"—"} / ${f.arr_gate||"—"}</span></div>
+             <div class="kv"><span>Aterrizaje prog.</span><span>${ft(f.arr_scheduled)}</span></div>
+             <div class="kv"><span>Retraso</span><span>${f.arr_delay?f.arr_delay+" min":"—"}</span></div>`; })() : "");
       const fired = new Set(msg.fired||[]);
       $("trk-thr").innerHTML = ["30","20","15","10","5","landed"].map(k =>
         `<span class="th ${fired.has(k)?"done":""}">${k==="landed"?"🛬":k+"m"}</span>`).join("");
@@ -461,6 +491,8 @@
           if (msg.error) { statusEl.innerHTML=`<span id="err">⚠ ${msg.error}</span>`; } else liveStatus();
         } else if (msg.type==="route") {
           if (selected && selected.name===msg.callsign) { selectedRoute = msg; renderSelection(selected, msg); }
+        } else if (msg.type==="status") {
+          if (selected && selected.name===msg.callsign) renderFs(msg.fs, $("sel-status"));
         } else if (msg.type==="track") {
           renderTrack(msg);
         }

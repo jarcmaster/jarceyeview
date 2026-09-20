@@ -31,6 +31,8 @@ Telegram (avisos)┘
 - **Vuela a tu ubicación** al abrir (geolocalización del navegador, con respaldo por IP).
 - **Scanner de radios** 📻: escanea emisoras de internet cercanas a la zona del mapa
   (Radio Browser), las muestra como marcadores y en una lista; clic → **reproduce** el stream.
+- **Estado de vuelo** (AviationStack): terminal, gate, hora programada/real de aterrizaje
+  y delays, en el panel de selección (botón «Horario / Gate») y en los avisos de Telegram.
 
 ## 1. Requisitos
 
