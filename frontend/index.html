@@ -65,15 +65,21 @@
     #np { margin-top:6px; font-size:12px; color:#ffb347; min-height:1em; display:flex; align-items:center; gap:6px; }
     #np .stopbtn { cursor:pointer; color:#ffdada; margin-left:auto; display:inline-flex; align-items:center; gap:4px; }
 
-    /* Reproductor webcam */
-    #wc-player { position:absolute; z-index:30; left:50%; transform:translateX(-50%); bottom:12px;
-      width:360px; max-width:92vw; display:none; background:rgba(6,16,26,.96);
+    /* Reproductores flotantes (webcam / street view) */
+    #wc-player, #sv-player { position:absolute; z-index:30; left:50%; transform:translateX(-50%); bottom:12px;
+      width:380px; max-width:92vw; display:none; background:rgba(6,16,26,.96);
       border:1px solid #2a6a8f; border-radius:12px; overflow:hidden; box-shadow:0 8px 34px rgba(0,0,0,.6); }
-    #wc-player .wc-head { display:flex; justify-content:space-between; align-items:center;
+    #wc-player .wc-head, #sv-player .wc-head { display:flex; justify-content:space-between; align-items:center;
       gap:8px; padding:8px 12px; font-size:12px; color:#cfefff; }
-    #wc-player iframe, #wc-player img { width:100%; height:210px; border:0; display:block; background:#000; }
-    #wc-player a { color:#7fd3ff; text-decoration:none; display:inline-flex; align-items:center; gap:5px; }
-    #wc-player .wc-close { cursor:pointer; color:#ffdada; display:inline-flex; }
+    #wc-player iframe, #wc-player img, #sv-player iframe { width:100%; height:230px; border:0; display:block; background:#000; }
+    #wc-player a, #sv-player a { color:#7fd3ff; text-decoration:none; display:inline-flex; align-items:center; gap:5px; }
+    #wc-player .wc-close, #sv-player .wc-close { cursor:pointer; color:#ffdada; display:inline-flex; }
+
+    /* Barra de resultado de búsqueda (con botón Street View) */
+    #searchbox { position:absolute; z-index:12; top:12px; left:50%; transform:translateX(-50%);
+      display:none; align-items:center; gap:12px; padding:8px 14px; font-size:13px; }
+    #searchbox button { width:auto; margin:0; padding:6px 12px; }
+    #searchbox .sclose { cursor:pointer; color:#ffdada; display:inline-flex; }
 
     #sel, #trk { display:none; }
     #status { position:absolute; bottom:12px; left:12px; z-index:11; font-family:monospace;
@@ -140,6 +146,8 @@
   </div>
 
   <div id="wc-player"></div>
+  <div id="sv-player"></div>
+  <div id="searchbox" class="panel"></div>
 
   <div id="status">conectando…</div>
   <div id="overlay"></div>
@@ -163,6 +171,8 @@
       play:'<svg class="ic" viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>',
       car:'<svg class="ic" viewBox="0 0 24 24"><path d="M5 13l1.4-4.2A2 2 0 0 1 8.3 7h7.4a2 2 0 0 1 1.9 1.3L19 13"/><path d="M4 13h16v4a1 1 0 0 1-1 1h-1"/><path d="M6 18H5a1 1 0 0 1-1-1v-4"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/></svg>',
       external:'<svg class="ic" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
+      pin:'<svg class="ic" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+      streetview:'<svg class="ic" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>',
     };
     const icon = (n) => IC[n] || "";
     document.querySelectorAll("[data-ic]").forEach(e => { e.innerHTML = icon(e.dataset.ic); });
@@ -342,6 +352,10 @@
       if (ent && typeof ent.id === "string" && ent.id.startsWith("webcam:")) {
         const w = webcamEntities.get(ent.id);
         if (w) showWebcam(w.cam);
+        return;
+      }
+      if (ent && ent.id === "searchpin" && lastSearch) {
+        openStreetView(lastSearch.lat, lastSearch.lon, lastSearch.name);
         return;
       }
       const e = ent && entities.get(ent.id);
@@ -553,6 +567,64 @@
       p.querySelector(".wc-close").onclick = () => { p.style.display = "none"; p.innerHTML = ""; };
     }
     $("btn-scanwc").addEventListener("click", scanWebcams);
+
+    // ---- Búsqueda: pin en el lugar + Street View ----------------------
+    const PIN_IMG = "data:image/svg+xml," + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="38" viewBox="0 0 24 30">' +
+      '<path fill="#ff4d5e" stroke="#0b1622" stroke-width="0.8" d="M12 1C6.5 1 2 5.4 2 10.9 2 18 12 29 12 29s10-11 10-18.1C22 5.4 17.5 1 12 1z"/>' +
+      '<circle cx="12" cy="10.8" r="4" fill="#fff"/></svg>');
+    let searchPin = null, lastSearch = null;
+
+    function dropSearchPin(lat, lon, name) {
+      lastSearch = { lat, lon, name };
+      const pos = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
+      if (!searchPin) {
+        searchPin = viewer.entities.add({
+          id: "searchpin", position: pos,
+          billboard: { image:PIN_IMG, width:30, height:38, verticalOrigin:Cesium.VerticalOrigin.BOTTOM,
+            disableDepthTestDistance:Number.POSITIVE_INFINITY },
+          label: { text:name, font:"12px sans-serif", pixelOffset:new Cesium.Cartesian2(0,-42),
+            fillColor:Cesium.Color.WHITE, showBackground:true,
+            backgroundColor:Cesium.Color.fromCssColorString("rgba(0,0,0,.6)"),
+            disableDepthTestDistance:Number.POSITIVE_INFINITY },
+        });
+      } else { searchPin.position = pos; searchPin.label.text = name; searchPin.show = true; }
+      const sb = $("searchbox");
+      sb.style.display = "flex";
+      sb.innerHTML =
+        `<span>${icon("pin")} <b>${name}</b></span>` +
+        `<button class="sv">${icon("streetview")} Street View</button>` +
+        `<span class="sclose">${icon("x")}</span>`;
+      sb.querySelector(".sv").onclick = () => openStreetView(lat, lon, name);
+      sb.querySelector(".sclose").onclick = () => {
+        sb.style.display = "none";
+        if (searchPin) searchPin.show = false;
+      };
+    }
+
+    function openStreetView(lat, lon, name) {
+      const p = $("sv-player");
+      p.style.display = "block";
+      const embed = cfg.googleApiKey
+        ? `<iframe src="https://www.google.com/maps/embed/v1/streetview?key=${cfg.googleApiKey}&location=${lat},${lon}&fov=90" allowfullscreen loading="lazy"></iframe>`
+        : "";
+      const ext = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lon}`;
+      p.innerHTML =
+        `<div class="wc-head"><span>${icon("streetview")} Street View — ${name}</span><span class="wc-close">${icon("x")}</span></div>` +
+        embed +
+        `<div class="wc-head"><a href="${ext}" target="_blank" rel="noopener">${icon("external")} Abrir en Google Maps</a>` +
+        `<span>${lat.toFixed(4)}, ${lon.toFixed(4)}</span></div>`;
+      p.querySelector(".wc-close").onclick = () => { p.style.display = "none"; p.innerHTML = ""; };
+    }
+
+    // Al completar una búsqueda del geocoder, la cámara ya voló al lugar: ponemos el pin.
+    if (viewer.geocoder && viewer.geocoder.viewModel) {
+      viewer.geocoder.viewModel.complete.addEventListener(() => {
+        const c = viewCenter();
+        const name = (viewer.geocoder.viewModel.searchText || "Ubicación").trim();
+        dropSearchPin(c.lat, c.lon, name);
+      });
+    }
 
     // ---- Panel de rastreo ---------------------------------------------
     const world = { track:null };
