@@ -168,6 +168,7 @@
       if (!e) {
         const history = [];
         const entity = viewer.entities.add({
+          id: d.id,   // icao24 -> permite localizar sus datos al hacer clic
           position: new Cesium.CallbackProperty(() => extrapolate(e.meta), false),
           billboard: { image:PLANE_IMG, width:28, height:28, color:COLOR[d.status]||Cesium.Color.WHITE,
             rotation:Cesium.Math.toRadians(-d.heading), alignedAxis:Cesium.Cartesian3.ZERO,
@@ -212,34 +213,50 @@
       $("count").textContent = list.length;
       $("n-air").textContent = air; $("n-ground").textContent = ground; $("n-emerg").textContent = emerg;
       applyFilters();
+      refreshSelection();   // datos del avión seleccionado, en vivo
     }
 
     // ---- Selección + ruta (#4) ----------------------------------------
-    let selected = null;
+    let selected = null;        // datos del avión seleccionado (se refresca en vivo)
+    let selectedRoute = null;   // ruta cacheada del seleccionado
     viewer.selectedEntityChanged.addEventListener((ent) => {
       const e = ent && entities.get(ent.id);
-      if (!e) { $("sel").style.display="none"; selected=null; return; }
-      selected = e._data;
+      if (!e) { $("sel").style.display="none"; selected=null; selectedRoute=null; return; }
+      selected = e._data; selectedRoute = null;
       $("sel").style.display="block";
-      renderSelection(e._data, null);
-      ws?.send(JSON.stringify({ type:"route", callsign:e._data.name }));
+      renderSelection(selected, null);
+      ws?.send(JSON.stringify({ type:"route", callsign:selected.name }));
     });
+    const fmt = (v) => (v==null || v==="") ? "—" : v;
     function renderSelection(d, route) {
-      const kmh = (d.speed*3.6).toFixed(0);
-      let routeHtml = `<div class="kv"><span>Ruta</span><span>buscando…</span></div>`;
+      const kmh = d.speed ? (d.speed*3.6).toFixed(0) : "0";
+      const estado = d.status==="alert" ? "🔴 Emergencia" : d.on_ground ? "🟡 En tierra" : "🟢 En vuelo";
+      let ruta = `<div class="kv"><span>Ruta</span><span>buscando…</span></div>`;
       if (route) {
-        const o = route.origin ? `${route.origin.icao}` : "¿?";
-        const t = route.dest ? `${route.dest.icao}` : "¿?";
-        routeHtml = `<div class="kv"><span>Ruta</span><span>${o} → ${t}</span></div>`;
+        const o = route.origin ? `${route.origin.icao} · ${route.origin.name}` : "¿?";
+        const t = route.dest ? `${route.dest.icao} · ${route.dest.name}` : "¿?";
+        const air = route.airline ? `<div class="kv"><span>Aerolínea</span><span>${route.airline}</span></div>` : "";
+        ruta = air +
+          `<div class="kv"><span>Origen</span><span>${o}</span></div>` +
+          `<div class="kv"><span>Destino</span><span>${t}</span></div>`;
       }
       $("sel-body").innerHTML =
-        `<div class="kv"><span>Vuelo</span><span>${d.name}</span></div>
-         <div class="kv"><span>País</span><span>${d.country}</span></div>
-         <div class="kv"><span>Altitud</span><span>${Math.round(d.alt)} m</span></div>
+        `<div class="kv"><span>Callsign</span><span>${fmt(d.name)}</span></div>
+         <div class="kv"><span>ICAO24</span><span>${fmt(d.id)}</span></div>
+         <div class="kv"><span>País</span><span>${fmt(d.country)}</span></div>
+         <div class="kv"><span>Estado</span><span>${estado}</span></div>
+         <div class="kv"><span>Altitud</span><span>${Math.round(d.alt||0)} m</span></div>
          <div class="kv"><span>Velocidad</span><span>${kmh} km/h</span></div>
-         <div class="kv"><span>Rumbo</span><span>${Math.round(d.heading)}°</span></div>
-         <div class="kv"><span>Squawk</span><span>${d.squawk||"—"}</span></div>
-         ${routeHtml}`;
+         <div class="kv"><span>Rumbo</span><span>${Math.round(d.heading||0)}°</span></div>
+         <div class="kv"><span>Squawk</span><span>${fmt(d.squawk)}</span></div>
+         <div class="kv"><span>Lat, Lon</span><span>${d.lat.toFixed(4)}, ${d.lon.toFixed(4)}</span></div>
+         ${ruta}`;
+    }
+    // Refresca el panel con los últimos datos mientras el avión sigue seleccionado
+    function refreshSelection() {
+      if (!selected) return;
+      const e = entities.get(selected.id);
+      if (e) { selected = e._data; renderSelection(selected, selectedRoute); }
     }
     $("btn-track").addEventListener("click", () => {
       if (!selected) return;
@@ -312,7 +329,7 @@
           render(msg.entities||[]);
           if (msg.error) { statusEl.innerHTML=`<span id="err">⚠ ${msg.error}</span>`; } else liveStatus();
         } else if (msg.type==="route") {
-          if (selected && selected.name===msg.callsign) renderSelection(selected, msg);
+          if (selected && selected.name===msg.callsign) { selectedRoute = msg; renderSelection(selected, msg); }
         } else if (msg.type==="track") {
           renderTrack(msg);
         }
