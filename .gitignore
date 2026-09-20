@@ -1,0 +1,14 @@
+# Entorno virtual de Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Secretos (NUNCA subir). Solo se versiona .env.example
+.env
+.env.*
+!.env.example
+
+# Sistema
+.DS_Store
+Thumbs.db
