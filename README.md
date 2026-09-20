@@ -10,15 +10,11 @@ adsbdb (rutas)  ─┤→ FastAPI (WebSocket) → Navegador (CesiumJS + Google 3
 Telegram (avisos)┘
 ```
 
-## Capturas
+## Captura
 
 **Panel de control** (rastreo de vuelos y enlace a Google Earth):
 
 ![Panel de control](assets/panel-control.png)
-
-**Vista web** (CesiumJS + filtros):
-
-![Vista web CesiumJS](assets/web-cesium.png)
 
 ## Funcionalidades
 
