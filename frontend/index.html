@@ -279,6 +279,21 @@
       display:none; max-width:320px; font-size:12px; }
     #popup .sclose { cursor:pointer; color:#ffdada; display:inline-flex; }
     #popup a { color:#7fd3ff; text-decoration:none; display:inline-flex; align-items:center; gap:5px; margin-top:6px; }
+    #wc-gallery { position:absolute; z-index:28; left:12px; bottom:44px; width:344px; max-height:54vh; display:none;
+      flex-direction:column; background:rgba(6,16,26,.92); border:1px solid rgba(80,180,255,.3); border-radius:12px;
+      backdrop-filter:blur(8px); box-shadow:0 8px 30px rgba(0,0,0,.55); overflow:hidden; }
+    .wcg-head { display:flex; justify-content:space-between; align-items:center; padding:9px 12px; color:#7fd3ff;
+      font-size:13px; letter-spacing:1px; border-bottom:1px solid #1f3d55; }
+    .wcg-head .wcg-close { cursor:pointer; color:#ffdada; font-size:14px; }
+    .wcg-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:10px; overflow-y:auto; }
+    .wc-card { position:relative; border-radius:8px; overflow:hidden; cursor:pointer; background:#0b1622; aspect-ratio:16/10; }
+    .wc-card img { width:100%; height:100%; object-fit:cover; display:block; }
+    .wc-card:hover { outline:2px solid #3aa0ff; }
+    .wc-card .wc-t { position:absolute; top:0; left:0; right:0; padding:5px 7px; font-size:10.5px; color:#fff;
+      background:linear-gradient(180deg, rgba(0,0,0,.78), transparent); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .wc-card .wc-m { position:absolute; bottom:0; left:0; right:0; padding:5px 7px; font-size:10px; color:#dfe;
+      background:linear-gradient(0deg, rgba(0,0,0,.78), transparent); display:flex; align-items:center; gap:5px; }
+    .wc-card .wc-dot { width:7px; height:7px; border-radius:50%; background:#5fe08a; flex:0 0 auto; }
 
     #sel, #trk { display:none; }
     #status { position:absolute; bottom:12px; left:12px; z-index:11; font-family:monospace;
@@ -448,6 +463,11 @@
     </div>
     <div id="live-content"></div>
     <div class="live-close" id="live-close">✕</div>
+  </div>
+
+  <div id="wc-gallery">
+    <div class="wcg-head"><b>Webcams cercanas</b><span class="wcg-close" id="wcg-close">✕</span></div>
+    <div class="wcg-grid" id="wcg-grid"></div>
   </div>
 
   <div id="status">conectando…</div>
@@ -913,6 +933,21 @@
       for (const [, w] of webcamEntities) viewer.entities.remove(w.entity);
       webcamEntities.clear();
     }
+    const wcTimeAgo=(u)=>{ if(u==null) return ""; const t=(typeof u==="number")?u*1000:Date.parse(u);
+      if(isNaN(t)) return ""; const m=Math.max(0,Math.round((Date.now()-t)/60000)); return m<60?`hace ${m}m`:`hace ${Math.round(m/60)}h`; };
+    const wcDistKm=(a,b,c,d)=>{ const R=6371,p1=a*Math.PI/180,p2=c*Math.PI/180,dp=(c-a)*Math.PI/180,dl=(d-b)*Math.PI/180;
+      const x=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2; return 2*R*Math.asin(Math.sqrt(x)); };
+    function renderWebcamGallery(cams, lat0, lon0){
+      const gal=$("wcg-grid"), box=$("wc-gallery"); box.style.display="flex";
+      if(!cams.length){ gal.innerHTML='<div style="grid-column:1/-1;color:#7a97ad;font-size:12px">Sin webcams en esta zona.</div>'; return; }
+      gal.innerHTML = cams.map((cam,i)=>{
+        const d=wcDistKm(lat0,lon0,cam.lat,cam.lon), dist=d<1?Math.round(d*1000)+" m":d.toFixed(1)+" km";
+        const meta=[wcTimeAgo(cam.updated),dist].filter(Boolean).join(" · ");
+        const img=cam.preview?`<img src="${cam.preview}" loading="lazy" onerror="this.style.visibility='hidden'">`:"";
+        return `<div class="wc-card" data-i="${i}">${img}<div class="wc-t">${cam.title}</div><div class="wc-m"><span class="wc-dot"></span>${meta}</div></div>`;
+      }).join("");
+      gal.querySelectorAll(".wc-card").forEach(el=>{ el.onclick=()=>showWebcam(cams[+el.dataset.i]); });
+    }
     async function scanWebcams() {
       const { lat, lon } = viewCenter();
       $("btn-scanwc").innerHTML = icon("search") + " Escaneando…";
@@ -924,9 +959,7 @@
       } catch {}
       $("btn-scanwc").innerHTML = icon("search") + " Escanear webcams aquí";
       clearWebcams();
-      const listEl = $("wc-list");
-      if (!cams.length) { listEl.innerHTML = '<div class="rmeta">Sin webcams en esta zona.</div>'; return; }
-      listEl.innerHTML = "";
+      $("wc-list").innerHTML = "";
       cams.forEach((cam, i) => {
         const id = `webcam:${i}`;
         const entity = viewer.entities.add({
@@ -940,12 +973,8 @@
             distanceDisplayCondition:new Cesium.DistanceDisplayCondition(0,200000) },
         });
         webcamEntities.set(id, { entity, cam });
-        const row = document.createElement("div");
-        row.className = "ritem";
-        row.innerHTML = `<span>${cam.title}</span><span class="rmeta">${cam.city||""}</span>`;
-        row.onclick = () => showWebcam(cam);
-        listEl.appendChild(row);
       });
+      renderWebcamGallery(cams, lat, lon);   // galería abajo-izquierda con scroll
     }
     function showWebcam(cam) {
       const p = $("wc-player");
@@ -960,6 +989,7 @@
       p.querySelector(".wc-close").onclick = () => { p.style.display = "none"; p.innerHTML = ""; };
     }
     $("btn-scanwc").addEventListener("click", scanWebcams);
+    $("wcg-close").onclick = () => { $("wc-gallery").style.display = "none"; };
 
     // ---- Búsqueda: pin en el lugar + Street View ----------------------
     const PIN_IMG = "data:image/svg+xml," + encodeURIComponent(

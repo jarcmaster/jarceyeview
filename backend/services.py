@@ -193,6 +193,7 @@ async def webcams(lat: float, lon: float, limit: int = 25, radius: int = 100,
             "embed": player.get("day") or "",
             "detail": urls.get("detail") or "",
             "views": c.get("viewCount", 0),
+            "updated": c.get("lastUpdatedOn"),
         })
     return out
 
