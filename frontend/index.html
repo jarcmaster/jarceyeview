@@ -523,7 +523,20 @@
     if (cfg.googleApiKey) viewerOpts.baseLayer = false;
     const viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
     viewer.scene.skyAtmosphere.show = true;
-    viewer.scene.globe.depthTestAgainstTerrain = true;  // ocultar marcadores tras el globo (lado oculto)
+    // Oclusión de marcadores tras el globo (sin romper el 3D): culling por horizonte
+    const _occ = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, viewer.camera.positionWC);
+    function cullMarkers(){
+      try {
+        _occ.cameraPosition = viewer.camera.positionWC;
+        const t = viewer.clock.currentTime, C = viewer.camera.positionWC, tmp = new Cesium.Cartesian3();
+        for (const e of quakeEnts){ const p=e.position.getValue(t); if(p) e.show=_occ.isPointVisible(p); }
+        if (issEnt){ const ip=issEnt.position.getValue(t);
+          if(ip){ const d=Cesium.Cartesian3.dot(Cesium.Cartesian3.normalize(ip,tmp),
+            Cesium.Cartesian3.normalize(C,new Cesium.Cartesian3())); issEnt.show = d > -0.25; } }
+      } catch {}
+    }
+    viewer.camera.percentageChanged = 0.15;
+    viewer.camera.changed.addEventListener(cullMarkers);
 
     let googleTileset = null;
     if (cfg.googleApiKey) {
@@ -1001,11 +1014,12 @@
       let qs=[]; try{ qs=(await (await fetch("/api/quakes")).json()).quakes||[]; }catch{}
       clearQuakes();
       qs.forEach((q,i)=>{ const m=q.mag||0, id=`quake:${i}`, col=Cesium.Color.fromCssColorString(magColor(m));
-        quakeEnts.push(viewer.entities.add({ id, position:Cesium.Cartesian3.fromDegrees(q.lon,q.lat,2000),
+        quakeEnts.push(viewer.entities.add({ id, position:Cesium.Cartesian3.fromDegrees(q.lon,q.lat,0),
           point:{ pixelSize:Math.max(6,m*3+3), color:col.withAlpha(0.9),
             outlineColor:Cesium.Color.fromCssColorString("#0b1622"), outlineWidth:1,
-            disableDepthTestDistance:60000 } }));   // finito: los del lado oculto quedan tras el globo
+            disableDepthTestDistance:Number.POSITIVE_INFINITY } }));
         quakeById.set(id,q); });
+      cullMarkers();   // oculta los del lado opuesto del globo
       if(fly && qs.length){   // volar al sismo más reciente
         const q=qs.reduce((a,b)=>((b.time||0)>(a.time||0)?b:a), qs[0]);
         viewer.camera.flyTo({ destination:Cesium.Cartesian3.fromDegrees(q.lon,q.lat,1500000),
@@ -1032,13 +1046,14 @@
       issTrail.push(pos); if(issTrail.length>90) issTrail.shift();
       if(!issEnt){
         issEnt=viewer.entities.add({ id:"iss", position:pos,
-          billboard:{ image:ISS_IMG, width:38, height:38, disableDepthTestDistance:2500000 },
+          billboard:{ image:ISS_IMG, width:38, height:38, disableDepthTestDistance:Number.POSITIVE_INFINITY },
           label:{ text:"ISS", font:"12px sans-serif", pixelOffset:new Cesium.Cartesian2(0,-24),
             fillColor:Cesium.Color.fromCssColorString("#ffd24a"), showBackground:true,
-            backgroundColor:Cesium.Color.fromCssColorString("rgba(0,0,0,.55)"), disableDepthTestDistance:2500000 } });
+            backgroundColor:Cesium.Color.fromCssColorString("rgba(0,0,0,.55)"), disableDepthTestDistance:Number.POSITIVE_INFINITY } });
         issTrailEnt=viewer.entities.add({ polyline:{ positions:new Cesium.CallbackProperty(()=>issTrail,false),
           width:2, material:Cesium.Color.fromCssColorString("#ffd24a").withAlpha(0.5), arcType:Cesium.ArcType.GEODESIC } });
       } else issEnt.position=pos;
+      cullMarkers();   // oculta la ISS si está en el lado opuesto del globo
       if(fly){ viewer.camera.flyTo({ destination:Cesium.Cartesian3.fromDegrees(d.lon,d.lat,2000000),
         orientation:{heading:0,pitch:Cesium.Math.toRadians(-90),roll:0}, duration:2.6 }); }
     }
