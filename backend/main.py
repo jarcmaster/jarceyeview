@@ -88,6 +88,7 @@ class World:
         self.bbox: tuple = DEFAULT_BBOX
         self.snapshot: list[dict] = []
         self.last_error: str = ""
+        self.last_kml: float = 0.0
         self.track: Track | None = None
         self.emergencies: dict[str, str] = {}   # icao24 -> squawk ya alertado
 
@@ -209,19 +210,21 @@ async def check_emergencies(aircraft: list[dict]) -> None:
 # --------------------------------------------------------------------------
 async def poller() -> None:
     while True:
-        try:
-            aircraft = [asdict(a) for a in await opensky.fetch(bbox=world.bbox)]
-            world.snapshot = aircraft
-            world.last_error = ""
-            await check_emergencies(aircraft)
-        except httpx.HTTPStatusError as e:
-            world.last_error = f"OpenSky HTTP {e.response.status_code}" + (
-                " (cuota agotada)" if e.response.status_code == 429 else "")
-        except Exception as e:
-            world.last_error = f"{type(e).__name__}: {e}"
-        await broadcast({"type": "state", "entities": world.snapshot, "error": world.last_error})
-        if ais.enabled:
-            await broadcast({"type": "ships", "vessels": ais.snapshot()})
+        active = bool(world.clients) or (time.time() - world.last_kml < 30)
+        if active:   # solo consultar OpenSky si hay alguien mirando (ahorra cuota)
+            try:
+                aircraft = [asdict(a) for a in await opensky.fetch(bbox=world.bbox)]
+                world.snapshot = aircraft
+                world.last_error = ""
+                await check_emergencies(aircraft)
+            except httpx.HTTPStatusError as e:
+                world.last_error = f"OpenSky HTTP {e.response.status_code}" + (
+                    " (cuota agotada)" if e.response.status_code == 429 else "")
+            except Exception as e:
+                world.last_error = f"{type(e).__name__}: {e}"
+            await broadcast({"type": "state", "entities": world.snapshot, "error": world.last_error})
+            if ais.enabled:
+                await broadcast({"type": "ships", "vessels": ais.snapshot()})
         await asyncio.sleep(POLL_INTERVAL)
 
 
@@ -583,6 +586,7 @@ async def earth_kml(request: Request) -> Response:
 @app.get("/flights.kml")
 async def flights_kml(request: Request) -> Response:
     """Devuelto en cada refresco de Google Earth, con los aviones del área visible."""
+    world.last_kml = time.time()   # mantiene vivo el poller en modo Google Earth
     bbox = request.query_params.get("BBOX")
     if bbox:
         try:
