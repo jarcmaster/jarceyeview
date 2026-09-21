@@ -1051,7 +1051,7 @@
       if(prev) viewer.imageryLayers.remove(prev);
     }
     $("lyr-rain").addEventListener("change", e=>{
-      if(e.target.checked){ loadRain(); rainTimer=setInterval(loadRain,300000); }
+      if(e.target.checked){ ensure2D(); loadRain(); rainTimer=setInterval(loadRain,300000); }
       else { clearInterval(rainTimer); if(rainLayer){viewer.imageryLayers.remove(rainLayer);rainLayer=null;} }
     });
 
@@ -1060,6 +1060,7 @@
       let layer=null;
       $(cbId).addEventListener("change", e=>{
         if(e.target.checked){
+          ensure2D();
           layer = new Cesium.ImageryLayer(new Cesium.UrlTemplateImageryProvider({ url, maximumLevel:19 }));
           layer.alpha = alpha; viewer.imageryLayers.add(layer);
         } else if(layer){ viewer.imageryLayers.remove(layer); layer=null; }
@@ -1187,9 +1188,13 @@
                      ["binglabels","BING LABELS"],["esri","ESRI SATELLITE"],["osm","OSM"],["streetview","STREET VIEW"]];
     $("source-row").innerHTML = SOURCES.map(([k,l]) =>
       `<div class="sbtn2 ${k==="google3d"?"active":""}" data-k="${k}">${l}</div>`).join("");
-    let baseLayers = [];
+    let baseLayers = [], currentSource = "google3d";
     function clearBaseLayers(){ baseLayers.forEach(l => { try { viewer.imageryLayers.remove(l); } catch {} }); baseLayers = []; }
+    // Las capas de tiles (tráfico/calles/lluvia) van sobre el globo, que queda DEBAJO de los
+    // Google 3D Tiles. Si estamos en 3D, cambiamos a Google Satélite 2D para que se vean.
+    function ensure2D(){ if(currentSource === "google3d") setMapSource("gsat"); }
     async function setMapSource(src) {
+      currentSource = src;
       document.querySelectorAll("#source-row .sbtn2").forEach(b => b.classList.toggle("active", b.dataset.k === src));
       clearBaseLayers();
       if (src === "google3d") { if (googleTileset) googleTileset.show = true; return; }
