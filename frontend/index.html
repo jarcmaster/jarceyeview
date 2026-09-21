@@ -9,6 +9,19 @@
   <style>
     html, body, #cesiumContainer { width:100%; height:100%; margin:0; overflow:hidden; background:#000;
       font-family:"Segoe UI", system-ui, sans-serif; }
+    #boot-modal { position:absolute; inset:0; z-index:45; display:flex; flex-direction:column;
+      align-items:center; justify-content:center; gap:18px; background:rgba(4,10,18,.35); backdrop-filter:blur(2px);
+      color:#dff; font-family:"Consolas", monospace; transition:opacity .5s; }
+    #boot-modal.hide { opacity:0; pointer-events:none; }
+    .boot-anim { position:relative; width:120px; height:120px; }
+    .boot-anim span { position:absolute; inset:0; margin:auto; width:16px; height:16px; border:2px solid #8fe3ff;
+      border-radius:50%; animation:boot-ping 2s ease-out infinite; opacity:0; }
+    .boot-anim span:nth-child(2){ animation-delay:.66s; } .boot-anim span:nth-child(3){ animation-delay:1.33s; }
+    .boot-anim b { position:absolute; inset:0; margin:auto; width:12px; height:12px; background:#8fe3ff;
+      border-radius:50%; box-shadow:0 0 14px #8fe3ff; }
+    @keyframes boot-ping { 0%{width:16px;height:16px;opacity:.9} 100%{width:120px;height:120px;opacity:0} }
+    .boot-txt { font-size:17px; letter-spacing:2px; color:#8fe3ff; text-shadow:0 0 10px rgba(127,211,255,.5); }
+    .boot-sub { font-size:12px; color:#9cc; letter-spacing:1px; }
     .panel { color:#dff; background:rgba(6,16,26,.82);
       border:1px solid rgba(80,180,255,.28); border-radius:12px; padding:12px 14px;
       backdrop-filter:blur(8px); box-shadow:0 6px 26px rgba(0,0,0,.5); }
@@ -280,6 +293,12 @@
 <body>
   <div id="cesiumContainer"></div>
 
+  <div id="boot-modal">
+    <div class="boot-anim"><span></span><span></span><span></span><b></b></div>
+    <div class="boot-txt" id="boot-txt">Identificando tu conexión…</div>
+    <div class="boot-sub" id="boot-sub">Estableciendo posición</div>
+  </div>
+
   <div id="left-col">
     <div id="hud" class="panel">
       <h1><span data-ic="plane"></span> JARC'S EYE — VUELOS</h1>
@@ -517,8 +536,13 @@
       orientation: { heading:0, pitch:Cesium.Math.toRadians(-55), roll:0 },
     });
 
+    // Modal de arranque "Identificando tu conexión…"
+    const setBoot=(t,s)=>{ $("boot-txt").textContent=t; if(s!=null) $("boot-sub").textContent=s; };
+    const hideBoot=()=>{ const m=$("boot-modal"); m.classList.add("hide"); setTimeout(()=>{ m.style.display="none"; }, 600); };
+
     // Volar a MI ubicación: 1) geolocalización del navegador  2) fallback por IP
     async function flyToMyLocation() {
+      setBoot("Identificando tu conexión…", "Solicitando ubicación del navegador");
       let loc = await new Promise((resolve) => {
         if (!navigator.geolocation) return resolve(null);
         navigator.geolocation.getCurrentPosition(
@@ -528,17 +552,24 @@
         );
       });
       if (!loc) {  // fallback: ubicación por IP (desde el backend)
+        setBoot("Identificando tu conexión…", "Localizando por IP…");
         try {
           const j = await (await fetch("/api/geoip")).json();
           if (j && j.lat != null) loc = { lat:j.lat, lon:j.lon, src:"IP", city:j.city };
         } catch {}
       }
       if (loc) {
+        setBoot("Conexión localizada", (loc.city ? loc.city + " · " : "") + "volando al punto…");
         viewer.camera.flyTo({
           destination: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, 120000),
           orientation: { heading:0, pitch:Cesium.Math.toRadians(-55), roll:0 },
           duration: 2.5,   // al terminar dispara moveEnd -> carga aviones de la zona
+          complete: hideBoot,
         });
+        setTimeout(hideBoot, 4000);  // salvaguarda por si complete no dispara
+      } else {
+        setBoot("No se pudo ubicar tu conexión", "Usando vista por defecto");
+        setTimeout(hideBoot, 1400);
       }
     }
     flyToMyLocation();
