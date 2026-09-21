@@ -69,8 +69,8 @@
     #np { margin-top:6px; font-size:12px; color:#ffb347; min-height:1em; display:flex; align-items:center; gap:6px; }
     #np .stopbtn { cursor:pointer; color:#ffdada; margin-left:auto; display:inline-flex; align-items:center; gap:4px; }
 
-    /* Dock inferior */
-    #dock { position:absolute; z-index:14; bottom:14px; left:50%; transform:translateX(-50%);
+    /* Dock inferior (por encima de la capa de captura del OBJETIVO para poder usar los controles) */
+    #dock { position:absolute; z-index:26; bottom:14px; left:50%; transform:translateX(-50%);
       display:flex; gap:2px; background:rgba(6,16,26,.9); border:1px solid rgba(80,180,255,.3);
       border-radius:14px; padding:6px; backdrop-filter:blur(8px); box-shadow:0 8px 34px rgba(0,0,0,.6); }
     .dock-btn { display:flex; align-items:center; gap:8px; padding:10px 16px; border-radius:10px;
@@ -82,7 +82,7 @@
     #mic-status { font-size:10px; color:#8ab; max-width:190px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
     /* Panel de presets + fuentes */
-    #preset-panel { position:absolute; z-index:14; bottom:86px; left:50%; transform:translateX(-50%);
+    #preset-panel { position:absolute; z-index:26; bottom:86px; left:50%; transform:translateX(-50%);
       width:660px; max-width:94vw; display:none; }
     .prow { display:flex; gap:6px; }
     .pbtn { flex:1; min-width:64px; display:flex; flex-direction:column; align-items:center; gap:5px;
