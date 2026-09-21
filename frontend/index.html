@@ -65,8 +65,39 @@
     #np { margin-top:6px; font-size:12px; color:#ffb347; min-height:1em; display:flex; align-items:center; gap:6px; }
     #np .stopbtn { cursor:pointer; color:#ffdada; margin-left:auto; display:inline-flex; align-items:center; gap:4px; }
 
+    /* Dock inferior */
+    #dock { position:absolute; z-index:14; bottom:14px; left:50%; transform:translateX(-50%);
+      display:flex; gap:2px; background:rgba(6,16,26,.9); border:1px solid rgba(80,180,255,.3);
+      border-radius:14px; padding:6px; backdrop-filter:blur(8px); box-shadow:0 8px 34px rgba(0,0,0,.6); }
+    .dock-btn { display:flex; align-items:center; gap:8px; padding:10px 16px; border-radius:10px;
+      cursor:pointer; color:#bcd; font-size:12px; letter-spacing:1px; user-select:none; }
+    .dock-btn:hover { background:#12283a; color:#dff; }
+    .dock-btn.active { background:#123449; color:#7fd3ff; }
+    #mic-btn { flex-direction:column; gap:3px; min-width:130px; text-align:center; color:#7fd3ff; }
+    #mic-btn.listening { background:#0e3a2a; color:#5fe08a; box-shadow:0 0 0 1px #2fbf70 inset; }
+    #mic-status { font-size:10px; color:#8ab; max-width:190px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+    /* Panel de presets + fuentes */
+    #preset-panel { position:absolute; z-index:14; bottom:86px; left:50%; transform:translateX(-50%);
+      width:660px; max-width:94vw; display:none; }
+    .prow { display:flex; gap:6px; }
+    .pbtn { flex:1; min-width:64px; display:flex; flex-direction:column; align-items:center; gap:5px;
+      padding:10px 4px; border-radius:10px; cursor:pointer; font-size:11px; letter-spacing:1px;
+      color:#9cc; background:#0b1622; border:1px solid #1f3d55; }
+    .pbtn:hover { background:#12283a; color:#dff; }
+    .pbtn.active { border-color:#3aa0ff; color:#7fd3ff; box-shadow:0 0 0 1px #3aa0ff inset; }
+    .pbtn .ic { width:18px; height:18px; }
+    .plabel { color:#7a97ad; font-size:10px; letter-spacing:2px; margin:10px 2px 4px; }
+    .srow { display:flex; gap:6px; flex-wrap:wrap; }
+    .sbtn2 { flex:1; min-width:96px; padding:8px; border-radius:8px; cursor:pointer; text-align:center;
+      font-size:11px; color:#9cc; background:#0b1622; border:1px solid #1f3d55; letter-spacing:1px; }
+    .sbtn2:hover { background:#12283a; color:#dff; }
+    .sbtn2.active { border-color:#3aa0ff; color:#7fd3ff; box-shadow:0 0 0 1px #3aa0ff inset; }
+    #crt-overlay { position:absolute; inset:0; z-index:9; pointer-events:none; display:none;
+      background:repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0, rgba(0,0,0,.22) 1px, transparent 1px, transparent 3px); }
+
     /* Reproductores flotantes (webcam / street view) */
-    #wc-player, #sv-player { position:absolute; z-index:30; left:50%; transform:translateX(-50%); bottom:12px;
+    #wc-player, #sv-player { position:absolute; z-index:30; left:50%; transform:translateX(-50%); bottom:92px;
       width:380px; max-width:92vw; display:none; background:rgba(6,16,26,.96);
       border:1px solid #2a6a8f; border-radius:12px; overflow:hidden; box-shadow:0 8px 34px rgba(0,0,0,.6); }
     #wc-player .wc-head, #sv-player .wc-head { display:flex; justify-content:space-between; align-items:center;
@@ -157,10 +188,23 @@
     </div>
   </div>
 
+  <div id="crt-overlay"></div>
   <div id="wc-player"></div>
   <div id="sv-player"></div>
   <div id="searchbox" class="panel"></div>
   <div id="popup" class="panel"></div>
+
+  <div id="preset-panel" class="panel">
+    <div class="plabel">PRESETS VISUALES</div>
+    <div class="prow" id="preset-row"></div>
+    <div class="plabel">FUENTE DE MAPA</div>
+    <div class="srow" id="source-row"></div>
+  </div>
+  <div id="dock">
+    <div class="dock-btn" id="loc-btn"><span data-ic="pin"></span> UBICACIÓN</div>
+    <div class="dock-btn" id="mic-btn"><span data-ic="mic"></span><span id="mic-status">Pide o comanda</span></div>
+    <div class="dock-btn" id="presets-btn"><span data-ic="layers"></span> PRESETS</div>
+  </div>
 
   <div id="status">conectando…</div>
   <div id="overlay"></div>
@@ -190,6 +234,15 @@
       satellite:'<svg class="ic" viewBox="0 0 24 24"><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><path d="M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>',
       cloudrain:'<svg class="ic" viewBox="0 0 24 24"><path d="M20 15.5A4.5 4.5 0 0 0 17.5 7h-1.8A7 7 0 1 0 4 13.9"/><path d="M8 19v1M12 19v2M16 19v1"/></svg>',
       anchor:'<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.2"/><path d="M12 7.2V21"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>',
+      mic:'<svg class="ic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 19v3"/></svg>',
+      layers:'<svg class="ic" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5 9-5z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></svg>',
+      p_normal:'<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/></svg>',
+      p_crt:'<svg class="ic" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 9h16M4 15h16M9 4v16M15 4v16"/></svg>',
+      p_nvg:'<svg class="ic" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>',
+      p_flir:'<svg class="ic" viewBox="0 0 24 24"><path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0z"/></svg>',
+      p_anime:'<svg class="ic" viewBox="0 0 24 24"><path d="m12 3 1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/></svg>',
+      p_noir:'<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg>',
+      p_snow:'<svg class="ic" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"/></svg>',
     };
     const icon = (n) => IC[n] || "";
     document.querySelectorAll("[data-ic]").forEach(e => { e.innerHTML = icon(e.dataset.ic); });
@@ -218,10 +271,11 @@
     const viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
     viewer.scene.skyAtmosphere.show = true;
 
+    let googleTileset = null;
     if (cfg.googleApiKey) {
       try {
         Cesium.GoogleMaps.defaultApiKey = cfg.googleApiKey;
-        viewer.scene.primitives.add(await Cesium.createGooglePhotorealistic3DTileset());
+        googleTileset = viewer.scene.primitives.add(await Cesium.createGooglePhotorealistic3DTileset());
       } catch (e) { fail(`No pude cargar Google 3D Tiles: <code>${e.message}</code>`); }
     }
     // Vista por defecto inmediata (por si tarda/falla la ubicación)
@@ -816,6 +870,127 @@
         }
       };
     }
+    // ================= DOCK: presets visuales, fuentes de mapa, voz =========
+    // --- Presets visuales (filtros sobre el canvas) ---
+    const PRESET_FILTERS = {
+      normal: "none",
+      crt:   "contrast(1.25) saturate(1.4) brightness(1.05)",
+      nvg:   "brightness(1.25) grayscale(1) sepia(1) hue-rotate(55deg) saturate(6) contrast(1.1)",
+      flir:  "grayscale(1) invert(1) contrast(1.5) sepia(1) hue-rotate(150deg) saturate(5)",
+      anime: "saturate(1.9) contrast(1.15) brightness(1.05)",
+      noir:  "grayscale(1) contrast(1.5) brightness(0.95)",
+      snow:  "brightness(1.2) saturate(0.5) contrast(0.95) hue-rotate(180deg)",
+    };
+    const PRESETS = [["normal","NORMAL"],["crt","CRT"],["nvg","NVG"],["flir","FLIR"],
+                     ["anime","ANIME"],["noir","NOIR"],["snow","SNOW"]];
+    $("preset-row").innerHTML = PRESETS.map(([k,l]) =>
+      `<div class="pbtn ${k==="normal"?"active":""}" data-k="${k}">${icon("p_"+k)}<span>${l}</span></div>`).join("");
+    function applyPreset(k) {
+      $("cesiumContainer").style.filter = PRESET_FILTERS[k] || "none";
+      $("crt-overlay").style.display = (k === "crt") ? "block" : "none";
+      document.querySelectorAll("#preset-row .pbtn").forEach(b => b.classList.toggle("active", b.dataset.k === k));
+    }
+    $("preset-row").querySelectorAll(".pbtn").forEach(b => b.onclick = () => applyPreset(b.dataset.k));
+
+    // --- Fuentes de mapa ---
+    const SOURCES = [["google3d","GOOGLE 3D"],["bing","BING AERIAL"],["binglabels","BING LABELS"],
+                     ["esri","ESRI SATELLITE"],["osm","OSM"]];
+    $("source-row").innerHTML = SOURCES.map(([k,l]) =>
+      `<div class="sbtn2 ${k==="google3d"?"active":""}" data-k="${k}">${l}</div>`).join("");
+    let baseLayers = [];
+    function clearBaseLayers(){ baseLayers.forEach(l => { try { viewer.imageryLayers.remove(l); } catch {} }); baseLayers = []; }
+    async function setMapSource(src) {
+      document.querySelectorAll("#source-row .sbtn2").forEach(b => b.classList.toggle("active", b.dataset.k === src));
+      clearBaseLayers();
+      if (src === "google3d") { if (googleTileset) googleTileset.show = true; return; }
+      if (googleTileset) googleTileset.show = false;
+      try {
+        let provider;
+        if (src === "bing") provider = await Cesium.IonImageryProvider.fromAssetId(2);
+        else if (src === "binglabels") provider = await Cesium.IonImageryProvider.fromAssetId(3);
+        else if (src === "esri") provider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
+          "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer");
+        else if (src === "osm") provider = new Cesium.OpenStreetMapImageryProvider({ url: "https://tile.openstreetmap.org/" });
+        if (provider) {
+          const layer = new Cesium.ImageryLayer(provider);
+          viewer.imageryLayers.add(layer); viewer.imageryLayers.lowerToBottom(layer);
+          baseLayers.push(layer);
+        }
+      } catch (e) { console.error("mapsource", src, e); }
+    }
+    $("source-row").querySelectorAll(".sbtn2").forEach(b => b.onclick = () => setMapSource(b.dataset.k));
+
+    // --- Botones del dock ---
+    $("presets-btn").onclick = () => {
+      const p = $("preset-panel"), open = p.style.display !== "block";
+      p.style.display = open ? "block" : "none";
+      $("presets-btn").classList.toggle("active", open);
+    };
+    $("loc-btn").onclick = () => flyToMyLocation();
+
+    // --- Voz (Web Speech API -> /api/voice -> acción) ---
+    const micStatus = $("mic-status");
+    function setMic(listening, text) {
+      $("mic-btn").classList.toggle("listening", !!listening);
+      if (text != null) micStatus.textContent = text;
+    }
+    let recognizing = false, recog = null;
+    function startVoice() {
+      if (!cfg.voice) { alert("Configura OPENAI_API_KEY en .env para los comandos de voz."); return; }
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { alert("Tu navegador no soporta dictado por voz. Usa Chrome o Edge."); return; }
+      if (recognizing) { recog && recog.stop(); return; }
+      recog = new SR(); recog.lang = "es-ES"; recog.interimResults = true; recog.continuous = false;
+      recog.onstart = () => { recognizing = true; setMic(true, "Escuchando…"); };
+      recog.onresult = (e) => {
+        let t = ""; for (const r of e.results) t += r[0].transcript;
+        setMic(true, t);
+        if (e.results[e.results.length - 1].isFinal) handleVoice(t.trim());
+      };
+      recog.onerror = () => { recognizing = false; setMic(false, "Pide o comanda"); };
+      recog.onend = () => { recognizing = false; $("mic-btn").classList.remove("listening"); };
+      recog.start();
+    }
+    async function handleVoice(text) {
+      if (!text) return;
+      setMic(false, "⋯ " + text);
+      let a = null;
+      try { a = await (await fetch("/api/voice", { method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ text }) })).json(); } catch {}
+      if (!a) { setMic(false, "Sin respuesta"); return; }
+      execIntent(a);
+      setMic(false, a.text || "Pide o comanda");
+    }
+    function execIntent(a) {
+      switch (a.action) {
+        case "flyto":
+          if (a.place) { viewer.geocoder.viewModel.searchText = a.place; viewer.geocoder.viewModel.search(); }
+          break;
+        case "mylocation": flyToMyLocation(); break;
+        case "layer": {
+          const id = { quakes:"lyr-quakes", iss:"lyr-iss", rain:"lyr-rain" }[a.layer];
+          if (id) { const cb = $(id), want = a.on !== false;
+            if (cb.checked !== want) { cb.checked = want; cb.dispatchEvent(new Event("change")); } }
+          break;
+        }
+        case "scan":
+          if (a.kind === "traffic") { $("wc-traffic").checked = true; scanWebcams(); }
+          else if (a.kind === "webcams") { $("wc-traffic").checked = false; scanWebcams(); }
+          else scanRadios();
+          break;
+        case "preset": applyPreset(a.preset); break;
+        case "mapsource": setMapSource(a.source); break;
+        case "track": if (a.callsign && ws) ws.send(JSON.stringify({ type:"track", callsign:a.callsign })); break;
+        case "streetview": {
+          const c = lastSearch || viewCenter();
+          openStreetView(c.lat, c.lon, (lastSearch && lastSearch.name) || "Aquí");
+          break;
+        }
+      }
+    }
+    $("mic-btn").onclick = startVoice;
+    if (!cfg.voice) micStatus.textContent = "voz no configurada";
+
     connect();
   </script>
 </body>

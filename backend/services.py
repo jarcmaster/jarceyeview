@@ -9,6 +9,7 @@ Servicios externos y utilidades para JARC's EYE View.
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import time
@@ -224,6 +225,55 @@ async def iss_position() -> dict | None:
         d = (await _http.get("https://api.wheretheiss.at/v1/satellites/25544")).json()
         return {"lat": d["latitude"], "lon": d["longitude"], "alt": d.get("altitude"),
                 "vel": d.get("velocity")}
+    except Exception:
+        return None
+
+
+VOICE_SYSTEM = """Eres el copiloto de voz de JARC'S EYE View, un mapa 3D tipo "God's Eye".
+Convierte la orden del usuario (español o inglés) en UNA sola acción JSON.
+Responde SOLO JSON válido: {"action":"...", ...campos, "text":"confirmación breve en español"}.
+
+Acciones válidas:
+- {"action":"flyto","place":"<lugar>","text":"..."}          (volar a una ciudad/lugar)
+- {"action":"mylocation","text":"..."}                        (ir a mi ubicación)
+- {"action":"layer","layer":"quakes|iss|rain","on":true|false,"text":"..."}
+- {"action":"scan","kind":"radio|webcams|traffic","text":"..."}
+- {"action":"preset","preset":"normal|crt|nvg|flir|anime|noir|snow","text":"..."}
+- {"action":"mapsource","source":"google3d|bing|binglabels|esri|osm","text":"..."}
+- {"action":"track","callsign":"<callsign>","text":"..."}     (rastrear un vuelo)
+- {"action":"streetview","text":"..."}                        (abrir Street View del punto actual)
+- {"action":"say","text":"<respuesta breve>"}                 (si no es un comando o es una pregunta)
+
+Ejemplos:
+"vuela a Tokio" -> {"action":"flyto","place":"Tokyo","text":"Volando a Tokio"}
+"muéstrame los terremotos" -> {"action":"layer","layer":"quakes","on":true,"text":"Mostrando terremotos"}
+"apaga la lluvia" -> {"action":"layer","layer":"rain","on":false,"text":"Lluvia apagada"}
+"visión nocturna" -> {"action":"preset","preset":"nvg","text":"Modo NVG"}
+"modo térmico" -> {"action":"preset","preset":"flir","text":"Modo FLIR"}
+"cambia a OpenStreetMap" -> {"action":"mapsource","source":"osm","text":"Mapa OSM"}
+"escanea radios" -> {"action":"scan","kind":"radio","text":"Escaneando radios"}
+"cámaras de carretera" -> {"action":"scan","kind":"traffic","text":"Cámaras de tráfico"}
+"llévame a casa" -> {"action":"mylocation","text":"Yendo a tu ubicación"}"""
+
+
+async def voice_intent(text: str) -> dict | None:
+    """Interpreta una orden de voz en una acción de navegación usando GPT."""
+    key = os.getenv("OPENAI_API_KEY", "")
+    if not key or not (text or "").strip():
+        return None
+    body = {
+        "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+        "temperature": 0,
+        "response_format": {"type": "json_object"},
+        "messages": [{"role": "system", "content": VOICE_SYSTEM},
+                     {"role": "user", "content": text}],
+    }
+    try:
+        r = await _http.post("https://api.openai.com/v1/chat/completions",
+                             headers={"Authorization": f"Bearer {key}"},
+                             json=body, timeout=20)
+        r.raise_for_status()
+        return json.loads(r.json()["choices"][0]["message"]["content"])
     except Exception:
         return None
 

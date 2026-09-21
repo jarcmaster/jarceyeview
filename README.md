@@ -39,6 +39,11 @@ Telegram (avisos)┘
 - **Búsqueda con pin + Street View**: al buscar un lugar cae un pin y un botón abre Street View.
 - **Capas globales** (panel CAPAS, sin API key): **terremotos** en vivo (USGS, coloreados por
   magnitud), **ISS** en tiempo real con estela (wheretheiss.at) y **radar de lluvia** (RainViewer).
+- **Dock de control** (barra inferior): **presets visuales** (Normal/CRT/NVG/FLIR/Anime/Noir/Snow),
+  **fuentes de mapa** (Google 3D / Bing / ESRI / OSM) y **comandos de voz** con GPT.
+- **Comandos de voz**: el navegador transcribe (Web Speech API) y GPT (backend, `OPENAI_API_KEY`)
+  interpreta la orden en una acción: volar a un lugar, activar capas, cambiar preset/mapa,
+  rastrear un vuelo, Street View, etc. La API key vive solo en el backend.
 
 ## 1. Requisitos
 

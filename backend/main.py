@@ -42,7 +42,7 @@ from fastapi.staticfiles import StaticFiles
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from services import (OpenSky, RouteService, Telegram, aclose, earthquakes,
                       flight_status, geoip, haversine_km, iss_position,
-                      radio_stations, rain_radar, webcams)
+                      radio_stations, rain_radar, voice_intent, webcams)
 
 load_dotenv()
 
@@ -309,6 +309,11 @@ async def api_rain() -> JSONResponse:
     return JSONResponse(await rain_radar())
 
 
+@app.post("/api/voice")
+async def api_voice(payload: dict) -> JSONResponse:
+    return JSONResponse(await voice_intent(payload.get("text", "")) or {"action": "say", "text": "No te entendí."})
+
+
 @app.get("/config")
 async def config() -> JSONResponse:
     return JSONResponse({
@@ -318,6 +323,7 @@ async def config() -> JSONResponse:
         "telegram": telegram.configured,
         "flightStatus": bool(os.getenv("AVIATIONSTACK_KEY", "")),
         "webcams": bool(os.getenv("WINDY_WEBCAMS_KEY", "")),
+        "voice": bool(os.getenv("OPENAI_API_KEY", "")),
         "pollInterval": POLL_INTERVAL,
         "thresholds": THRESHOLDS,
     })
@@ -548,8 +554,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
             elif kind == "status":
                 asyncio.create_task(_handle_status_request(ws, msg.get("callsign", "")))
             elif kind == "track":
-                world.track = Track(icao24=(msg.get("id") or "").lower(),
-                                    callsign=(msg.get("callsign") or "").strip())
+                start_track(msg.get("callsign", ""), msg.get("id"))
             elif kind == "untrack":
                 world.track = None
                 await broadcast({"type": "track", "phase": "off"})
