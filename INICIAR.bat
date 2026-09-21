@@ -10,7 +10,7 @@ echo.
 
 REM 1) Crear entorno virtual e instalar dependencias si no existe
 if not exist ".venv\Scripts\python.exe" (
-    echo [1/3] Creando entorno virtual e instalando dependencias...
+    echo [1/4] Creando entorno virtual e instalando dependencias...
     py -m venv .venv
     ".venv\Scripts\python.exe" -m pip install --upgrade pip
     ".venv\Scripts\python.exe" -m pip install -r "backend\requirements.txt"
@@ -24,11 +24,17 @@ if not exist ".env" (
     echo.
 )
 
-REM 3) Abrir el navegador tras 3s (mientras arranca el servidor)
-echo [2/3] Abriendo http://localhost:8000 en el navegador...
+REM 3) Liberar el puerto 8000 si hay un servidor previo ocupandolo
+echo [2/4] Liberando el puerto 8000 si estaba ocupado...
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":8000" ^| findstr "LISTENING"') do (
+    taskkill /F /PID %%p >nul 2>&1
+)
+
+REM 4) Abrir el navegador tras 3s (mientras arranca el servidor)
+echo [3/4] Abriendo http://localhost:8000 en el navegador...
 start "" /min cmd /c "timeout /t 3 /nobreak >nul && explorer http://localhost:8000"
 
-echo [3/3] Iniciando servidor. Cierra esta ventana o pulsa Ctrl+C para detener.
+echo [4/4] Iniciando servidor. Cierra esta ventana o pulsa Ctrl+C para detener.
 echo.
 ".venv\Scripts\python.exe" -m uvicorn backend.main:app --port 8000
 
