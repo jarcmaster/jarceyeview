@@ -261,7 +261,7 @@
     .veh-item .vid { color:#5fe08a; font-weight:600; align-self:flex-start; }
 
     /* Reproductores flotantes (webcam / street view) */
-    #wc-player, #sv-player { position:absolute; z-index:30; left:50%; transform:translateX(-50%); bottom:92px;
+    #wc-player, #sv-player { position:absolute; z-index:31; left:50%; top:50%; transform:translate(-50%,-50%);
       width:380px; max-width:92vw; display:none; background:rgba(6,16,26,.96);
       border:1px solid #2a6a8f; border-radius:12px; overflow:hidden; box-shadow:0 8px 34px rgba(0,0,0,.6); }
     #wc-player .wc-head, #sv-player .wc-head { display:flex; justify-content:space-between; align-items:center;
@@ -279,21 +279,42 @@
       display:none; max-width:320px; font-size:12px; }
     #popup .sclose { cursor:pointer; color:#ffdada; display:inline-flex; }
     #popup a { color:#7fd3ff; text-decoration:none; display:inline-flex; align-items:center; gap:5px; margin-top:6px; }
-    #wc-gallery { position:absolute; z-index:28; right:12px; bottom:44px; width:344px; max-height:60vh; display:none;
-      flex-direction:column; background:rgba(6,16,26,.92); border:1px solid rgba(80,180,255,.3); border-radius:12px;
-      backdrop-filter:blur(8px); box-shadow:0 8px 30px rgba(0,0,0,.55); overflow:hidden; }
+    #wc-gallery { position:absolute; z-index:28; right:12px; bottom:44px; width:344px; max-height:62vh; display:none;
+      flex-direction:column; background:rgba(3,9,15,.96); border:1px solid rgba(80,180,255,.28); border-radius:12px;
+      backdrop-filter:blur(8px); box-shadow:0 8px 30px rgba(0,0,0,.6); overflow:hidden; }
     .wcg-head { display:flex; justify-content:space-between; align-items:center; padding:9px 12px; color:#7fd3ff;
-      font-size:13px; letter-spacing:1px; border-bottom:1px solid #1f3d55; }
+      font-size:13px; letter-spacing:1px; border-bottom:1px solid #17303f; }
     .wcg-head .wcg-close { cursor:pointer; color:#ffdada; font-size:14px; }
-    .wcg-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:10px; overflow-y:auto; }
-    .wc-card { position:relative; border-radius:8px; overflow:hidden; cursor:pointer; background:#0b1622; height:96px; }
+    .wcg-body { overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:12px; }
+    .wcg-body::-webkit-scrollbar { width:11px; }
+    .wcg-body::-webkit-scrollbar-track { background:#050c12; }
+    .wcg-body::-webkit-scrollbar-thumb { background:#16303f; border-radius:6px; border:2px solid #050c12; }
+    .wcg-body::-webkit-scrollbar-thumb:hover { background:#22475f; }
+    .wcg-label { color:#7fd3ff; font-size:11px; letter-spacing:1px; margin-bottom:6px; opacity:.85; }
+    .wcg-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .wc-card { position:relative; border-radius:8px; overflow:hidden; cursor:pointer; background:#0a141e; height:96px; }
     .wc-card img { width:100%; height:100%; object-fit:cover; display:block; }
     .wc-card:hover { outline:2px solid #3aa0ff; }
+    .wc-fav { position:absolute; top:3px; right:4px; font-size:15px; line-height:1; color:#ff8fa3; cursor:pointer;
+      text-shadow:0 0 4px rgba(0,0,0,.9); z-index:2; }
+    .wc-fav.on { color:#ff4d6d; }
     .wc-card .wc-t { position:absolute; top:0; left:0; right:0; padding:5px 7px; font-size:10.5px; color:#fff;
       background:linear-gradient(180deg, rgba(0,0,0,.78), transparent); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .wc-card .wc-m { position:absolute; bottom:0; left:0; right:0; padding:5px 7px; font-size:10px; color:#dfe;
       background:linear-gradient(0deg, rgba(0,0,0,.78), transparent); display:flex; align-items:center; gap:5px; }
     .wc-card .wc-dot { width:7px; height:7px; border-radius:50%; background:#5fe08a; flex:0 0 auto; }
+    /* Efecto "hackeo" al activar capas */
+    #hackfx { position:absolute; inset:0; z-index:35; display:none; align-items:center; justify-content:center;
+      background:rgba(2,8,14,.25); font-family:"Consolas", monospace; }
+    .hx-box { width:340px; max-width:88vw; background:rgba(3,12,10,.92); border:1px solid #2fbf70; border-radius:10px;
+      padding:14px 16px; color:#5fe08a; box-shadow:0 0 30px rgba(47,191,112,.35), inset 0 0 20px rgba(47,191,112,.08); transition:box-shadow .3s; }
+    .hx-title { font-size:13px; letter-spacing:1px; color:#8affc0; margin-bottom:8px; text-shadow:0 0 8px rgba(95,224,138,.6); }
+    .hx-log { height:118px; overflow:hidden; font-size:11px; line-height:1.5; color:#3ec77e; }
+    .hx-log div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .hx-barwrap { margin-top:10px; height:8px; background:#062012; border:1px solid #1f5a37; border-radius:5px; overflow:hidden; }
+    .hx-bar { height:100%; width:0; background:linear-gradient(90deg,#1f7a45,#5fe08a); box-shadow:0 0 10px #5fe08a; transition:width .18s; }
+    .hx-pct { text-align:right; font-size:12px; margin-top:4px; color:#8affc0; }
+    #hackfx.hx-done .hx-box { border-color:#5fe08a; box-shadow:0 0 42px rgba(95,224,138,.6); }
 
     #sel, #trk { display:none; }
     #status { position:absolute; bottom:12px; left:12px; z-index:11; font-family:monospace;
@@ -466,8 +487,26 @@
   </div>
 
   <div id="wc-gallery">
-    <div class="wcg-head"><b>Webcams cercanas</b><span class="wcg-close" id="wcg-close">✕</span></div>
-    <div class="wcg-grid" id="wcg-grid"></div>
+    <div class="wcg-head"><b>Webcams</b><span class="wcg-close" id="wcg-close">✕</span></div>
+    <div class="wcg-body">
+      <div class="wcg-sec" id="wcg-favsec" style="display:none">
+        <div class="wcg-label">♥ Favoritos</div>
+        <div class="wcg-grid" id="wcg-favs"></div>
+      </div>
+      <div class="wcg-sec">
+        <div class="wcg-label">Cercanas</div>
+        <div class="wcg-grid" id="wcg-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="hackfx">
+    <div class="hx-box">
+      <div class="hx-title" id="hx-title">&gt; ACCEDIENDO</div>
+      <div class="hx-log" id="hx-log"></div>
+      <div class="hx-barwrap"><div class="hx-bar" id="hx-bar"></div></div>
+      <div class="hx-pct" id="hx-pct">0%</div>
+    </div>
   </div>
 
   <div id="status">conectando…</div>
@@ -519,6 +558,40 @@
       hdr.appendChild(chev);
       hdr.addEventListener("click", () => p.classList.toggle("collapsed"));
     });
+
+    // ---- Efecto "hackeo con progreso" al activar capas ----
+    let hxProgTimer=null, hxLogTimer=null, hxProg=0;
+    const HX_MSGS=["Estableciendo tunel seguro","Descifrando paquetes AES-256","Bypass de firewall",
+      "Enumerando nodos de red","Inyectando payload","Interceptando telemetria","Rutas de acceso mapeadas",
+      "Handshake completado","Autenticando token de sesion","Escaneando puertos abiertos","Elevando privilegios"];
+    function showHack(label){
+      const box=$("hackfx"); box.style.display="flex"; box.classList.remove("hx-done");
+      $("hx-title").textContent="> ACCEDIENDO: "+label;
+      $("hx-log").innerHTML=""; hxProg=0; $("hx-bar").style.width="0%"; $("hx-pct").textContent="0%";
+      clearInterval(hxProgTimer); clearInterval(hxLogTimer);
+      hxLogTimer=setInterval(()=>{
+        const log=$("hx-log");
+        const hex=Array.from({length:8},()=>Math.floor(Math.random()*256).toString(16).padStart(2,"0")).join(" ");
+        const msg=(Math.random()<0.5)?HX_MSGS[Math.floor(Math.random()*HX_MSGS.length)]:("0x"+hex);
+        const line=document.createElement("div"); line.textContent="> "+msg;
+        log.appendChild(line); while(log.children.length>7) log.removeChild(log.firstChild);
+      },210);
+      hxProgTimer=setInterval(()=>{ hxProg=Math.min(92, hxProg+Math.random()*9);
+        $("hx-bar").style.width=hxProg+"%"; $("hx-pct").textContent=Math.floor(hxProg)+"%"; },170);
+    }
+    async function hackDone(){
+      clearInterval(hxProgTimer); clearInterval(hxLogTimer);
+      $("hx-bar").style.width="100%"; $("hx-pct").textContent="100%";
+      const l=document.createElement("div"); l.style.color="#8affc0"; l.textContent="> ACCESO CONCEDIDO";
+      $("hx-log").appendChild(l); $("hackfx").classList.add("hx-done");
+      await new Promise(r=>setTimeout(r,650)); $("hackfx").style.display="none";
+    }
+    function hackFX(label, work){
+      showHack(label);
+      const min=new Promise(r=>setTimeout(r,1200));
+      const job=(typeof work==="number")?new Promise(r=>setTimeout(r,work)):Promise.resolve(work).catch(()=>{});
+      return Promise.all([job,min]).then(hackDone);
+    }
 
     const PLANE_SVG =
       '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24">' +
@@ -632,7 +705,7 @@
     }
     ["f-country","f-airline","f-alt","f-emerg","f-trails"].forEach(id =>
       $(id).addEventListener("input", readFilters));
-    $("lyr-planes").addEventListener("change", e => { filters.planes = e.target.checked; applyFilters(); });
+    $("lyr-planes").addEventListener("change", e => { filters.planes = e.target.checked; applyFilters(); if(e.target.checked) hackFX("VUELOS", 900); });
 
     function passes(d) {
       if (!filters.planes) return false;
@@ -937,16 +1010,46 @@
       if(isNaN(t)) return ""; const m=Math.max(0,Math.round((Date.now()-t)/60000)); return m<60?`hace ${m}m`:`hace ${Math.round(m/60)}h`; };
     const wcDistKm=(a,b,c,d)=>{ const R=6371,p1=a*Math.PI/180,p2=c*Math.PI/180,dp=(c-a)*Math.PI/180,dl=(d-b)*Math.PI/180;
       const x=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2; return 2*R*Math.asin(Math.sqrt(x)); };
+    let wcFavs = {};
+    try { wcFavs = JSON.parse(localStorage.getItem("jarceye_wc_favs")||"{}"); } catch { wcFavs = {}; }
+    const favKey = (cam)=> cam.detail || `${cam.title}|${cam.lat}|${cam.lon}`;
+    const isFav = (cam)=> !!wcFavs[favKey(cam)];
+    let lastScanCams=[], lastCenter=null;
+    function wcCard(cam){
+      const c0=lastCenter||{lat:cam.lat,lon:cam.lon};
+      const d=wcDistKm(c0.lat,c0.lon,cam.lat,cam.lon), dist=d<1?Math.round(d*1000)+" m":d.toFixed(1)+" km";
+      const meta=[wcTimeAgo(cam.updated),dist].filter(Boolean).join(" · ");
+      const img=cam.preview?`<img src="${cam.preview}" loading="lazy" onerror="this.style.visibility='hidden'">`:"";
+      return `<div class="wc-card">${img}<div class="wc-t">${cam.title}</div>`+
+        `<div class="wc-m"><span class="wc-dot"></span>${meta}</div>`+
+        `<span class="wc-fav ${isFav(cam)?'on':''}">${isFav(cam)?'♥':'♡'}</span></div>`;
+    }
+    function wireCards(container, cams){
+      container.querySelectorAll(".wc-card").forEach((el,i)=>{
+        const fav=el.querySelector(".wc-fav");
+        if(fav) fav.onclick=(ev)=>{ ev.stopPropagation(); toggleFav(cams[i]); };
+        el.onclick=()=>showWebcam(cams[i]);
+      });
+    }
+    function toggleFav(cam){
+      const k=favKey(cam); if(wcFavs[k]) delete wcFavs[k]; else wcFavs[k]={...cam};
+      try{ localStorage.setItem("jarceye_wc_favs", JSON.stringify(wcFavs)); }catch{}
+      renderFavs();
+      const g=$("wcg-grid"); g.innerHTML=lastScanCams.map(wcCard).join(""); wireCards(g,lastScanCams);
+    }
+    function renderFavs(){
+      const arr=Object.values(wcFavs), sec=$("wcg-favsec"), g=$("wcg-favs");
+      if(!arr.length){ sec.style.display="none"; return; }
+      sec.style.display="block"; g.innerHTML=arr.map(wcCard).join(""); wireCards(g,arr);
+    }
     function renderWebcamGallery(cams, lat0, lon0){
-      const gal=$("wcg-grid"), box=$("wc-gallery"); box.style.display="flex";
-      if(!cams.length){ gal.innerHTML='<div style="grid-column:1/-1;color:#7a97ad;font-size:12px">Sin webcams en esta zona.</div>'; return; }
-      gal.innerHTML = cams.map((cam,i)=>{
-        const d=wcDistKm(lat0,lon0,cam.lat,cam.lon), dist=d<1?Math.round(d*1000)+" m":d.toFixed(1)+" km";
-        const meta=[wcTimeAgo(cam.updated),dist].filter(Boolean).join(" · ");
-        const img=cam.preview?`<img src="${cam.preview}" loading="lazy" onerror="this.style.visibility='hidden'">`:"";
-        return `<div class="wc-card" data-i="${i}">${img}<div class="wc-t">${cam.title}</div><div class="wc-m"><span class="wc-dot"></span>${meta}</div></div>`;
-      }).join("");
-      gal.querySelectorAll(".wc-card").forEach(el=>{ el.onclick=()=>showWebcam(cams[+el.dataset.i]); });
+      lastScanCams=cams; lastCenter={lat:lat0,lon:lon0};
+      $("wc-gallery").style.display="flex";
+      const g=$("wcg-grid");
+      g.innerHTML = cams.length ? cams.map(wcCard).join("")
+        : '<div style="grid-column:1/-1;color:#7a97ad;font-size:12px">Sin webcams en esta zona.</div>';
+      wireCards(g, cams);
+      renderFavs();
     }
     async function scanWebcams() {
       const { lat, lon } = viewCenter();
@@ -1078,7 +1181,7 @@
       }
     }
     $("lyr-quakes").addEventListener("change", e=>{
-      if(e.target.checked){ loadQuakes(true); quakeTimer=setInterval(()=>loadQuakes(false),120000); }
+      if(e.target.checked){ hackFX("TERREMOTOS", loadQuakes(true)); quakeTimer=setInterval(()=>loadQuakes(false),120000); }
       else { clearInterval(quakeTimer); clearQuakes(); $("popup").style.display="none"; }
     });
 
@@ -1109,7 +1212,7 @@
         orientation:{heading:0,pitch:Cesium.Math.toRadians(-90),roll:0}, duration:2.6 }); }
     }
     $("lyr-iss").addEventListener("change", e=>{
-      if(e.target.checked){ tickISS(true); issTimer=setInterval(()=>tickISS(false),5000); }
+      if(e.target.checked){ hackFX("ISS", tickISS(true)); issTimer=setInterval(()=>tickISS(false),5000); }
       else { clearInterval(issTimer);
         if(issEnt){viewer.entities.remove(issEnt);issEnt=null;}
         if(issTrailEnt){viewer.entities.remove(issTrailEnt);issTrailEnt=null;}
@@ -1128,25 +1231,26 @@
       if(prev) viewer.imageryLayers.remove(prev);
     }
     $("lyr-rain").addEventListener("change", e=>{
-      if(e.target.checked){ ensure2D(); loadRain(); rainTimer=setInterval(loadRain,300000); }
+      if(e.target.checked){ ensure2D(); hackFX("RADAR LLUVIA", loadRain()); rainTimer=setInterval(loadRain,300000); }
       else { clearInterval(rainTimer); if(rainLayer){viewer.imageryLayers.remove(rainLayer);rainLayer=null;} }
     });
 
     // Capas de tiles (TomTom): tráfico en vivo y nombres de calles
-    function tileToggle(cbId, url, alpha){
+    function tileToggle(cbId, url, alpha, label){
       let layer=null;
       $(cbId).addEventListener("change", e=>{
         if(e.target.checked){
           ensure2D();
           layer = new Cesium.ImageryLayer(new Cesium.UrlTemplateImageryProvider({ url, maximumLevel:19 }));
           layer.alpha = alpha; viewer.imageryLayers.add(layer);
+          hackFX(label, 1600);
         } else if(layer){ viewer.imageryLayers.remove(layer); layer=null; }
       });
     }
     if(!cfg.traffic){ $("lyr-traffic-row").style.display="none"; $("lyr-streets-row").style.display="none"; }
     else {
-      tileToggle("lyr-traffic", "/tiles/traffic/{z}/{x}/{y}.png", 0.9);
-      tileToggle("lyr-streets", "/tiles/labels/{z}/{x}/{y}.png", 1.0);
+      tileToggle("lyr-traffic", "/tiles/traffic/{z}/{x}/{y}.png", 0.9, "TRAFICO");
+      tileToggle("lyr-streets", "/tiles/labels/{z}/{x}/{y}.png", 1.0, "NOMBRES DE CALLES");
     }
 
     // Barcos (AIS) en vivo
@@ -1186,7 +1290,7 @@
     }
     $("lyr-ships").addEventListener("change", e=>{
       if(!cfg.ais){ e.target.checked=false; alert("Los barcos (AIS) necesitan una key de AISStream en .env."); return; }
-      if(e.target.checked){ if(ws) ws.send(JSON.stringify({type:"ships",on:true})); }
+      if(e.target.checked){ if(ws) ws.send(JSON.stringify({type:"ships",on:true})); hackFX("BARCOS AIS", 2200); }
       else { if(ws) ws.send(JSON.stringify({type:"ships",on:false})); clearShips(); }
     });
 
@@ -1231,7 +1335,7 @@
       });
     }
     $("lyr-alpr").addEventListener("change", e=>{
-      if(e.target.checked){ alprOn=true; scanALPR(); } else { alprOn=false; clearALPR(); }
+      if(e.target.checked){ alprOn=true; hackFX("CAMARAS ALPR", scanALPR()); } else { alprOn=false; clearALPR(); }
     });
     viewer.camera.moveEnd.addEventListener(()=>{ if(alprOn){ clearTimeout(alprTimer); alprTimer=setTimeout(scanALPR,1500); } });
 
