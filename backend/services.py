@@ -426,6 +426,40 @@ async def enhance_image(image: str, prompt: str) -> str | None:
         return None
 
 
+_alpr_cache: dict[tuple, tuple[float, list]] = {}
+
+
+async def alpr_cameras(s: float, w: float, n: float, e: float) -> list[dict]:
+    """Ubicaciones de cámaras ALPR/ANPR (OpenStreetMap/DeFlock vía Overpass). Datos públicos."""
+    key = (round(s, 1), round(w, 1), round(n, 1), round(e, 1))
+    now = time.monotonic()
+    hit = _alpr_cache.get(key)
+    if hit and now - hit[0] < 60:
+        return hit[1]
+    q = (f'[out:json][timeout:25];'
+         f'(node["man_made"="surveillance"]["surveillance:type"~"ALPR|ANPR"]({s},{w},{n},{e});'
+         f'way["man_made"="surveillance"]["surveillance:type"~"ALPR|ANPR"]({s},{w},{n},{e}););'
+         f'out center 400;')
+    out: list = []
+    try:
+        r = await _http.post("https://overpass-api.de/api/interpreter", data={"data": q},
+                             headers={"User-Agent": "JarcsEyeView/1.0 (jarcmaster@gmail.com)"}, timeout=35)
+        for el in (r.json().get("elements") or []):
+            t = el.get("tags") or {}
+            lat = el.get("lat") or (el.get("center") or {}).get("lat")
+            lon = el.get("lon") or (el.get("center") or {}).get("lon")
+            if lat is None or lon is None:
+                continue
+            out.append({"lat": lat, "lon": lon,
+                        "operator": t.get("operator") or t.get("brand") or "",
+                        "direction": str(t.get("direction", "")),
+                        "type": t.get("surveillance:type", "ALPR")})
+    except Exception:
+        out = []
+    _alpr_cache[key] = (now, out)
+    return out
+
+
 async def rain_radar() -> dict:
     """Plantilla de tiles del último frame de radar de lluvia (RainViewer, sin key)."""
     try:
