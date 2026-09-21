@@ -1166,11 +1166,28 @@
       '<path fill="#ff5c6c" stroke="#0b1622" stroke-width="0.6" d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>'+
       '<circle cx="12" cy="13" r="3.2" fill="#0b1622"/><circle cx="12" cy="13" r="1.6" fill="#ff5c6c"/></svg>');
     const alprEntities=new Map(), alprById=new Map();
-    let alprOn=false, alprTimer=null;
+    let alprOn=false, alprTimer=null, alprWedges=[];
     function viewRect(){ const r=viewer.camera.computeViewRectangle(); if(!r) return null;
       return { s:Cesium.Math.toDegrees(r.south), w:Cesium.Math.toDegrees(r.west),
                n:Cesium.Math.toDegrees(r.north), e:Cesium.Math.toDegrees(r.east) }; }
-    function clearALPR(){ for(const [,en] of alprEntities) viewer.entities.remove(en); alprEntities.clear(); alprById.clear(); }
+    function clearALPR(){
+      for(const [,en] of alprEntities) viewer.entities.remove(en); alprEntities.clear(); alprById.clear();
+      for(const w of alprWedges) viewer.entities.remove(w); alprWedges=[];
+    }
+    const CARDINAL={N:0,NNE:22.5,NE:45,ENE:67.5,E:90,ESE:112.5,SE:135,SSE:157.5,S:180,SSW:202.5,SW:225,WSW:247.5,W:270,WNW:292.5,NW:315,NNW:337.5};
+    function parseDir(d){ if(d==null||d==="") return null; const n=parseFloat(d); if(!isNaN(n)) return n;
+      const v=CARDINAL[String(d).toUpperCase().trim()]; return v==null?null:v; }
+    function destPoint(lon,lat,brg,dist){ const b=Cesium.Math.toRadians(brg);
+      const dLat=(dist*Math.cos(b))/111320, dLon=(dist*Math.sin(b))/(111320*Math.cos(Cesium.Math.toRadians(lat))||1e-6);
+      return [lon+dLon, lat+dLat]; }
+    function addWedge(lon,lat,dir,fov,R){
+      const pts=[lon,lat]; const steps=10;
+      for(let i=0;i<=steps;i++){ const a=dir-fov/2+(fov*i/steps); const p=destPoint(lon,lat,a,R); pts.push(p[0],p[1]); }
+      alprWedges.push(viewer.entities.add({ polygon:{
+        hierarchy:Cesium.Cartesian3.fromDegreesArray(pts),
+        material:Cesium.Color.fromCssColorString("#ff5c6c").withAlpha(0.28),
+        classificationType:Cesium.ClassificationType.BOTH } }));   // drapea sobre 3D tiles y terreno
+    }
     async function scanALPR(){
       const r=viewRect(); if(!r) return;
       if((r.n-r.s)>3 || (r.e-r.w)>3){ clearALPR(); statusEl.textContent="Acércate para escanear cámaras ALPR"; return; }
@@ -1178,7 +1195,10 @@
       clearALPR();
       cams.forEach((c,i)=>{ const id="alpr:"+i; alprById.set(id,c);
         alprEntities.set(id, viewer.entities.add({ id, position:Cesium.Cartesian3.fromDegrees(c.lon,c.lat,0),
-          billboard:{ image:ALPR_IMG, width:20, height:20, disableDepthTestDistance:Number.POSITIVE_INFINITY } })); });
+          billboard:{ image:ALPR_IMG, width:20, height:20, disableDepthTestDistance:Number.POSITIVE_INFINITY } }));
+        const dir=parseDir(c.direction);
+        if(dir!=null) addWedge(c.lon,c.lat,dir,34,45);   // cono de dirección (~34° FOV, 45 m)
+      });
     }
     $("lyr-alpr").addEventListener("change", e=>{
       if(e.target.checked){ alprOn=true; scanALPR(); } else { alprOn=false; clearALPR(); }
