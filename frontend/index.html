@@ -315,6 +315,27 @@
     .hx-bar { height:100%; width:0; background:linear-gradient(90deg,#1f7a45,#5fe08a); box-shadow:0 0 10px #5fe08a; transition:width .18s; }
     .hx-pct { text-align:right; font-size:12px; margin-top:4px; color:#8affc0; }
     #hackfx.hx-done .hx-box { border-color:#5fe08a; box-shadow:0 0 42px rgba(95,224,138,.6); }
+    /* HUD estilo jet de combate (modo cabina) */
+    #hud-jet { position:absolute; inset:0; z-index:33; display:none; pointer-events:none; color:#38ff9a;
+      font-family:"Consolas", monospace; text-shadow:0 0 6px rgba(56,255,154,.7); }
+    #hud-jet svg line, #hud-jet svg path, #hud-jet svg circle { stroke:#38ff9a; stroke-width:1.4; fill:none; }
+    #hud-jet svg text { fill:#38ff9a; font-size:9px; }
+    .hj-hdg { position:absolute; top:22px; left:50%; transform:translateX(-50%); width:380px; height:22px; overflow:hidden;
+      border-top:1px solid rgba(56,255,154,.5); border-bottom:1px solid rgba(56,255,154,.5); }
+    .hj-hdg-tape { position:absolute; inset:0;
+      background:repeating-linear-gradient(90deg, transparent 0 28px, #38ff9a 28px 29px, transparent 29px 29px); opacity:.55; }
+    .hj-caret { position:absolute; top:8px; left:50%; transform:translateX(-50%); font-size:12px; }
+    .hj-hdg-box { position:absolute; top:48px; left:50%; transform:translateX(-50%); border:1px solid #38ff9a;
+      padding:2px 9px; font-size:17px; letter-spacing:2px; background:rgba(0,20,10,.45); }
+    .hj-spd, .hj-alt { position:absolute; top:50%; transform:translateY(-50%); text-align:center; }
+    .hj-spd { left:70px; } .hj-alt { right:70px; }
+    .hj-box { border:1px solid #38ff9a; padding:5px 10px; font-size:20px; min-width:66px; background:rgba(0,20,10,.45); }
+    .hj-t { font-size:11px; letter-spacing:2px; margin-bottom:4px; } .hj-u { font-size:10px; margin-top:4px; }
+    .hj-center { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:320px; height:224px; }
+    .hj-center svg { width:100%; height:100%; }
+    .hj-foot { position:absolute; bottom:74px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:16px; font-size:13px; letter-spacing:1px; }
+    .hj-exit { pointer-events:auto; cursor:pointer; border:1px solid #ff6b6b; color:#ff9a9a; padding:3px 11px; border-radius:4px; text-shadow:none; }
+    .hj-exit:hover { background:rgba(255,107,107,.15); }
 
     #sel, #trk { display:none; }
     #status { position:absolute; bottom:12px; left:12px; z-index:11; font-family:monospace;
@@ -386,6 +407,7 @@
       <h2><span data-ic="plane"></span> SELECCIÓN</h2>
       <div id="sel-body"></div>
       <div id="sel-status"></div>
+      <button id="btn-cockpit"><span data-ic="plane"></span> Cabina / Fly View</button>
       <button id="btn-status"><span data-ic="clipboard"></span> Horario / Gate</button>
       <button id="btn-track"><span data-ic="target"></span> Rastrear + Telegram</button>
     </div>
@@ -498,6 +520,23 @@
         <div class="wcg-grid" id="wcg-grid"></div>
       </div>
     </div>
+  </div>
+
+  <div id="hud-jet">
+    <div class="hj-hdg"><div class="hj-hdg-tape" id="hj-hdg-tape"></div></div>
+    <div class="hj-caret">▼</div>
+    <div class="hj-hdg-box" id="hj-hdg">000</div>
+    <div class="hj-spd"><div class="hj-t">SPD</div><div class="hj-box" id="hj-spd">0</div><div class="hj-u">KT</div></div>
+    <div class="hj-alt"><div class="hj-t">ALT</div><div class="hj-box" id="hj-alt">0</div><div class="hj-u">FT</div></div>
+    <div class="hj-center"><svg viewBox="-100 -70 200 140">
+      <line x1="-92" y1="0" x2="-34" y2="0"/><line x1="34" y1="0" x2="92" y2="0"/>
+      <path d="M-16 0 L-6 0 L0 8 L6 0 L16 0" fill="none"/><circle cx="0" cy="0" r="2.5"/>
+      <g opacity="0.75"><line x1="-26" y1="-28" x2="26" y2="-28"/><text x="30" y="-25">5</text>
+        <line x1="-26" y1="28" x2="26" y2="28"/><text x="30" y="31">-5</text>
+        <line x1="-30" y1="-56" x2="30" y2="-56"/><text x="34" y="-53">10</text>
+        <line x1="-30" y1="56" x2="30" y2="56"/><text x="34" y="59">-10</text></g>
+    </svg></div>
+    <div class="hj-foot"><span class="hj-call" id="hj-call">—</span><span class="hj-exit" id="hj-exit">✕ SALIR</span></div>
   </div>
 
   <div id="hackfx">
@@ -736,6 +775,9 @@
     // entities: icao24 -> { entity, trail, history[], meta, _data }
     const entities = new Map();
     const TRAIL_MAX = 25;
+    // Color de estela según velocidad (kt): verde lento → amarillo → naranja → rojo rápido
+    const speedColor = (s) => { const kn=(s||0)*1.94384;
+      return kn>450?"#ff3b3b":kn>320?"#ff7a1a":kn>180?"#ffd24a":"#5fe08a"; };
 
     function upsert(d) {
       let e = entities.get(d.id);
@@ -756,7 +798,7 @@
         });
         const trail = viewer.entities.add({
           polyline: { positions:new Cesium.CallbackProperty(() => e.history.concat([extrapolate(e.meta)]), false),
-            width:2, material:(COLOR[d.status]||Cesium.Color.WHITE).withAlpha(0.55), arcType:Cesium.ArcType.GEODESIC },
+            width:2, material:Cesium.Color.fromCssColorString(speedColor(d.speed)).withAlpha(0.6), arcType:Cesium.ArcType.GEODESIC },
         });
         e = { entity, trail, history, meta, _data:d, cid:d.id };
         entities.set(d.id, e);
@@ -765,6 +807,7 @@
         e.entity.billboard.color = COLOR[d.status]||Cesium.Color.WHITE;
         e.entity.billboard.rotation = Cesium.Math.toRadians(-d.heading);
         e.entity.label.text = d.name;
+        e.trail.polyline.material = Cesium.Color.fromCssColorString(speedColor(d.speed)).withAlpha(0.6);
       }
       // punto histórico para la estela
       e.history.push(Cesium.Cartesian3.fromDegrees(d.lon, d.lat, d.alt||0));
@@ -780,7 +823,7 @@
         if (d.status==="alert") emerg++; else if (d.on_ground) ground++; else air++;
       }
       for (const [id,e] of entities) {
-        if (!seen.has(id) && id !== (world.track?.icao24)) {
+        if (!seen.has(id) && id !== (world.track?.icao24) && id !== cockpitId) {
           viewer.entities.remove(e.entity); if (e.trail) viewer.entities.remove(e.trail);
           entities.delete(id);
         }
@@ -890,6 +933,48 @@
       if (!cfg.telegram) alert("Telegram no está configurado en el backend (.env). Se rastreará igual, pero sin notificaciones.");
       ws.send(JSON.stringify({ type:"track", id:selected.id, callsign:selected.name }));
     });
+
+    // ---- Modo cabina / Fly View con HUD de jet ----
+    let cockpitId=null, cockpitRemove=null, hudLast=0;
+    function planeNow(e){
+      const dt=(performance.now()-e.meta.t0)/1000, dist=e.meta.speed*dt, hdg=Cesium.Math.toRadians(e.meta.heading);
+      const lat=e.meta.lat+(dist*Math.cos(hdg))/111320;
+      const lon=e.meta.lon+(dist*Math.sin(hdg))/(111320*Math.cos(Cesium.Math.toRadians(e.meta.lat))||1e-6);
+      return { lon, lat, alt:e.meta.alt||3000, heading:e.meta.heading, speed:e.meta.speed };
+    }
+    function updateHUD(p){
+      const now=performance.now(); if(now-hudLast<80) return; hudLast=now;
+      $("hj-hdg").textContent=String(Math.round(p.heading)%360).padStart(3,"0");
+      $("hj-spd").textContent=Math.round((p.speed||0)*1.94384);
+      $("hj-alt").textContent=Math.round((p.alt||0)*3.28084);
+      $("hj-hdg-tape").style.backgroundPositionX=(-(p.heading)*5.8)+"px";
+    }
+    function cockpitTick(){
+      if(!cockpitId) return;
+      const e=entities.get(cockpitId); if(!e){ exitCockpit(); return; }
+      const p=planeNow(e);
+      const back=destPoint(p.lon, p.lat, (p.heading+180)%360, 170);
+      viewer.camera.setView({
+        destination:Cesium.Cartesian3.fromDegrees(back[0], back[1], p.alt+50),
+        orientation:{ heading:Cesium.Math.toRadians(p.heading), pitch:Cesium.Math.toRadians(-8), roll:0 },
+      });
+      updateHUD(p);
+    }
+    function enterCockpit(id){
+      const e=entities.get(id); if(!e) return;
+      cockpitId=id; $("hj-call").textContent=(e._data && e._data.name)||id;
+      viewer.scene.screenSpaceCameraController.enableInputs=false;
+      $("hud-jet").style.display="block";
+      if(!cockpitRemove) cockpitRemove=viewer.scene.preRender.addEventListener(cockpitTick);
+    }
+    function exitCockpit(){
+      if(cockpitRemove){ cockpitRemove(); cockpitRemove=null; }
+      cockpitId=null; viewer.scene.screenSpaceCameraController.enableInputs=true;
+      $("hud-jet").style.display="none";
+    }
+    $("hj-exit").onclick=exitCockpit;
+    $("btn-cockpit").addEventListener("click", ()=>{ if(selected && selected.id) enterCockpit(selected.id); });
+    window.addEventListener("keydown", (e)=>{ if(e.key==="Escape" && cockpitId) exitCockpit(); });
 
     // ---- Estado de vuelo: terminal, gate, hora de aterrizaje, delay ----
     if (!cfg.flightStatus) $("btn-status").style.display = "none";
@@ -1506,11 +1591,23 @@
     });
 
     // --- Botones del dock ---
-    $("presets-btn").onclick = () => {
+    $("presets-btn").onclick = (ev) => {
+      ev.stopPropagation();
       const p = $("preset-panel"), open = p.style.display !== "block";
       p.style.display = open ? "block" : "none";
       $("presets-btn").classList.toggle("active", open);
     };
+    // Cerrar PRESETS al hacer clic fuera (mapa u otro sitio)
+    document.addEventListener("click", (ev) => {
+      const p = $("preset-panel");
+      if (p.style.display === "block" && !p.contains(ev.target) && !$("presets-btn").contains(ev.target)) {
+        p.style.display = "none"; $("presets-btn").classList.remove("active");
+      }
+    });
+    viewer.scene.canvas.addEventListener("pointerdown", () => {
+      const p = $("preset-panel");
+      if (p.style.display === "block") { p.style.display = "none"; $("presets-btn").classList.remove("active"); }
+    });
     $("loc-btn").onclick = () => flyToMyLocation();
 
     // --- Voz (Web Speech API -> /api/voice -> acción) ---
