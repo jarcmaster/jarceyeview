@@ -336,6 +336,14 @@
     .hj-foot { position:absolute; bottom:56px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:8px; font-size:13px; letter-spacing:1px; }
     .hj-exit { pointer-events:auto; cursor:pointer; border:1px solid #ff6b6b; color:#ff9a9a; padding:3px 11px; border-radius:4px; text-shadow:none; }
     .hj-exit:hover { background:rgba(255,107,107,.15); }
+    #landed-toast { position:absolute; inset:0; z-index:36; display:none; align-items:center; justify-content:center;
+      background:rgba(2,8,14,.35); font-family:"Consolas", monospace; }
+    #landed-toast .lt-box { text-align:center; background:rgba(3,20,12,.94); border:1px solid #38ff9a; border-radius:12px;
+      padding:22px 34px; color:#38ff9a; box-shadow:0 0 40px rgba(56,255,154,.4); animation:ltpop .35s ease; }
+    .lt-title { font-size:22px; letter-spacing:3px; text-shadow:0 0 10px rgba(56,255,154,.7); }
+    .lt-sub { font-size:16px; color:#bff; margin-top:6px; letter-spacing:1px; }
+    .lt-note { font-size:11px; color:#7ab; margin-top:10px; }
+    @keyframes ltpop { from{opacity:0; transform:scale(.9)} to{opacity:1} }
 
     #sel, #trk { display:none; }
     #status { position:absolute; bottom:12px; left:12px; z-index:11; font-family:monospace;
@@ -537,6 +545,14 @@
         <line x1="-30" y1="56" x2="30" y2="56"/><text x="34" y="59">-10</text></g>
     </svg></div>
     <div class="hj-foot"><span class="hj-call" id="hj-call">—</span><span class="hj-exit" id="hj-exit">✕ SALIR</span></div>
+  </div>
+
+  <div id="landed-toast">
+    <div class="lt-box">
+      <div class="lt-title">✈ ATERRIZÓ</div>
+      <div class="lt-sub" id="lt-sub"></div>
+      <div class="lt-note">Saliendo de Fly View…</div>
+    </div>
   </div>
 
   <div id="hackfx">
@@ -935,7 +951,7 @@
     });
 
     // ---- Modo cabina / Fly View con HUD de jet ----
-    let cockpitId=null, cockpitRemove=null, hudLast=0;
+    let cockpitId=null, cockpitRemove=null, hudLast=0, cockpitLandedTimer=null, cockpitAirborne=false;
     function planeNow(e){
       const dt=(performance.now()-e.meta.t0)/1000, dist=e.meta.speed*dt, hdg=Cesium.Math.toRadians(e.meta.heading);
       const lat=e.meta.lat+(dist*Math.cos(hdg))/111320;
@@ -959,18 +975,32 @@
         orientation:{ heading:Cesium.Math.toRadians(p.heading), pitch:Cesium.Math.toRadians(-8), roll:0 },
       });
       updateHUD(p);
+      const grounded = e._data && e._data.on_ground;
+      if(!grounded) cockpitAirborne=true;
+      else if(cockpitAirborne && !cockpitLandedTimer) showLanded((e._data && e._data.name) || cockpitId);
+    }
+    function showLanded(name){
+      $("lt-sub").textContent = name;
+      $("landed-toast").style.display="flex";
+      cockpitLandedTimer = setTimeout(exitCockpit, 5000);   // cierra y sale de Fly View en 5s
     }
     function enterCockpit(id){
       const e=entities.get(id); if(!e) return;
-      cockpitId=id; $("hj-call").textContent=(e._data && e._data.name)||id;
+      cockpitId=id; cockpitAirborne=false;
+      if(cockpitLandedTimer){ clearTimeout(cockpitLandedTimer); cockpitLandedTimer=null; }
+      $("landed-toast").style.display="none";
+      $("hj-call").textContent=(e._data && e._data.name)||id;
       viewer.scene.screenSpaceCameraController.enableInputs=false;
       $("hud-jet").style.display="block";
       if(!cockpitRemove) cockpitRemove=viewer.scene.preRender.addEventListener(cockpitTick);
     }
     function exitCockpit(){
       if(cockpitRemove){ cockpitRemove(); cockpitRemove=null; }
-      cockpitId=null; viewer.scene.screenSpaceCameraController.enableInputs=true;
+      if(cockpitLandedTimer){ clearTimeout(cockpitLandedTimer); cockpitLandedTimer=null; }
+      cockpitId=null; cockpitAirborne=false;
+      viewer.scene.screenSpaceCameraController.enableInputs=true;
       $("hud-jet").style.display="none";
+      $("landed-toast").style.display="none";
     }
     $("hj-exit").onclick=exitCockpit;
     $("btn-cockpit").addEventListener("click", ()=>{ if(selected && selected.id) enterCockpit(selected.id); });
