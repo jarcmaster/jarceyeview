@@ -544,6 +544,7 @@
       try {
         Cesium.GoogleMaps.defaultApiKey = cfg.googleApiKey;
         googleTileset = viewer.scene.primitives.add(await Cesium.createGooglePhotorealistic3DTileset());
+        viewer.scene.globe.show = false;  // los 3D Tiles son la superficie: evita el globo azul asomando
       } catch (e) { fail(`No pude cargar Google 3D Tiles: <code>${e.message}</code>`); }
     }
     // Vista por defecto inmediata (por si tarda/falla la ubicación)
@@ -1305,6 +1306,8 @@
       currentSource = src;
       document.querySelectorAll("#source-row .sbtn2").forEach(b => b.classList.toggle("active", b.dataset.k === src));
       clearBaseLayers();
+      // Google 3D: ocultar el globo (los tiles son la superficie). Fuentes 2D: mostrarlo.
+      viewer.scene.globe.show = (src !== "google3d");
       if (src === "google3d") { if (googleTileset) googleTileset.show = true; return; }
       if (googleTileset) googleTileset.show = false;
       try {
