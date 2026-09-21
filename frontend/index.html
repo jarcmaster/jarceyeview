@@ -540,36 +540,40 @@
     const setBoot=(t,s)=>{ $("boot-txt").textContent=t; if(s!=null) $("boot-sub").textContent=s; };
     const hideBoot=()=>{ const m=$("boot-modal"); m.classList.add("hide"); setTimeout(()=>{ m.style.display="none"; }, 600); };
 
-    // Volar a MI ubicación: 1) geolocalización del navegador  2) fallback por IP
+    // Volar a MI ubicación: 1) geolocalización PRECISA del navegador  2) fallback por IP (aprox)
     async function flyToMyLocation() {
-      setBoot("Identificando tu conexión…", "Solicitando ubicación del navegador");
-      let loc = await new Promise((resolve) => {
-        if (!navigator.geolocation) return resolve(null);
+      setBoot("Identificando tu conexión…", "Solicitando ubicación precisa (GPS/WiFi)…");
+      const geo = await new Promise((resolve) => {
+        if (!navigator.geolocation) return resolve({ error:2 });
         navigator.geolocation.getCurrentPosition(
-          p => resolve({ lat:p.coords.latitude, lon:p.coords.longitude, src:"navegador" }),
-          () => resolve(null),
-          { enableHighAccuracy:false, timeout:7000, maximumAge:600000 }
+          p => resolve({ lat:p.coords.latitude, lon:p.coords.longitude, acc:p.coords.accuracy, src:"gps" }),
+          err => resolve({ error:err.code }),   // 1=denegado, 2=no disponible, 3=timeout
+          { enableHighAccuracy:true, timeout:12000, maximumAge:0 }
         );
       });
-      if (!loc) {  // fallback: ubicación por IP (desde el backend)
-        setBoot("Identificando tu conexión…", "Localizando por IP…");
+      let loc = geo.error ? null : geo, denied = geo.error === 1, viaIP = false;
+      if (!loc) {  // fallback aproximado por IP (desde el backend)
+        setBoot("Identificando tu conexión…", denied ? "Permiso denegado — localizando por IP (aprox)…" : "Localizando por IP (aprox)…");
         try {
           const j = await (await fetch("/api/geoip")).json();
-          if (j && j.lat != null) loc = { lat:j.lat, lon:j.lon, src:"IP", city:j.city };
+          if (j && j.lat != null) { loc = { lat:j.lat, lon:j.lon, city:j.city }; viaIP = true; }
         } catch {}
       }
       if (loc) {
-        setBoot("Conexión localizada", (loc.city ? loc.city + " · " : "") + "volando al punto…");
+        // GPS -> cerca (barrio); IP -> lejos (nivel ciudad, es impreciso)
+        const alt = viaIP ? 220000 : (loc.acc && loc.acc > 500 ? 60000 : 9000);
+        setBoot(viaIP ? "Ubicación aproximada (IP)" : "Conexión localizada (GPS)",
+                (loc.city ? loc.city + " · " : "") + "volando al punto…");
         viewer.camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, 120000),
+          destination: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, alt),
           orientation: { heading:0, pitch:Cesium.Math.toRadians(-55), roll:0 },
-          duration: 2.5,   // al terminar dispara moveEnd -> carga aviones de la zona
-          complete: hideBoot,
+          duration: 2.5, complete: hideBoot,
         });
-        setTimeout(hideBoot, 4000);  // salvaguarda por si complete no dispara
+        setTimeout(hideBoot, 4000);
+        if (viaIP) statusEl.title = "Ubicación aproximada por IP. Permite la ubicación del navegador para precisión GPS.";
       } else {
-        setBoot("No se pudo ubicar tu conexión", "Usando vista por defecto");
-        setTimeout(hideBoot, 1400);
+        setBoot("No se pudo ubicar tu conexión", denied ? "Permiso de ubicación denegado" : "Usando vista por defecto");
+        setTimeout(hideBoot, 1800);
       }
     }
     flyToMyLocation();
