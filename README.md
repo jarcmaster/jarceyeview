@@ -36,6 +36,9 @@ Telegram (avisos)┘
 - **Webcams en vivo** 📷 (Windy): escanea webcams cercanas a la zona del mapa, marcadores
   en el globo y lista; clic → reproductor en vivo incrustado + enlace a Windy.
   Incluye toggle **«🚦 Solo cámaras de tráfico»** (cámaras de carretera en vivo).
+- **Búsqueda con pin + Street View**: al buscar un lugar cae un pin y un botón abre Street View.
+- **Capas globales** (panel CAPAS, sin API key): **terremotos** en vivo (USGS, coloreados por
+  magnitud), **ISS** en tiempo real con estela (wheretheiss.at) y **radar de lluvia** (RainViewer).
 
 ## 1. Requisitos
 

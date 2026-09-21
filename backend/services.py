@@ -196,6 +196,52 @@ async def webcams(lat: float, lon: float, limit: int = 25, radius: int = 100,
 
 
 # --------------------------------------------------------------------------
+# Capas globales sin key: terremotos (USGS), ISS, radar de lluvia (RainViewer)
+# --------------------------------------------------------------------------
+async def earthquakes() -> list[dict]:
+    """Sismos M2.5+ de las últimas 24 h (USGS)."""
+    try:
+        r = await _http.get(
+            "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson")
+        feats = (r.json() or {}).get("features") or []
+    except Exception:
+        return []
+    out = []
+    for f in feats:
+        c = (f.get("geometry") or {}).get("coordinates") or []
+        p = f.get("properties") or {}
+        if len(c) < 2:
+            continue
+        out.append({"lon": c[0], "lat": c[1], "depth": c[2] if len(c) > 2 else None,
+                    "mag": p.get("mag"), "place": p.get("place", ""),
+                    "time": p.get("time"), "url": p.get("url", "")})
+    return out
+
+
+async def iss_position() -> dict | None:
+    """Posición en vivo de la ISS (wheretheiss.at, sin key)."""
+    try:
+        d = (await _http.get("https://api.wheretheiss.at/v1/satellites/25544")).json()
+        return {"lat": d["latitude"], "lon": d["longitude"], "alt": d.get("altitude"),
+                "vel": d.get("velocity")}
+    except Exception:
+        return None
+
+
+async def rain_radar() -> dict:
+    """Plantilla de tiles del último frame de radar de lluvia (RainViewer, sin key)."""
+    try:
+        d = (await _http.get("https://api.rainviewer.com/public/weather-maps.json")).json()
+        host = d.get("host")
+        past = (d.get("radar") or {}).get("past") or []
+        if host and past:
+            return {"url": f"{host}{past[-1]['path']}/256/{{z}}/{{x}}/{{y}}/2/1_1.png"}
+    except Exception:
+        pass
+    return {}
+
+
+# --------------------------------------------------------------------------
 # Geo
 # --------------------------------------------------------------------------
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

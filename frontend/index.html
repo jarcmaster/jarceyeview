@@ -80,6 +80,10 @@
       display:none; align-items:center; gap:12px; padding:8px 14px; font-size:13px; }
     #searchbox button { width:auto; margin:0; padding:6px 12px; }
     #searchbox .sclose { cursor:pointer; color:#ffdada; display:inline-flex; }
+    #popup { position:absolute; z-index:13; top:56px; left:50%; transform:translateX(-50%);
+      display:none; max-width:320px; font-size:12px; }
+    #popup .sclose { cursor:pointer; color:#ffdada; display:inline-flex; }
+    #popup a { color:#7fd3ff; text-decoration:none; display:inline-flex; align-items:center; gap:5px; margin-top:6px; }
 
     #sel, #trk { display:none; }
     #status { position:absolute; bottom:12px; left:12px; z-index:11; font-family:monospace;
@@ -110,6 +114,14 @@
       <label>Altitud mínima (m)</label><input id="f-alt" type="number" placeholder="0" />
       <label class="chk"><input type="checkbox" id="f-emerg" /> Solo emergencias</label>
       <label class="chk"><input type="checkbox" id="f-trails" checked /> Mostrar estelas</label>
+    </div>
+
+    <div id="layers" class="panel">
+      <h2><span data-ic="globe"></span> CAPAS</h2>
+      <label class="chk"><input type="checkbox" id="lyr-quakes" /> <span class="dot" style="color:#ff5c6c">●</span> Terremotos (24 h)</label>
+      <label class="chk"><input type="checkbox" id="lyr-iss" /> <span data-ic="satellite"></span> ISS en vivo</label>
+      <label class="chk"><input type="checkbox" id="lyr-rain" /> <span data-ic="cloudrain"></span> Radar de lluvia</label>
+      <label class="chk"><input type="checkbox" id="lyr-ships" /> <span data-ic="anchor"></span> Barcos (AIS)</label>
     </div>
 
     <div id="webcams" class="panel">
@@ -148,6 +160,7 @@
   <div id="wc-player"></div>
   <div id="sv-player"></div>
   <div id="searchbox" class="panel"></div>
+  <div id="popup" class="panel"></div>
 
   <div id="status">conectando…</div>
   <div id="overlay"></div>
@@ -173,6 +186,10 @@
       external:'<svg class="ic" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
       pin:'<svg class="ic" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>',
       streetview:'<svg class="ic" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>',
+      globe:'<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18z"/></svg>',
+      satellite:'<svg class="ic" viewBox="0 0 24 24"><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><path d="M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>',
+      cloudrain:'<svg class="ic" viewBox="0 0 24 24"><path d="M20 15.5A4.5 4.5 0 0 0 17.5 7h-1.8A7 7 0 1 0 4 13.9"/><path d="M8 19v1M12 19v2M16 19v1"/></svg>',
+      anchor:'<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.2"/><path d="M12 7.2V21"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>',
     };
     const icon = (n) => IC[n] || "";
     document.querySelectorAll("[data-ic]").forEach(e => { e.innerHTML = icon(e.dataset.ic); });
@@ -356,6 +373,22 @@
       }
       if (ent && ent.id === "searchpin" && lastSearch) {
         openStreetView(lastSearch.lat, lastSearch.lon, lastSearch.name);
+        return;
+      }
+      if (ent && typeof ent.id === "string" && ent.id.startsWith("quake:")) {
+        const q = quakeById.get(ent.id);
+        if (q) showPopup(`Sismo M${q.mag}`,
+          `<div class="kv"><span>Lugar</span><span>${q.place}</span></div>
+           <div class="kv"><span>Profundidad</span><span>${q.depth!=null?q.depth.toFixed(0)+" km":"—"}</span></div>
+           <div class="kv"><span>Hora</span><span>${new Date(q.time).toLocaleString()}</span></div>
+           <a href="${q.url}" target="_blank" rel="noopener">${icon("external")} Detalle USGS</a>`);
+        return;
+      }
+      if (ent && ent.id === "iss" && issData) {
+        showPopup("Estación Espacial Internacional",
+          `<div class="kv"><span>Posición</span><span>${issData.lat.toFixed(2)}, ${issData.lon.toFixed(2)}</span></div>
+           <div class="kv"><span>Altitud</span><span>${issData.alt?issData.alt.toFixed(0)+" km":"—"}</span></div>
+           <div class="kv"><span>Velocidad</span><span>${issData.vel?issData.vel.toFixed(0)+" km/h":"—"}</span></div>`);
         return;
       }
       const e = ent && entities.get(ent.id);
@@ -625,6 +658,86 @@
         dropSearchPin(c.lat, c.lon, name);
       });
     }
+
+    // ---- Capas globales: terremotos, ISS, radar de lluvia -------------
+    function showPopup(title, html) {
+      const p = $("popup"); p.style.display = "block";
+      p.innerHTML = `<h2 style="justify-content:space-between">${title}<span class="sclose">${icon("x")}</span></h2>${html}`;
+      p.querySelector(".sclose").onclick = () => { p.style.display = "none"; };
+    }
+
+    // Terremotos (USGS, M2.5+ últimas 24 h)
+    const quakeById = new Map();
+    let quakeEnts = [], quakeTimer = null;
+    const magColor = (m) => m>=6?"#ff2d2d":m>=4.5?"#ff7a1a":m>=3.5?"#ffcc55":"#7fe08a";
+    function clearQuakes(){ quakeEnts.forEach(e=>viewer.entities.remove(e)); quakeEnts=[]; quakeById.clear(); }
+    async function loadQuakes(){
+      let qs=[]; try{ qs=(await (await fetch("/api/quakes")).json()).quakes||[]; }catch{}
+      clearQuakes();
+      qs.forEach((q,i)=>{ const m=q.mag||0, id=`quake:${i}`, col=Cesium.Color.fromCssColorString(magColor(m));
+        quakeEnts.push(viewer.entities.add({ id, position:Cesium.Cartesian3.fromDegrees(q.lon,q.lat,0),
+          point:{ pixelSize:Math.max(6,m*3+3), color:col.withAlpha(0.85),
+            outlineColor:Cesium.Color.fromCssColorString("#0b1622"), outlineWidth:1,
+            disableDepthTestDistance:Number.POSITIVE_INFINITY } }));
+        quakeById.set(id,q); });
+    }
+    $("lyr-quakes").addEventListener("change", e=>{
+      if(e.target.checked){ loadQuakes(); quakeTimer=setInterval(loadQuakes,120000); }
+      else { clearInterval(quakeTimer); clearQuakes(); $("popup").style.display="none"; }
+    });
+
+    // ISS en vivo (wheretheiss.at)
+    const ISS_IMG = "data:image/svg+xml," + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="40" height="40">'+
+      '<g fill="#ffd24a" stroke="#0b1622" stroke-width="0.6">'+
+      '<rect x="10.5" y="9" width="3" height="6" rx="0.6"/><rect x="2.5" y="10" width="6" height="4" rx="0.6"/>'+
+      '<rect x="15.5" y="10" width="6" height="4" rx="0.6"/></g>'+
+      '<path d="M12 9V5" stroke="#ffd24a" stroke-width="1.4" fill="none"/><circle cx="12" cy="4" r="1.2" fill="#ffd24a"/></svg>');
+    let issEnt=null, issTrailEnt=null, issTrail=[], issData=null, issTimer=null;
+    async function tickISS(){
+      let d; try{ d=await (await fetch("/api/iss")).json(); }catch{ return; }
+      if(d.lat==null) return; issData=d;
+      const pos=Cesium.Cartesian3.fromDegrees(d.lon,d.lat,(d.alt||420)*1000);
+      issTrail.push(pos); if(issTrail.length>90) issTrail.shift();
+      if(!issEnt){
+        issEnt=viewer.entities.add({ id:"iss", position:pos,
+          billboard:{ image:ISS_IMG, width:38, height:38, disableDepthTestDistance:Number.POSITIVE_INFINITY },
+          label:{ text:"ISS", font:"12px sans-serif", pixelOffset:new Cesium.Cartesian2(0,-24),
+            fillColor:Cesium.Color.fromCssColorString("#ffd24a"), showBackground:true,
+            backgroundColor:Cesium.Color.fromCssColorString("rgba(0,0,0,.55)"), disableDepthTestDistance:Number.POSITIVE_INFINITY } });
+        issTrailEnt=viewer.entities.add({ polyline:{ positions:new Cesium.CallbackProperty(()=>issTrail,false),
+          width:2, material:Cesium.Color.fromCssColorString("#ffd24a").withAlpha(0.5), arcType:Cesium.ArcType.GEODESIC } });
+      } else issEnt.position=pos;
+    }
+    $("lyr-iss").addEventListener("change", e=>{
+      if(e.target.checked){ tickISS(); issTimer=setInterval(tickISS,5000); }
+      else { clearInterval(issTimer);
+        if(issEnt){viewer.entities.remove(issEnt);issEnt=null;}
+        if(issTrailEnt){viewer.entities.remove(issTrailEnt);issTrailEnt=null;}
+        issTrail=[]; issData=null; }
+    });
+
+    // Radar de lluvia (RainViewer)
+    let rainLayer=null, rainTimer=null;
+    async function loadRain(){
+      let u; try{ u=(await (await fetch("/api/rain")).json()).url; }catch{}
+      if(!u) return;
+      const layer = new Cesium.ImageryLayer(new Cesium.UrlTemplateImageryProvider({ url:u, maximumLevel:12 }));
+      layer.alpha = 0.65;
+      const prev = rainLayer;
+      viewer.imageryLayers.add(layer); rainLayer = layer;
+      if(prev) viewer.imageryLayers.remove(prev);
+    }
+    $("lyr-rain").addEventListener("change", e=>{
+      if(e.target.checked){ loadRain(); rainTimer=setInterval(loadRain,300000); }
+      else { clearInterval(rainTimer); if(rainLayer){viewer.imageryLayers.remove(rainLayer);rainLayer=null;} }
+    });
+
+    // Barcos (AIS) — requiere key gratuita de AISStream
+    $("lyr-ships").addEventListener("change", e=>{
+      if(e.target.checked){ e.target.checked=false;
+        alert("Los barcos (AIS) necesitan una key gratuita de AISStream.io. Pásamela y lo activo."); }
+    });
 
     // ---- Panel de rastreo ---------------------------------------------
     const world = { track:null };
