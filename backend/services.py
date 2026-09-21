@@ -278,6 +278,76 @@ async def voice_intent(text: str) -> dict | None:
         return None
 
 
+# --------------------------------------------------------------------------
+# TomTom (tráfico, etiquetas, reverse-geocode) + Google 2D roadmap
+# --------------------------------------------------------------------------
+async def tomtom_tile(kind: str, z: int, x: int, y: int) -> bytes | None:
+    key = os.getenv("TOMTOM_KEY", "")
+    if not key:
+        return None
+    if kind == "traffic":
+        url = f"https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key={key}"
+    elif kind == "labels":
+        url = f"https://api.tomtom.com/map/1/tile/labels/main/{z}/{x}/{y}.png?key={key}"
+    else:
+        url = f"https://api.tomtom.com/map/1/tile/basic/main/{z}/{x}/{y}.png?key={key}"
+    try:
+        r = await _http.get(url)
+        if r.status_code == 200:
+            return r.content
+    except Exception:
+        pass
+    return None
+
+
+async def revgeo(lat: float, lon: float) -> dict | None:
+    """Dirección/calle real de un punto (TomTom Reverse Geocoding)."""
+    key = os.getenv("TOMTOM_KEY", "")
+    if not key:
+        return None
+    try:
+        r = await _http.get(f"https://api.tomtom.com/search/2/reverseGeocode/{lat},{lon}.json",
+                            params={"key": key})
+        a = ((r.json().get("addresses") or [{}])[0]).get("address", {})
+        if a:
+            return {"address": a.get("freeformAddress", ""), "street": a.get("streetName", ""),
+                    "city": a.get("municipality", ""), "country": a.get("country", "")}
+    except Exception:
+        pass
+    return None
+
+
+_gmap_session = {"token": "", "exp": 0.0}
+
+
+async def gmap_tile(z: int, x: int, y: int) -> bytes | None:
+    """Tile 2D roadmap de Google (Map Tiles API 2D, con sesión cacheada)."""
+    key = os.getenv("GOOGLE_MAPS_API_KEY", "")
+    if not key:
+        return None
+    if not (_gmap_session["token"] and time.monotonic() < _gmap_session["exp"] - 120):
+        try:
+            r = await _http.post(f"https://tile.googleapis.com/v1/createSession?key={key}",
+                                 json={"mapType": "roadmap", "language": "en-US", "region": "US"})
+            d = r.json()
+            if "session" in d:
+                _gmap_session["token"] = d["session"]
+                _gmap_session["exp"] = time.monotonic() + 3600 * 20
+        except Exception:
+            return None
+    sess = _gmap_session["token"]
+    if not sess:
+        return None
+    try:
+        r = await _http.get(f"https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}",
+                            params={"session": sess, "key": key})
+        if r.status_code == 200:
+            return r.content
+    except Exception:
+        pass
+    return None
+
+
 async def rain_radar() -> dict:
     """Plantilla de tiles del último frame de radar de lluvia (RainViewer, sin key)."""
     try:

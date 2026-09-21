@@ -41,8 +41,9 @@ from fastapi.staticfiles import StaticFiles
 # Permite `from services import ...` sin importar desde dónde se lance uvicorn.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from services import (OpenSky, RouteService, Telegram, aclose, earthquakes,
-                      flight_status, geoip, haversine_km, iss_position,
-                      radio_stations, rain_radar, voice_intent, webcams)
+                      flight_status, geoip, gmap_tile, haversine_km, iss_position,
+                      radio_stations, rain_radar, revgeo, tomtom_tile,
+                      voice_intent, webcams)
 
 load_dotenv()
 
@@ -314,6 +315,29 @@ async def api_voice(payload: dict) -> JSONResponse:
     return JSONResponse(await voice_intent(payload.get("text", "")) or {"action": "say", "text": "No te entendí."})
 
 
+@app.get("/api/revgeo")
+async def api_revgeo(lat: float, lon: float) -> JSONResponse:
+    return JSONResponse(await revgeo(lat, lon) or {})
+
+
+_TILE_HEADERS = {"Cache-Control": "public, max-age=60"}
+
+
+@app.get("/tiles/traffic/{z}/{x}/{y}.png")
+async def tile_traffic(z: int, x: int, y: int) -> Response:
+    return Response(await tomtom_tile("traffic", z, x, y) or b"", media_type="image/png", headers=_TILE_HEADERS)
+
+
+@app.get("/tiles/labels/{z}/{x}/{y}.png")
+async def tile_labels(z: int, x: int, y: int) -> Response:
+    return Response(await tomtom_tile("labels", z, x, y) or b"", media_type="image/png", headers=_TILE_HEADERS)
+
+
+@app.get("/tiles/gmap/{z}/{x}/{y}.png")
+async def tile_gmap(z: int, x: int, y: int) -> Response:
+    return Response(await gmap_tile(z, x, y) or b"", media_type="image/png", headers=_TILE_HEADERS)
+
+
 @app.get("/config")
 async def config() -> JSONResponse:
     return JSONResponse({
@@ -324,6 +348,8 @@ async def config() -> JSONResponse:
         "flightStatus": bool(os.getenv("AVIATIONSTACK_KEY", "")),
         "webcams": bool(os.getenv("WINDY_WEBCAMS_KEY", "")),
         "voice": bool(os.getenv("OPENAI_API_KEY", "")),
+        "traffic": bool(os.getenv("TOMTOM_KEY", "")),
+        "gmap2d": bool(os.getenv("GOOGLE_MAPS_API_KEY", "")),
         "pollInterval": POLL_INTERVAL,
         "thresholds": THRESHOLDS,
     })

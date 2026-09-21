@@ -44,6 +44,11 @@ Telegram (avisos)┘
 - **Comandos de voz**: el navegador transcribe (Web Speech API) y GPT (backend, `OPENAI_API_KEY`)
   interpreta la orden en una acción: volar a un lugar, activar capas, cambiar preset/mapa,
   rastrear un vuelo, Street View, etc. La API key vive solo en el backend.
+- **Paneles plegables**: clic en el encabezado de cada panel de la izquierda para contraer/expandir.
+- **Modo OBJETIVO** (spy zoom): arrastra un recuadro y hace un zoom cinematográfico estilo satélite,
+  con HUD de datos en vivo (lat/lon/área/elevación/dirección real) y efecto "enhance".
+- **TomTom** (`TOMTOM_KEY`, proxied): **tráfico en vivo**, **nombres de calles** y **direcciones
+  reales** (reverse-geocode) en el HUD. Fuentes de mapa extra: **Google Normal** (2D) y **Street View**.
 
 ## 1. Requisitos
 

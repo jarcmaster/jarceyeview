@@ -25,6 +25,10 @@
       font-size:14px; letter-spacing:1px; color:#7fd3ff; font-weight:600; }
     #hud h1 { font-size:15px; letter-spacing:2px; }
     #radio h2 { color:#ffb347; }
+    #left-col .panel > h1, #left-col .panel > h2 { cursor:pointer; }
+    .chev { margin-left:auto; color:#7fd3ff; display:inline-flex; transition:transform .2s; }
+    .panel.collapsed > *:not(h1):not(h2) { display:none !important; }
+    .panel.collapsed .chev { transform:rotate(-90deg); }
     .row { display:flex; justify-content:space-between; font-size:13px; margin:3px 0; }
     .air{color:#5fe08a;} .ground{color:#ffcc55;} .emerg{color:#ff5c6c;}
 
@@ -198,6 +202,8 @@
       <label class="chk"><input type="checkbox" id="lyr-quakes" /> <span class="dot" style="color:#ff5c6c">●</span> Terremotos (24 h)</label>
       <label class="chk"><input type="checkbox" id="lyr-iss" /> <span data-ic="satellite"></span> ISS en vivo</label>
       <label class="chk"><input type="checkbox" id="lyr-rain" /> <span data-ic="cloudrain"></span> Radar de lluvia</label>
+      <label class="chk" id="lyr-traffic-row"><input type="checkbox" id="lyr-traffic" /> <span data-ic="car"></span> Tráfico en vivo</label>
+      <label class="chk" id="lyr-streets-row"><input type="checkbox" id="lyr-streets" /> <span data-ic="pin"></span> Nombres de calles</label>
       <label class="chk"><input type="checkbox" id="lyr-ships" /> <span data-ic="anchor"></span> Barcos (AIS)</label>
     </div>
 
@@ -310,9 +316,17 @@
       p_noir:'<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg>',
       p_snow:'<svg class="ic" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"/></svg>',
       crosshair:'<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>',
+      chevron:'<svg class="ic" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>',
     };
     const icon = (n) => IC[n] || "";
     document.querySelectorAll("[data-ic]").forEach(e => { e.innerHTML = icon(e.dataset.ic); });
+    // Paneles plegables (clic en el encabezado)
+    document.querySelectorAll("#left-col .panel").forEach(p => {
+      const hdr = p.querySelector(":scope > h1, :scope > h2"); if (!hdr) return;
+      const chev = document.createElement("span"); chev.className = "chev"; chev.innerHTML = icon("chevron");
+      hdr.appendChild(chev);
+      hdr.addEventListener("click", () => p.classList.toggle("collapsed"));
+    });
 
     const PLANE_SVG =
       '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24">' +
@@ -854,6 +868,22 @@
       else { clearInterval(rainTimer); if(rainLayer){viewer.imageryLayers.remove(rainLayer);rainLayer=null;} }
     });
 
+    // Capas de tiles (TomTom): tráfico en vivo y nombres de calles
+    function tileToggle(cbId, url, alpha){
+      let layer=null;
+      $(cbId).addEventListener("change", e=>{
+        if(e.target.checked){
+          layer = new Cesium.ImageryLayer(new Cesium.UrlTemplateImageryProvider({ url, maximumLevel:19 }));
+          layer.alpha = alpha; viewer.imageryLayers.add(layer);
+        } else if(layer){ viewer.imageryLayers.remove(layer); layer=null; }
+      });
+    }
+    if(!cfg.traffic){ $("lyr-traffic-row").style.display="none"; $("lyr-streets-row").style.display="none"; }
+    else {
+      tileToggle("lyr-traffic", "/tiles/traffic/{z}/{x}/{y}.png", 0.9);
+      tileToggle("lyr-streets", "/tiles/labels/{z}/{x}/{y}.png", 1.0);
+    }
+
     // Barcos (AIS) — requiere key gratuita de AISStream
     $("lyr-ships").addEventListener("change", e=>{
       if(e.target.checked){ e.target.checked=false;
@@ -962,8 +992,8 @@
     $("preset-row").querySelectorAll(".pbtn").forEach(b => b.onclick = () => applyPreset(b.dataset.k));
 
     // --- Fuentes de mapa ---
-    const SOURCES = [["google3d","GOOGLE 3D"],["bing","BING AERIAL"],["binglabels","BING LABELS"],
-                     ["esri","ESRI SATELLITE"],["osm","OSM"]];
+    const SOURCES = [["google3d","GOOGLE 3D"],["gmap","GOOGLE NORMAL"],["bing","BING AERIAL"],
+                     ["binglabels","BING LABELS"],["esri","ESRI SATELLITE"],["osm","OSM"],["streetview","STREET VIEW"]];
     $("source-row").innerHTML = SOURCES.map(([k,l]) =>
       `<div class="sbtn2 ${k==="google3d"?"active":""}" data-k="${k}">${l}</div>`).join("");
     let baseLayers = [];
@@ -975,7 +1005,8 @@
       if (googleTileset) googleTileset.show = false;
       try {
         let provider;
-        if (src === "bing") provider = await Cesium.IonImageryProvider.fromAssetId(2);
+        if (src === "gmap") provider = new Cesium.UrlTemplateImageryProvider({ url: "/tiles/gmap/{z}/{x}/{y}.png", maximumLevel: 20 });
+        else if (src === "bing") provider = await Cesium.IonImageryProvider.fromAssetId(2);
         else if (src === "binglabels") provider = await Cesium.IonImageryProvider.fromAssetId(3);
         else if (src === "esri") provider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
           "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer");
@@ -987,7 +1018,30 @@
         }
       } catch (e) { console.error("mapsource", src, e); }
     }
-    $("source-row").querySelectorAll(".sbtn2").forEach(b => b.onclick = () => setMapSource(b.dataset.k));
+    // Modo Street View: pulsa STREET VIEW y luego clic en el mapa
+    let svHandler = null;
+    function enterStreetViewPick() {
+      viewer.scene.canvas.style.cursor = "crosshair";
+      $("spy-hint").textContent = "◎ HAZ CLIC EN EL MAPA PARA STREET VIEW · ESC PARA SALIR";
+      $("spy-hint").style.display = "block";
+      if (svHandler) svHandler.destroy();
+      svHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+      svHandler.setInputAction((click) => {
+        const c = viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
+        if (c) { const g = Cesium.Cartographic.fromCartesian(c);
+          openStreetView(Cesium.Math.toDegrees(g.latitude), Cesium.Math.toDegrees(g.longitude), "Street View"); }
+        exitStreetViewPick();
+      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    }
+    function exitStreetViewPick() {
+      viewer.scene.canvas.style.cursor = "";
+      $("spy-hint").style.display = "none"; $("spy-hint").textContent = "◎ ARRASTRA PARA MARCAR LA ZONA · ESC PARA SALIR";
+      if (svHandler) { svHandler.destroy(); svHandler = null; }
+    }
+    $("source-row").querySelectorAll(".sbtn2").forEach(b => b.onclick = () => {
+      if (b.dataset.k === "streetview") enterStreetViewPick();
+      else setMapSource(b.dataset.k);
+    });
 
     // --- Botones del dock ---
     $("presets-btn").onclick = () => {
@@ -1061,7 +1115,7 @@
     if (!cfg.voice) micStatus.textContent = "voz no configurada";
 
     // --- Modo OBJETIVO: recuadro + zoom cinematográfico estilo satélite ---
-    let spyMode=false, spyDown=false, spyA=null, spyId="", spyAnimRAF=null;
+    let spyMode=false, spyDown=false, spyA=null, spyId="", spyAnimRAF=null, spyAddr="";
     const rnd=(n)=>Math.floor(Math.random()*n);
     const fmtArea=(a)=> a>1e6 ? (a/1e6).toFixed(2)+" km²" : Math.round(a)+" m²";
     const fmtDist=(d)=> d>=1000 ? (d/1000).toFixed(2)+" km" : Math.round(d)+" m";
@@ -1089,6 +1143,7 @@
         `LAT <b>${d.lat.toFixed(6)}</b>&nbsp; LON <b>${d.lon.toFixed(6)}</b><br>`+
         `DIST <b>${fmtDist(d.dist)}</b>&nbsp; ELEV <b>${d.elev}</b><br>`+
         `AREA <b>${d.area}</b>&nbsp; AZ(t) <b>${d.az.toFixed(1)}°</b><br>`+
+        (spyAddr ? `ADDR <b>${spyAddr}</b><br>` : "")+
         `FRAME <b>${d.wpx}×${d.hpx}px</b>&nbsp; ${d.state}`;
     }
     function endSpy(){
@@ -1103,7 +1158,7 @@
       $("spy-capture").style.display=on?"block":"none";
       $("spy-hint").style.display=on?"block":"none";
       $("spy-btn").classList.toggle("active",on);
-      if(on){ spyId=`${rnd(90000)+10000}-${rnd(900)+100}`; $("spy-hud").classList.remove("fade"); $("spy-hud").style.display="block"; $("spy-box").style.display="none"; }
+      if(on){ spyId=`${rnd(90000)+10000}-${rnd(900)+100}`; spyAddr=""; $("spy-hud").classList.remove("fade"); $("spy-hud").style.display="block"; $("spy-box").style.display="none"; }
       else endSpy();
     }
     function drawBox(a,b){
@@ -1120,7 +1175,7 @@
     $("spy-capture").addEventListener("mousedown",(e)=>{ if(!spyMode)return; spyDown=true; spyA={x:e.clientX,y:e.clientY}; $("spy-box").style.display="block"; drawBox(spyA,spyA); });
     window.addEventListener("mousemove",(e)=>{ if(spyMode&&spyDown) drawBox(spyA,{x:e.clientX,y:e.clientY}); });
     window.addEventListener("mouseup",(e)=>{ if(spyMode&&spyDown){ spyDown=false; finalizeSpy(spyA,{x:e.clientX,y:e.clientY}); } });
-    window.addEventListener("keydown",(e)=>{ if(e.key==="Escape"&&spyMode) endSpy(); });
+    window.addEventListener("keydown",(e)=>{ if(e.key==="Escape"){ if(spyMode) endSpy(); if(svHandler) exitStreetViewPick(); } });
 
     function finalizeSpy(a,b){
       const w=Math.abs(a.x-b.x),h=Math.abs(a.y-b.y);
@@ -1129,6 +1184,9 @@
       $("spy-capture").style.display="none"; $("spy-hint").style.display="none";
       spyMode=false; $("spy-btn").classList.remove("active");
       const m=geoMetrics(gA,gB), elevStr=sampleElev(m.centerLon,m.centerLat), DUR=2.8;
+      spyAddr = "…";  // dirección real (TomTom reverse-geocode)
+      fetch(`/api/revgeo?lat=${m.centerLat}&lon=${m.centerLon}`).then(r=>r.json())
+        .then(d=>{ spyAddr = d.address || d.street || "—"; }).catch(()=>{ spyAddr="—"; });
       // El recuadro se desliza al centro (área marcada centrada mientras hace zoom dentro)
       const vw=window.innerWidth, vh=window.innerHeight, aspect=w/h;
       let th=Math.min(vh*0.62,(vw*0.66)/aspect), tw=th*aspect;
