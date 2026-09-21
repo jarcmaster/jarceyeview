@@ -179,6 +179,61 @@
     #cam-overlay.glitching { animation:camshake .09s steps(2); }
     @keyframes camshake { 0%{transform:translate(2px,0)} 50%{transform:translate(-2px,1px)} 100%{transform:translate(0,0)} }
 
+    /* ===== Live Environment (análisis IA) ===== */
+    #live-modal { position:absolute; inset:0; z-index:40; display:none; background:rgba(2,7,14,.95);
+      color:#dff; font-family:"Consolas", monospace; overflow:auto; }
+    #live-modal.open { display:block; }
+    #live-modal.done #live-loading { display:none; }
+    #live-modal.done #live-content { display:block; }
+    .live-close { position:absolute; top:14px; right:16px; z-index:2; cursor:pointer; color:#8fe3ff;
+      border:1px solid rgba(127,211,255,.4); border-radius:8px; padding:5px 11px; font-size:15px; }
+    .live-close:hover { background:#12283a; }
+    #live-loading { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; }
+    .sat-scene { position:relative; width:260px; height:260px; }
+    .sat-orbit { position:absolute; inset:0; border:1px dashed rgba(127,211,255,.3); border-radius:50%; animation:sat-spin 8s linear infinite; }
+    .sat-body { position:absolute; top:2px; left:50%; transform:translateX(-50%); animation:sat-float 3s ease-in-out infinite;
+      filter:drop-shadow(0 0 8px rgba(127,211,255,.7)); }
+    .sat-target { position:absolute; bottom:8px; left:50%; transform:translateX(-50%); width:34px; height:34px;
+      border:2px solid #8fe3ff; border-radius:50%; box-shadow:0 0 12px rgba(127,211,255,.6); }
+    .sat-target::before,.sat-target::after{content:"";position:absolute;background:#8fe3ff}
+    .sat-target::before{left:50%;top:-8px;bottom:-8px;width:1px;transform:translateX(-50%)}
+    .sat-target::after{top:50%;left:-8px;right:-8px;height:1px;transform:translateY(-50%)}
+    .sat-beam { position:absolute; left:50%; top:56px; width:2px; height:150px; transform:translateX(-50%);
+      background:linear-gradient(#8fe3ff, transparent); background-size:2px 12px;
+      -webkit-mask:repeating-linear-gradient(#000 0 6px, transparent 6px 12px); mask:repeating-linear-gradient(#000 0 6px, transparent 6px 12px);
+      animation:sat-down .5s linear infinite; }
+    .sat-ping { position:absolute; bottom:8px; left:50%; width:34px; height:34px; transform:translateX(-50%);
+      border:2px solid #8fe3ff; border-radius:50%; animation:sat-ping 1.4s ease-out infinite; }
+    @keyframes sat-spin { to{transform:rotate(360deg)} }
+    @keyframes sat-float { 0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(-6px)} }
+    @keyframes sat-down { to{background-position:0 12px} }
+    @keyframes sat-ping { 0%{transform:translateX(-50%) scale(1);opacity:.9} 100%{transform:translateX(-50%) scale(3.4);opacity:0} }
+    .live-status { font-size:18px; letter-spacing:3px; color:#8fe3ff; text-shadow:0 0 10px rgba(127,211,255,.6); }
+    .live-sub { font-size:12px; color:#7a97ad; letter-spacing:1px; }
+    .live-bar { width:280px; height:5px; background:#0b1622; border:1px solid #234; border-radius:4px; overflow:hidden; }
+    .live-bar i { display:block; height:100%; width:0; background:linear-gradient(90deg,#2a6a8f,#8fe3ff); transition:width .4s; }
+    #live-content { display:none; padding:16px 18px 28px; max-width:1500px; margin:0 auto; }
+    .lc-head { display:flex; align-items:flex-start; gap:16px; border-bottom:1px solid #1f3d55; padding-bottom:10px; margin-bottom:14px; }
+    .lc-head h2 { margin:0 0 4px; color:#8fe3ff; font-size:16px; letter-spacing:2px; }
+    .lc-meta { font-size:11px; color:#9cc; line-height:1.6; }
+    .lc-grid { display:grid; grid-template-columns:1fr 300px; gap:14px; }
+    @media(max-width:820px){ .lc-grid{ grid-template-columns:1fr; } }
+    .lc-hero { border:1px solid #234a63; border-radius:10px; overflow:hidden; }
+    .lc-hero img { width:100%; display:block; }
+    .lc-veh { border:1px solid #234a63; border-radius:10px; padding:10px; max-height:72vh; overflow:auto; }
+    .lc-veh h3, .lc-panel h3 { margin:0 0 8px; color:#8fe3ff; font-size:12px; letter-spacing:1px; }
+    .veh-item { display:flex; justify-content:space-between; gap:8px; font-size:12px; padding:6px 4px; border-bottom:1px solid #12283a; }
+    .veh-item .vid { color:#5fe08a; font-weight:600; } .veh-item .vplate { color:#ffcc55; }
+    .lc-panels { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-top:14px; }
+    .lc-panel { border:1px solid #234a63; border-radius:10px; padding:12px; }
+    .lc-panel .kv { display:flex; justify-content:space-between; gap:8px; font-size:12px; margin:3px 0; color:#cde; }
+    .lc-imgs { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; margin-top:14px; }
+    .lc-img { border:1px solid #234a63; border-radius:10px; overflow:hidden; background:#0b1622; position:relative; }
+    .lc-img img { width:100%; display:block; }
+    .lc-img .cap { position:absolute; left:0; right:0; bottom:0; font-size:11px; color:#cfefff; background:rgba(0,0,0,.6); padding:5px 8px; }
+    .lc-img .ph { display:flex; align-items:center; justify-content:center; height:150px; color:#7a97ad; font-size:12px; text-align:center; }
+    .lc-disc { font-size:10.5px; color:#7a97ad; margin-top:16px; line-height:1.5; }
+
     /* Reproductores flotantes (webcam / street view) */
     #wc-player, #sv-player { position:absolute; z-index:30; left:50%; transform:translateX(-50%); bottom:92px;
       width:380px; max-width:92vw; display:none; background:rgba(6,16,26,.96);
@@ -334,8 +389,31 @@
   <div id="dock">
     <div class="dock-btn" id="loc-btn"><span data-ic="pin"></span> UBICACIÓN</div>
     <div class="dock-btn" id="spy-btn"><span data-ic="crosshair"></span> OBJETIVO</div>
+    <div class="dock-btn" id="live-btn"><span data-ic="satellite"></span> LIVE ENV</div>
     <div class="dock-btn" id="mic-btn"><span data-ic="mic"></span><span id="mic-status">Pide o comanda</span></div>
     <div class="dock-btn" id="presets-btn"><span data-ic="layers"></span> PRESETS</div>
+  </div>
+
+  <div id="live-modal">
+    <div id="live-loading">
+      <div class="sat-scene">
+        <div class="sat-orbit"></div>
+        <div class="sat-body"><svg viewBox="0 0 48 48" width="52" height="52">
+          <g fill="#8fe3ff" stroke="#0b1622" stroke-width="0.8">
+            <rect x="21" y="18" width="6" height="12" rx="1"/>
+            <rect x="5" y="20" width="12" height="8" rx="1"/><rect x="31" y="20" width="12" height="8" rx="1"/></g>
+          <path d="M24 18v-6" stroke="#8fe3ff" stroke-width="2" fill="none"/><circle cx="24" cy="10" r="2.4" fill="#8fe3ff"/>
+        </svg></div>
+        <div class="sat-beam"></div>
+        <div class="sat-target"></div>
+        <div class="sat-ping"></div>
+      </div>
+      <div class="live-status" id="live-status-txt">CONTACTANDO SATÉLITE…</div>
+      <div class="live-bar"><i id="live-bar-i"></i></div>
+      <div class="live-sub" id="live-sub">Estableciendo enlace de datos…</div>
+    </div>
+    <div id="live-content"></div>
+    <div class="live-close" id="live-close">✕</div>
   </div>
 
   <div id="status">conectando…</div>
@@ -405,6 +483,7 @@
       baseLayerPicker:false, geocoder:true, homeButton:false,
       timeline:false, animation:false, sceneModePicker:false, navigationHelpButton:false,
       infoBox:false, selectionIndicator:true,
+      contextOptions:{ webgl:{ preserveDrawingBuffer:true } },  // permite capturar el canvas
     };
     // Con Google 3D Tiles quitamos la capa base; sin ella, dejamos la imaginería
     // por defecto de Cesium ion (requiere CESIUM_ION_TOKEN) para que el globo se vea.
@@ -1183,6 +1262,18 @@
     const rnd=(n)=>Math.floor(Math.random()*n);
     const fmtArea=(a)=> a>1e6 ? (a/1e6).toFixed(2)+" km²" : Math.round(a)+" m²";
     const fmtDist=(d)=> d>=1000 ? (d/1000).toFixed(2)+" km" : Math.round(d)+" m";
+    const RETICLE_IMG = "data:image/svg+xml," + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">'+
+      '<circle cx="24" cy="24" r="15" fill="none" stroke="#8fe3ff" stroke-width="1.6"/>'+
+      '<circle cx="24" cy="24" r="3" fill="#8fe3ff"/>'+
+      '<path d="M24 3v9M24 36v9M3 24h9M36 24h9" stroke="#8fe3ff" stroke-width="1.6"/></svg>');
+    let targetReticleEnt=null;
+    function dropTargetReticle(lon,lat){
+      const pos=Cesium.Cartesian3.fromDegrees(lon,lat,0);
+      if(!targetReticleEnt){ targetReticleEnt=viewer.entities.add({ id:"target-reticle", position:pos,
+        billboard:{ image:RETICLE_IMG, width:44, height:44, disableDepthTestDistance:Number.POSITIVE_INFINITY } }); }
+      else targetReticleEnt.position=pos;
+    }
     function screenToGeo(x,y){
       const rect=viewer.scene.canvas.getBoundingClientRect();
       const c=viewer.camera.pickEllipsoid(new Cesium.Cartesian2(x-rect.left,y-rect.top), viewer.scene.globe.ellipsoid);
@@ -1267,22 +1358,25 @@
           az:Cesium.Math.toDegrees(viewer.camera.heading)||0, wpx:w, hpx:h, area:fmtArea(m.area), state:"ZOOMING…" });
         spyAnimRAF=requestAnimationFrame(live);
       }
-      startCam(); live();
+      startCam(); live(); dropTargetReticle(m.centerLon, m.centerLat);
+      let done=false;
+      const finish=()=>{
+        if(done) return; done=true;
+        cancelAnimationFrame(spyAnimRAF);
+        $("spy-flash").classList.remove("on"); void $("spy-flash").offsetWidth; $("spy-flash").classList.add("on");
+        enhancePulse();
+        fillSpyData({ id:spyId, lat:m.centerLat, lon:m.centerLon, dist:viewer.camera.positionCartographic.height,
+          elev:elevStr, az:Cesium.Math.toDegrees(viewer.camera.heading)||0, wpx:Math.round(tw), hpx:Math.round(th),
+          area:fmtArea(m.area), state:'<b style="color:#5fe08a">● LOCK ACQUIRED</b>' });
+        setTimeout(()=>{ $("spy-hud").classList.add("fade"); setTimeout(endSpy,700); }, 2600);
+        maybeLiveEnv();  // dispara "Live Environment" si estamos a <100 ft
+      };
       // Encuadre centrado y oblicuo (mantiene el objetivo en el centro)
       viewer.camera.flyToBoundingSphere(
-        new Cesium.BoundingSphere(Cesium.Cartesian3.fromDegrees(m.centerLon,m.centerLat,0), Math.max(40,m.largerSpan/2)),
-        { offset:new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-72), Math.max(60,m.largerSpan*1.4)),
-          duration:DUR, easingFunction:Cesium.EasingFunction.QUINTIC_IN_OUT,
-          complete:()=>{
-            cancelAnimationFrame(spyAnimRAF);
-            $("spy-flash").classList.remove("on"); void $("spy-flash").offsetWidth; $("spy-flash").classList.add("on");
-            enhancePulse();
-            fillSpyData({ id:spyId, lat:m.centerLat, lon:m.centerLon, dist:viewer.camera.positionCartographic.height,
-              elev:elevStr, az:Cesium.Math.toDegrees(viewer.camera.heading)||0, wpx:Math.round(tw), hpx:Math.round(th),
-              area:fmtArea(m.area), state:'<b style="color:#5fe08a">● LOCK ACQUIRED</b>' });
-            setTimeout(()=>{ $("spy-hud").classList.add("fade"); setTimeout(endSpy,700); }, 2600);
-          },
-        });
+        new Cesium.BoundingSphere(Cesium.Cartesian3.fromDegrees(m.centerLon,m.centerLat,0), Math.max(30,m.largerSpan/2)),
+        { offset:new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-72), Math.max(45,m.largerSpan*1.2)),
+          duration:DUR, easingFunction:Cesium.EasingFunction.QUINTIC_IN_OUT, complete:finish });
+      setTimeout(finish, (DUR+4)*1000);  // salvaguarda: si complete no dispara, limpia igual
     }
     function enhancePulse(){
       enhanceFilter = "contrast(1.22) saturate(1.25) brightness(1.04)"; updateCanvasFilter();
@@ -1312,6 +1406,102 @@
       glitchFilter=""; focusFilter=""; updateCanvasFilter(); $("cam-overlay").style.display="none"; $("cam-overlay").classList.remove("glitching");
     }
     $("spy-btn").onclick=()=>setSpyMode(!spyMode);
+
+    // ===== Live Environment: análisis IA de la vista actual =====
+    let liveEnvOn=false, liveBusy=false, lastLiveKey="", liveStatusTimer=null, liveImg=null;
+    if(!cfg.ai) $("live-btn").style.display="none";
+    function captureMap(maxW=1100){
+      try{
+        viewer.render();
+        const src=viewer.scene.canvas, scale=Math.min(1, maxW/src.width);
+        const tc=document.createElement("canvas"); tc.width=Math.round(src.width*scale); tc.height=Math.round(src.height*scale);
+        tc.getContext("2d").drawImage(src,0,0,tc.width,tc.height);
+        return tc.toDataURL("image/jpeg",0.85);
+      }catch(e){ return null; }
+    }
+    function animateLiveStatus(){
+      const phases=[["CONTACTANDO SATÉLITE…","Localizando WorldView-3…",14],
+        ["ESTABLECIENDO ENLACE…","Handshake de datos seguro…",36],
+        ["RECIBIENDO FEED EN VIVO…","Descargando imagen orbital…",64],
+        ["ANALIZANDO ESCENA (IA)…","Detectando estructuras y vehículos…",90]];
+      let i=0; const step=()=>{ const p=phases[Math.min(i,phases.length-1)];
+        $("live-status-txt").textContent=p[0]; $("live-sub").textContent=p[1]; $("live-bar-i").style.width=p[2]+"%"; i++; };
+      step(); liveStatusTimer=setInterval(step,1500);
+    }
+    function stopLiveStatus(){ clearInterval(liveStatusTimer); $("live-bar-i").style.width="100%"; }
+    async function runLiveEnv(){
+      if(liveBusy) return; liveBusy=true;
+      liveImg=captureMap();
+      const modal=$("live-modal"); modal.classList.add("open"); modal.classList.remove("done");
+      animateLiveStatus();
+      const c=viewCenter(); let data=null;
+      if(liveImg){ try{ data=await (await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({image:liveImg,lat:c.lat,lon:c.lon})})).json(); }catch{} }
+      stopLiveStatus(); renderDashboard(data, liveImg); modal.classList.add("done"); liveBusy=false;
+    }
+    const vehHtml=(v)=>`<div class="veh-item"><span><span class="vid">${v.id||""}</span> ${v.make||""} ${v.year||""} · ${v.color||""}</span><span class="vplate">${v.plate||""}</span></div>`;
+    function renderDashboard(d, img){
+      if(!d || d.error){ $("live-content").innerHTML=`<div class="lc-head"><h2>ANÁLISIS NO DISPONIBLE</h2></div><div class="lc-meta">No se pudo analizar la vista. ${(d&&d.error)||""}</div>`; return; }
+      const b=d.building||{};
+      const veh=(d.vehicles||[]).map(vehHtml).join("")||'<div class="lc-meta">Sin vehículos detectados.</div>';
+      const roofs=(d.roof_sections||[]).map(r=>`<div class="kv"><span>${r.id||""}</span><span>${r.material||""} · ${r.area||""}</span></div>`).join("");
+      const hvac=(d.hvac||[]).map(h=>`<div class="kv"><span>${h.id||""}</span><span>${h.spec||""}</span></div>`).join("");
+      const struct=(d.structural||[]).map(s=>`<div class="kv"><span>${s.label||""}</span><span>${s.detail||""}</span></div>`).join("");
+      $("live-content").innerHTML =
+        `<div class="lc-head">${icon("globe")}
+           <div><h2>SATELLITE ANALYSIS</h2>
+           <div class="lc-meta">${d.coords||""} · ${d.location||""}<br>
+           SAT: ${d.satellite||"—"} · RES: ${d.resolution||"—"} · MODE: ${d.mode||"—"}</div></div></div>
+         <div class="lc-grid">
+           <div>
+             <div class="lc-hero">${img?`<img src="${img}">`:""}</div>
+             <div class="lc-panels">
+               <div class="lc-panel"><h3>EDIFICIO</h3>
+                 <div class="kv"><span>Plantas</span><span>${b.stories||"—"}</span></div>
+                 <div class="kv"><span>Área</span><span>${b.area||"—"}</span></div>
+                 <div class="kv"><span>Altura</span><span>${b.height||"—"}</span></div>
+                 <div class="kv"><span>Construido</span><span>${b.built||"—"}</span></div>
+                 <div class="kv"><span>Uso</span><span>${b.use||"—"}</span></div></div>
+               <div class="lc-panel"><h3>TECHOS · HVAC</h3>${roofs}${hvac}${(!roofs&&!hvac)?'<div class="lc-meta">—</div>':""}</div>
+               <div class="lc-panel"><h3>ESTRUCTURA</h3>${struct||'<div class="lc-meta">—</div>'}</div>
+             </div>
+             <div class="lc-panel" style="margin-top:14px"><h3>VISTAS IA (a partir de la imagen)</h3>
+               <button id="gen-imgs" style="width:auto;margin:4px 0 10px">${icon("satellite")} Generar vistas mejoradas</button>
+               <div class="lc-imgs" id="lc-imgs"></div></div>
+           </div>
+           <div class="lc-veh"><h3>IDENTIFICACIÓN DE VEHÍCULOS</h3>${veh}</div>
+         </div>
+         <div class="lc-disc">⚠ Análisis generado por IA a partir de la imagen del mapa: los datos (placas, modelos, dimensiones) son ESTIMACIONES para demostración, no información verificada.</div>`;
+      const btn=$("gen-imgs"); if(btn) btn.onclick=()=>generateViews(img);
+    }
+    async function generateViews(img){
+      const cont=$("lc-imgs");
+      const jobs=[
+        ["Vista frontal (nivel calle)","Photorealistic professional ground-level FRONT elevation photo of the main building seen in this aerial image, eye-level architectural photography, daylight."],
+        ["Detalle de azotea","Photorealistic close-up of the rooftop of the main building in this image, HVAC units and roofing membrane, high detail."],
+      ];
+      cont.innerHTML = jobs.map((j,i)=>`<div class="lc-img" id="lci-${i}"><div class="ph">generando…</div><div class="cap">${j[0]}</div></div>`).join("");
+      for(let i=0;i<jobs.length;i++){
+        try{
+          const r=await (await fetch("/api/enhance",{method:"POST",headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({image:img,prompt:jobs[i][1]})})).json();
+          const el=$("lci-"+i);
+          if(r.b64) el.innerHTML=`<img src="data:image/png;base64,${r.b64}"><div class="cap">${jobs[i][0]}</div>`;
+          else if(el) el.querySelector(".ph").textContent="no disponible";
+        }catch{ const el=$("lci-"+i); if(el) el.querySelector(".ph").textContent="error"; }
+      }
+    }
+    function maybeLiveEnv(){ if(liveEnvOn && viewer.camera.positionCartographic.height < 30.5) runLiveEnv(); }
+    $("live-btn").onclick=()=>{ liveEnvOn=!liveEnvOn; $("live-btn").classList.toggle("active",liveEnvOn); if(liveEnvOn) runLiveEnv(); };
+    $("live-close").onclick=()=>$("live-modal").classList.remove("open");
+    viewer.camera.percentageChanged = 0.2;
+    viewer.camera.changed.addEventListener(()=>{
+      if(!liveEnvOn||liveBusy) return;
+      if(viewer.camera.positionCartographic.height < 30.5){
+        const c=viewCenter(); const key=Math.round(c.lat*2000)+","+Math.round(c.lon*2000);
+        if(key!==lastLiveKey){ lastLiveKey=key; runLiveEnv(); }
+      }
+    });
 
     connect();
   </script>

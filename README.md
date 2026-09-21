@@ -46,7 +46,11 @@ Telegram (avisos)┘
   rastrear un vuelo, Street View, etc. La API key vive solo en el backend.
 - **Paneles plegables**: clic en el encabezado de cada panel de la izquierda para contraer/expandir.
 - **Modo OBJETIVO** (spy zoom): arrastra un recuadro y hace un zoom cinematográfico estilo satélite,
-  con HUD de datos en vivo (lat/lon/área/elevación/dirección real) y efecto "enhance".
+  con HUD de datos en vivo (lat/lon/área/elevación/dirección real), viewfinder de cámara con
+  glitch/TV-flicker, autofocus, reticle anclado al punto y efecto "enhance".
+- **Live Environment** (IA): al acercarte a <100 ft (o desde el dock) captura la vista y GPT-4o
+  la analiza (edificio, techos, HVAC, vehículos, estructura) en un modal estilo inteligencia,
+  con animación de "satélite recibiendo feed" y generación de vistas con gpt-image-1.
 - **TomTom** (`TOMTOM_KEY`, proxied): **tráfico en vivo**, **nombres de calles** y **direcciones
   reales** (reverse-geocode) en el HUD. Fuentes de mapa extra: **Google Normal** (2D) y **Street View**.
 

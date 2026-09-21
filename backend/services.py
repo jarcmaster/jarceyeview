@@ -9,6 +9,7 @@ Servicios externos y utilidades para JARC's EYE View.
 
 from __future__ import annotations
 
+import base64
 import json
 import math
 import os
@@ -346,6 +347,71 @@ async def gmap_tile(z: int, x: int, y: int) -> bytes | None:
     except Exception:
         pass
     return None
+
+
+ANALYZE_SYSTEM = """Eres un sistema de análisis de imágenes satelitales/aéreas estilo "inteligencia".
+Analiza la imagen (vista cenital/oblicua del mapa) y devuelve SOLO JSON válido con datos plausibles
+de estilo militar/OSINT. NO son datos reales verificados: son ESTIMACIONES de IA para una demo.
+
+Esquema exacto:
+{
+ "satellite":"WORLDVIEW-3","resolution":"0.31 m","mode":"MULTI-SPECTRAL",
+ "location":"<ciudad, región, país estimados>",
+ "building":{"stories":"<p.ej. 1 STORY>","area":"<~X sq ft>","built":"<año est.>","use":"<Commercial / Residential / Industrial>","height":"<X ft>"},
+ "roof_sections":[{"id":"ROOF SECTION A","material":"<material>","area":"<X sq ft>"}],
+ "hvac":[{"id":"HVAC-1","spec":"<X Ton>"}],
+ "vehicles":[{"id":"V01","plate":"<placa estimada>","make":"<marca modelo>","year":"<año>","color":"<color>"}],
+ "structural":[{"label":"ROOF EDGE","detail":"<material>"},{"label":"WALL PANEL","detail":"..."},{"label":"WINDOW SYSTEM","detail":"..."},{"label":"PARKING LOT","detail":"..."}],
+ "summary":"<1-2 frases>"
+}
+Detecta lo que REALMENTE se vea: cuenta vehículos visibles (hasta 12), secciones de techo, unidades HVAC.
+Si no es un edificio (campo, agua, bosque), adapta building/roof a lo que corresponda y deja arrays vacíos.
+Las placas y modelos son ESTIMACIONES (no se pueden leer): invéntalas plausibles."""
+
+
+async def analyze_scene(image: str, lat: float, lon: float) -> dict | None:
+    key = os.getenv("OPENAI_API_KEY", "")
+    if not key or not image:
+        return None
+    url = image if image.startswith("data:") else f"data:image/png;base64,{image}"
+    body = {
+        "model": "gpt-4o", "temperature": 0.4, "max_tokens": 1600,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {"role": "system", "content": ANALYZE_SYSTEM},
+            {"role": "user", "content": [
+                {"type": "text", "text": f"Coordenadas: {lat:.6f}, {lon:.6f}. Analiza esta vista."},
+                {"type": "image_url", "image_url": {"url": url, "detail": "high"}},
+            ]},
+        ],
+    }
+    try:
+        r = await _http.post("https://api.openai.com/v1/chat/completions",
+                             headers={"Authorization": f"Bearer {key}"}, json=body, timeout=90)
+        r.raise_for_status()
+        d = json.loads(r.json()["choices"][0]["message"]["content"])
+        d["coords"] = f"{lat:.6f}, {lon:.6f}"
+        return d
+    except Exception:
+        return None
+
+
+async def enhance_image(image: str, prompt: str) -> str | None:
+    """Genera una imagen 'mejorada' a partir de la captura del mapa (gpt-image-1 edits)."""
+    key = os.getenv("OPENAI_API_KEY", "")
+    if not key or not image:
+        return None
+    try:
+        raw = base64.b64decode(image.split(",", 1)[-1])
+        files = {"image": ("map.png", raw, "image/png")}
+        data = {"model": "gpt-image-1", "prompt": prompt, "size": "1024x1024"}
+        r = await _http.post("https://api.openai.com/v1/images/edits",
+                             headers={"Authorization": f"Bearer {key}"},
+                             data=data, files=files, timeout=180)
+        r.raise_for_status()
+        return r.json()["data"][0]["b64_json"]
+    except Exception:
+        return None
 
 
 async def rain_radar() -> dict:

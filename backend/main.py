@@ -40,10 +40,10 @@ from fastapi.staticfiles import StaticFiles
 
 # Permite `from services import ...` sin importar desde dónde se lance uvicorn.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from services import (OpenSky, RouteService, Telegram, aclose, earthquakes,
-                      flight_status, geoip, gmap_tile, haversine_km, iss_position,
-                      radio_stations, rain_radar, revgeo, tomtom_tile,
-                      voice_intent, webcams)
+from services import (OpenSky, RouteService, Telegram, aclose, analyze_scene,
+                      earthquakes, enhance_image, flight_status, geoip, gmap_tile,
+                      haversine_km, iss_position, radio_stations, rain_radar,
+                      revgeo, tomtom_tile, voice_intent, webcams)
 
 load_dotenv()
 
@@ -320,6 +320,18 @@ async def api_revgeo(lat: float, lon: float) -> JSONResponse:
     return JSONResponse(await revgeo(lat, lon) or {})
 
 
+@app.post("/api/analyze")
+async def api_analyze(payload: dict) -> JSONResponse:
+    d = await analyze_scene(payload.get("image", ""), payload.get("lat", 0.0), payload.get("lon", 0.0))
+    return JSONResponse(d or {"error": "sin análisis"})
+
+
+@app.post("/api/enhance")
+async def api_enhance(payload: dict) -> JSONResponse:
+    b64 = await enhance_image(payload.get("image", ""), payload.get("prompt", ""))
+    return JSONResponse({"b64": b64} if b64 else {"error": "sin imagen"})
+
+
 _TILE_HEADERS = {"Cache-Control": "public, max-age=60"}
 
 
@@ -348,6 +360,7 @@ async def config() -> JSONResponse:
         "flightStatus": bool(os.getenv("AVIATIONSTACK_KEY", "")),
         "webcams": bool(os.getenv("WINDY_WEBCAMS_KEY", "")),
         "voice": bool(os.getenv("OPENAI_API_KEY", "")),
+        "ai": bool(os.getenv("OPENAI_API_KEY", "")),
         "traffic": bool(os.getenv("TOMTOM_KEY", "")),
         "gmap2d": bool(os.getenv("GOOGLE_MAPS_API_KEY", "")),
         "pollInterval": POLL_INTERVAL,
