@@ -319,6 +319,7 @@
 
     <div id="layers" class="panel">
       <h2><span data-ic="globe"></span> CAPAS</h2>
+      <label class="chk"><input type="checkbox" id="lyr-planes" checked /> <span data-ic="plane"></span> Aviones (vuelos)</label>
       <label class="chk"><input type="checkbox" id="lyr-quakes" /> <span class="dot" style="color:#ff5c6c">●</span> Terremotos (24 h)</label>
       <label class="chk"><input type="checkbox" id="lyr-iss" /> <span data-ic="satellite"></span> ISS en vivo</label>
       <label class="chk"><input type="checkbox" id="lyr-rain" /> <span data-ic="cloudrain"></span> Radar de lluvia</label>
@@ -585,7 +586,7 @@
     const TRACK_COLOR = Cesium.Color.fromCssColorString("#ff4fd8");
 
     // ---- Filtros -------------------------------------------------------
-    const filters = { country:"", airline:"", alt:0, emerg:false, trails:true };
+    const filters = { country:"", airline:"", alt:0, emerg:false, trails:true, planes:true };
     function readFilters() {
       filters.country = $("f-country").value.trim().toLowerCase();
       filters.airline = $("f-airline").value.trim().toUpperCase();
@@ -596,8 +597,10 @@
     }
     ["f-country","f-airline","f-alt","f-emerg","f-trails"].forEach(id =>
       $(id).addEventListener("input", readFilters));
+    $("lyr-planes").addEventListener("change", e => { filters.planes = e.target.checked; applyFilters(); });
 
     function passes(d) {
+      if (!filters.planes) return false;
       if (filters.country && !d.country.toLowerCase().includes(filters.country)) return false;
       if (filters.airline && !d.name.toUpperCase().startsWith(filters.airline)) return false;
       if (filters.alt && d.alt < filters.alt) return false;
