@@ -318,30 +318,30 @@ async def revgeo(lat: float, lon: float) -> dict | None:
     return None
 
 
-_gmap_session = {"token": "", "exp": 0.0}
+_gmap_sessions: dict[str, dict] = {}
 
 
-async def gmap_tile(z: int, x: int, y: int) -> bytes | None:
-    """Tile 2D roadmap de Google (Map Tiles API 2D, con sesión cacheada)."""
+async def gmap_tile(z: int, x: int, y: int, map_type: str = "roadmap") -> bytes | None:
+    """Tile 2D de Google (roadmap o satellite), Map Tiles API 2D con sesión cacheada por tipo."""
     key = os.getenv("GOOGLE_MAPS_API_KEY", "")
     if not key:
         return None
-    if not (_gmap_session["token"] and time.monotonic() < _gmap_session["exp"] - 120):
+    s = _gmap_sessions.get(map_type)
+    if not (s and time.monotonic() < s["exp"] - 120):
         try:
             r = await _http.post(f"https://tile.googleapis.com/v1/createSession?key={key}",
-                                 json={"mapType": "roadmap", "language": "en-US", "region": "US"})
+                                 json={"mapType": map_type, "language": "en-US", "region": "US"})
             d = r.json()
             if "session" in d:
-                _gmap_session["token"] = d["session"]
-                _gmap_session["exp"] = time.monotonic() + 3600 * 20
+                _gmap_sessions[map_type] = {"token": d["session"], "exp": time.monotonic() + 3600 * 20}
         except Exception:
             return None
-    sess = _gmap_session["token"]
-    if not sess:
+        s = _gmap_sessions.get(map_type)
+    if not s:
         return None
     try:
         r = await _http.get(f"https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}",
-                            params={"session": sess, "key": key})
+                            params={"session": s["token"], "key": key})
         if r.status_code == 200:
             return r.content
     except Exception:

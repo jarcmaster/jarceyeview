@@ -347,7 +347,12 @@ async def tile_labels(z: int, x: int, y: int) -> Response:
 
 @app.get("/tiles/gmap/{z}/{x}/{y}.png")
 async def tile_gmap(z: int, x: int, y: int) -> Response:
-    return Response(await gmap_tile(z, x, y) or b"", media_type="image/png", headers=_TILE_HEADERS)
+    return Response(await gmap_tile(z, x, y, "roadmap") or b"", media_type="image/png", headers=_TILE_HEADERS)
+
+
+@app.get("/tiles/gsat/{z}/{x}/{y}.png")
+async def tile_gsat(z: int, x: int, y: int) -> Response:
+    return Response(await gmap_tile(z, x, y, "satellite") or b"", media_type="image/png", headers=_TILE_HEADERS)
 
 
 @app.get("/config")

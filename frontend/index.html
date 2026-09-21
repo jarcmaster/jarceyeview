@@ -180,8 +180,8 @@
     @keyframes camshake { 0%{transform:translate(2px,0)} 50%{transform:translate(-2px,1px)} 100%{transform:translate(0,0)} }
 
     /* ===== Live Environment (análisis IA) ===== */
-    #live-modal { position:absolute; inset:0; z-index:40; display:none; background:rgba(2,7,14,.95);
-      color:#dff; font-family:"Consolas", monospace; overflow:auto; }
+    #live-modal { position:absolute; inset:0; z-index:40; display:none; background:rgba(2,7,14,.5);
+      backdrop-filter:blur(3px); color:#dff; font-family:"Consolas", monospace; overflow:auto; }
     #live-modal.open { display:block; }
     #live-modal.done #live-loading { display:none; }
     #live-modal.done #live-content { display:block; }
@@ -1135,7 +1135,7 @@
     $("preset-row").querySelectorAll(".pbtn").forEach(b => b.onclick = () => applyPreset(b.dataset.k));
 
     // --- Fuentes de mapa ---
-    const SOURCES = [["google3d","GOOGLE 3D"],["gmap","GOOGLE NORMAL"],["bing","BING AERIAL"],
+    const SOURCES = [["google3d","GOOGLE 3D"],["gsat","GOOGLE SAT"],["gmap","GOOGLE NORMAL"],["bing","BING AERIAL"],
                      ["binglabels","BING LABELS"],["esri","ESRI SATELLITE"],["osm","OSM"],["streetview","STREET VIEW"]];
     $("source-row").innerHTML = SOURCES.map(([k,l]) =>
       `<div class="sbtn2 ${k==="google3d"?"active":""}" data-k="${k}">${l}</div>`).join("");
@@ -1149,6 +1149,7 @@
       try {
         let provider;
         if (src === "gmap") provider = new Cesium.UrlTemplateImageryProvider({ url: "/tiles/gmap/{z}/{x}/{y}.png", maximumLevel: 20 });
+        else if (src === "gsat") provider = new Cesium.UrlTemplateImageryProvider({ url: "/tiles/gsat/{z}/{x}/{y}.png", maximumLevel: 20 });
         else if (src === "bing") provider = await Cesium.IonImageryProvider.fromAssetId(2);
         else if (src === "binglabels") provider = await Cesium.IonImageryProvider.fromAssetId(3);
         else if (src === "esri") provider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
@@ -1258,7 +1259,7 @@
     if (!cfg.voice) micStatus.textContent = "voz no configurada";
 
     // --- Modo OBJETIVO: recuadro + zoom cinematográfico estilo satélite ---
-    let spyMode=false, spyDown=false, spyA=null, spyId="", spyAnimRAF=null, spyAddr="";
+    let spyMode=false, spyDown=false, spyA=null, spyId="", spyAnimRAF=null, spyAddr="", spyPurpose="zoom", objetivoOn=false;
     const rnd=(n)=>Math.floor(Math.random()*n);
     const fmtArea=(a)=> a>1e6 ? (a/1e6).toFixed(2)+" km²" : Math.round(a)+" m²";
     const fmtDist=(d)=> d>=1000 ? (d/1000).toFixed(2)+" km" : Math.round(d)+" m";
@@ -1306,15 +1307,30 @@
       $("spy-capture").style.display="none"; $("spy-hint").style.display="none";
       $("spy-hud").style.display="none"; $("spy-hud").classList.remove("fade");
       const s=$("spy-box"); s.style.display="none"; s.style.transition="";
-      $("spy-btn").classList.remove("active");
     }
-    function setSpyMode(on){
-      spyMode=on;
-      $("spy-capture").style.display=on?"block":"none";
-      $("spy-hint").style.display=on?"block":"none";
-      $("spy-btn").classList.toggle("active",on);
-      if(on){ spyId=`${rnd(90000)+10000}-${rnd(900)+100}`; spyAddr=""; $("spy-hud").classList.remove("fade"); $("spy-hud").style.display="block"; $("spy-box").style.display="none"; }
-      else endSpy();
+    function armMark(purpose){
+      spyMode=true; spyPurpose=purpose;
+      spyId=`${rnd(90000)+10000}-${rnd(900)+100}`; spyAddr="";
+      $("spy-capture").style.display="block";
+      $("spy-hint").textContent = purpose==="live"
+        ? "◎ ARRASTRA LA ZONA PARA ANÁLISIS IA · ESC PARA SALIR"
+        : "◎ ARRASTRA PARA MARCAR LA ZONA (repetible) · ESC PARA SALIR";
+      $("spy-hint").style.display="block";
+      $("spy-hud").classList.remove("fade"); $("spy-hud").style.display="block"; $("spy-box").style.display="none";
+    }
+    function disarmMark(){ spyMode=false; spyDown=false; $("spy-capture").style.display="none"; $("spy-hint").style.display="none"; }
+    // Captura el recorte del recuadro marcado (coordenadas de pantalla -> píxeles del canvas)
+    function captureRegion(l,t,w,h){
+      try{
+        viewer.render();
+        const src=viewer.scene.canvas, rect=src.getBoundingClientRect();
+        const kx=src.width/rect.width, ky=src.height/rect.height;
+        const sx=(l-rect.left)*kx, sy=(t-rect.top)*ky, sw=w*kx, sh=h*ky;
+        const scale=Math.min(1, 1100/sw);
+        const tc=document.createElement("canvas"); tc.width=Math.round(sw*scale); tc.height=Math.round(sh*scale);
+        tc.getContext("2d").drawImage(src, sx,sy,sw,sh, 0,0,tc.width,tc.height);
+        return tc.toDataURL("image/jpeg",0.9);
+      }catch(e){ return null; }
     }
     function drawBox(a,b){
       const l=Math.min(a.x,b.x),t=Math.min(a.y,b.y),w=Math.abs(a.x-b.x),h=Math.abs(a.y-b.y);
@@ -1330,14 +1346,20 @@
     $("spy-capture").addEventListener("mousedown",(e)=>{ if(!spyMode)return; spyDown=true; spyA={x:e.clientX,y:e.clientY}; autofocus(); $("spy-box").style.display="block"; drawBox(spyA,spyA); });
     window.addEventListener("mousemove",(e)=>{ if(spyMode&&spyDown) drawBox(spyA,{x:e.clientX,y:e.clientY}); });
     window.addEventListener("mouseup",(e)=>{ if(spyMode&&spyDown){ spyDown=false; finalizeSpy(spyA,{x:e.clientX,y:e.clientY}); } });
-    window.addEventListener("keydown",(e)=>{ if(e.key==="Escape"){ if(spyMode) endSpy(); if(svHandler) exitStreetViewPick(); } });
+    window.addEventListener("keydown",(e)=>{ if(e.key==="Escape"){ if(spyMode||objetivoOn){ objetivoOn=false; $("spy-btn").classList.remove("active"); endSpy(); } if(svHandler) exitStreetViewPick(); } });
 
     function finalizeSpy(a,b){
       const w=Math.abs(a.x-b.x),h=Math.abs(a.y-b.y);
       const gA=screenToGeo(a.x,a.y), gB=screenToGeo(b.x,b.y);
-      if(w<12||h<12||!gA||!gB){ endSpy(); return; }
-      $("spy-capture").style.display="none"; $("spy-hint").style.display="none";
-      spyMode=false; $("spy-btn").classList.remove("active");
+      if(w<12||h<12||!gA||!gB){ endSpy(); if(objetivoOn) armMark("zoom"); return; }
+      if(spyPurpose==="live"){   // LIVE ENV: recortar el recuadro y analizarlo con IA
+        const l=Math.min(a.x,b.x), t=Math.min(a.y,b.y);
+        const crop=captureRegion(l,t,w,h);
+        disarmMark(); $("spy-hud").style.display="none"; $("spy-box").style.display="none";
+        runLiveEnv(crop);
+        return;
+      }
+      $("spy-capture").style.display="none"; $("spy-hint").style.display="none"; spyMode=false;
       const m=geoMetrics(gA,gB), elevStr=sampleElev(m.centerLon,m.centerLat), DUR=2.8;
       spyAddr = "…";  // dirección real (TomTom reverse-geocode)
       fetch(`/api/revgeo?lat=${m.centerLat}&lon=${m.centerLon}`).then(r=>r.json())
@@ -1368,8 +1390,7 @@
         fillSpyData({ id:spyId, lat:m.centerLat, lon:m.centerLon, dist:viewer.camera.positionCartographic.height,
           elev:elevStr, az:Cesium.Math.toDegrees(viewer.camera.heading)||0, wpx:Math.round(tw), hpx:Math.round(th),
           area:fmtArea(m.area), state:'<b style="color:#5fe08a">● LOCK ACQUIRED</b>' });
-        setTimeout(()=>{ $("spy-hud").classList.add("fade"); setTimeout(endSpy,700); }, 2600);
-        maybeLiveEnv();  // dispara "Live Environment" si estamos a <100 ft
+        setTimeout(()=>{ $("spy-hud").classList.add("fade"); setTimeout(()=>{ endSpy(); if(objetivoOn) armMark("zoom"); }, 700); }, 2600);
       };
       // Encuadre centrado y oblicuo (mantiene el objetivo en el centro)
       viewer.camera.flyToBoundingSphere(
@@ -1405,10 +1426,13 @@
       if(glitchTimer){clearInterval(glitchTimer);glitchTimer=null;} if(camTimer){clearInterval(camTimer);camTimer=null;}
       glitchFilter=""; focusFilter=""; updateCanvasFilter(); $("cam-overlay").style.display="none"; $("cam-overlay").classList.remove("glitching");
     }
-    $("spy-btn").onclick=()=>setSpyMode(!spyMode);
+    $("spy-btn").onclick=()=>{
+      objetivoOn=!objetivoOn; $("spy-btn").classList.toggle("active",objetivoOn);
+      if(objetivoOn) armMark("zoom"); else { disarmMark(); endSpy(); }
+    };
 
     // ===== Live Environment: análisis IA de la vista actual =====
-    let liveEnvOn=false, liveBusy=false, lastLiveKey="", liveStatusTimer=null, liveImg=null;
+    let liveBusy=false, liveStatusTimer=null, liveImg=null;
     if(!cfg.ai) $("live-btn").style.display="none";
     function captureMap(maxW=1100){
       try{
@@ -1429,15 +1453,16 @@
       step(); liveStatusTimer=setInterval(step,1500);
     }
     function stopLiveStatus(){ clearInterval(liveStatusTimer); $("live-bar-i").style.width="100%"; }
-    async function runLiveEnv(){
+    async function runLiveEnv(img){
       if(liveBusy) return; liveBusy=true;
-      liveImg=captureMap();
+      liveImg = img || captureMap();
       const modal=$("live-modal"); modal.classList.add("open"); modal.classList.remove("done");
       animateLiveStatus();
       const c=viewCenter(); let data=null;
       if(liveImg){ try{ data=await (await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({image:liveImg,lat:c.lat,lon:c.lon})})).json(); }catch{} }
       stopLiveStatus(); renderDashboard(data, liveImg); modal.classList.add("done"); liveBusy=false;
+      if(data && !data.error) generateViews(liveImg);   // convierte la zona marcada en imagen(es) enhanced
     }
     const vehHtml=(v)=>`<div class="veh-item"><span><span class="vid">${v.id||""}</span> ${v.make||""} ${v.year||""} · ${v.color||""}</span><span class="vplate">${v.plate||""}</span></div>`;
     function renderDashboard(d, img){
@@ -1491,17 +1516,9 @@
         }catch{ const el=$("lci-"+i); if(el) el.querySelector(".ph").textContent="error"; }
       }
     }
-    function maybeLiveEnv(){ if(liveEnvOn && viewer.camera.positionCartographic.height < 30.5) runLiveEnv(); }
-    $("live-btn").onclick=()=>{ liveEnvOn=!liveEnvOn; $("live-btn").classList.toggle("active",liveEnvOn); if(liveEnvOn) runLiveEnv(); };
+    // LIVE ENV: marca una zona y esa (recortada) se manda a GPT para analizar y "enhance"
+    $("live-btn").onclick=()=>{ if(cfg.ai) armMark("live"); };
     $("live-close").onclick=()=>$("live-modal").classList.remove("open");
-    viewer.camera.percentageChanged = 0.2;
-    viewer.camera.changed.addEventListener(()=>{
-      if(!liveEnvOn||liveBusy) return;
-      if(viewer.camera.positionCartographic.height < 30.5){
-        const c=viewCenter(); const key=Math.round(c.lat*2000)+","+Math.round(c.lon*2000);
-        if(key!==lastLiveKey){ lastLiveKey=key; runLiveEnv(); }
-      }
-    });
 
     connect();
   </script>
