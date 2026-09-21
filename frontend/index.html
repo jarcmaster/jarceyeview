@@ -137,6 +137,10 @@
       text-shadow:0 0 6px rgba(127,211,255,.7); animation:spyfade .5s ease; }
     #spy-data b { color:#8fe3ff; font-weight:600; }
     @keyframes spyfade { from{opacity:0; transform:translateY(6px)} to{opacity:1} }
+    #spy-flash { position:absolute; inset:0; pointer-events:none; opacity:0;
+      background:radial-gradient(circle at 50% 45%, rgba(200,240,255,.55), rgba(200,240,255,0) 60%); }
+    #spy-flash.on { animation:spyflash .7s ease-out; }
+    @keyframes spyflash { 0%{opacity:0} 25%{opacity:1} 100%{opacity:0} }
 
     /* Reproductores flotantes (webcam / street view) */
     #wc-player, #sv-player { position:absolute; z-index:30; left:50%; transform:translateX(-50%); bottom:92px;
@@ -241,6 +245,7 @@
       <span class="spy-corner spy-tr"></span><span class="spy-corner spy-bl"></span>
       <div class="spy-cross"></div>
       <div id="spy-scan"></div>
+      <div id="spy-flash"></div>
       <div class="spy-lbl" id="spy-lbl-tl"></div>
       <div class="spy-lbl" id="spy-lbl-br"></div>
       <div class="spy-lbl" id="spy-lbl-top"></div>
@@ -947,7 +952,9 @@
                      ["anime","ANIME"],["noir","NOIR"],["snow","SNOW"]];
     $("preset-row").innerHTML = PRESETS.map(([k,l]) =>
       `<div class="pbtn ${k==="normal"?"active":""}" data-k="${k}">${icon("p_"+k)}<span>${l}</span></div>`).join("");
+    let currentPreset = "normal";
     function applyPreset(k) {
+      currentPreset = k;
       $("cesiumContainer").style.filter = PRESET_FILTERS[k] || "none";
       $("crt-overlay").style.display = (k === "crt") ? "block" : "none";
       document.querySelectorAll("#preset-row .pbtn").forEach(b => b.classList.toggle("active", b.dataset.k === k));
@@ -1054,79 +1061,113 @@
     if (!cfg.voice) micStatus.textContent = "voz no configurada";
 
     // --- Modo OBJETIVO: recuadro + zoom cinematográfico estilo satélite ---
-    let spyMode = false, spyDown = false, spyA = null;
-    const rnd = (n) => Math.floor(Math.random() * n);
-    function screenToGeo(x, y) {
-      const rect = viewer.scene.canvas.getBoundingClientRect();
-      const c = viewer.camera.pickEllipsoid(new Cesium.Cartesian2(x - rect.left, y - rect.top), viewer.scene.globe.ellipsoid);
-      if (!c) return null;
-      const g = Cesium.Cartographic.fromCartesian(c);
-      return { lat: Cesium.Math.toDegrees(g.latitude), lon: Cesium.Math.toDegrees(g.longitude) };
+    let spyMode=false, spyDown=false, spyA=null, spyId="", spyAnimRAF=null;
+    const rnd=(n)=>Math.floor(Math.random()*n);
+    const fmtArea=(a)=> a>1e6 ? (a/1e6).toFixed(2)+" km²" : Math.round(a)+" m²";
+    const fmtDist=(d)=> d>=1000 ? (d/1000).toFixed(2)+" km" : Math.round(d)+" m";
+    function screenToGeo(x,y){
+      const rect=viewer.scene.canvas.getBoundingClientRect();
+      const c=viewer.camera.pickEllipsoid(new Cesium.Cartesian2(x-rect.left,y-rect.top), viewer.scene.globe.ellipsoid);
+      if(!c) return null; const g=Cesium.Cartographic.fromCartesian(c);
+      return {lat:Cesium.Math.toDegrees(g.latitude), lon:Cesium.Math.toDegrees(g.longitude)};
     }
-    function endSpy() {
-      spyMode = false; spyDown = false;
-      $("spy-capture").style.display = "none"; $("spy-hint").style.display = "none";
-      $("spy-hud").style.display = "none"; $("spy-hud").classList.remove("fade");
-      $("spy-box").style.display = "none"; $("spy-btn").classList.remove("active");
+    function geoMetrics(gA,gB){
+      const centerLat=(gA.lat+gB.lat)/2, centerLon=(gA.lon+gB.lon)/2;
+      const w_m=Cesium.Cartesian3.distance(Cesium.Cartesian3.fromDegrees(gA.lon,centerLat),Cesium.Cartesian3.fromDegrees(gB.lon,centerLat));
+      const h_m=Cesium.Cartesian3.distance(Cesium.Cartesian3.fromDegrees(centerLon,gA.lat),Cesium.Cartesian3.fromDegrees(centerLon,gB.lat));
+      return {centerLat,centerLon,w_m,h_m,area:w_m*h_m,largerSpan:Math.max(w_m,h_m)};
     }
-    function setSpyMode(on) {
-      spyMode = on;
-      $("spy-capture").style.display = on ? "block" : "none";
-      $("spy-hint").style.display = on ? "block" : "none";
-      $("spy-btn").classList.toggle("active", on);
-      if (on) { $("spy-hud").classList.remove("fade"); $("spy-hud").style.display = "block"; $("spy-box").style.display = "none"; }
+    function sampleElev(lon,lat){
+      try{ if(viewer.scene.sampleHeightSupported){ const h=viewer.scene.sampleHeight(Cesium.Cartographic.fromDegrees(lon,lat)); if(h!=null&&isFinite(h)) return h.toFixed(1)+" m"; } }catch{}
+      return "—";
+    }
+    function fillSpyData(d){
+      $("spy-lbl-top").textContent=`SPYEYE ${d.id}`; $("spy-lbl-bot").textContent=`SPYEYE ${d.id}`;
+      $("spy-lbl-tl").textContent=`+${d.lat.toFixed(6)}`; $("spy-lbl-br").textContent=`${d.lon.toFixed(6)}`;
+      $("spy-data").innerHTML =
+        `<b>SATELLITE DATA · SPYEYE ${d.id}</b><br>`+
+        `LAT <b>${d.lat.toFixed(6)}</b>&nbsp; LON <b>${d.lon.toFixed(6)}</b><br>`+
+        `DIST <b>${fmtDist(d.dist)}</b>&nbsp; ELEV <b>${d.elev}</b><br>`+
+        `AREA <b>${d.area}</b>&nbsp; AZ(t) <b>${d.az.toFixed(1)}°</b><br>`+
+        `FRAME <b>${d.wpx}×${d.hpx}px</b>&nbsp; ${d.state}`;
+    }
+    function endSpy(){
+      spyMode=false; spyDown=false; cancelAnimationFrame(spyAnimRAF);
+      $("spy-capture").style.display="none"; $("spy-hint").style.display="none";
+      $("spy-hud").style.display="none"; $("spy-hud").classList.remove("fade");
+      const s=$("spy-box"); s.style.display="none"; s.style.transition="";
+      $("spy-btn").classList.remove("active");
+    }
+    function setSpyMode(on){
+      spyMode=on;
+      $("spy-capture").style.display=on?"block":"none";
+      $("spy-hint").style.display=on?"block":"none";
+      $("spy-btn").classList.toggle("active",on);
+      if(on){ spyId=`${rnd(90000)+10000}-${rnd(900)+100}`; $("spy-hud").classList.remove("fade"); $("spy-hud").style.display="block"; $("spy-box").style.display="none"; }
       else endSpy();
     }
-    function drawBox(a, b) {
-      const l = Math.min(a.x, b.x), t = Math.min(a.y, b.y), w = Math.abs(a.x - b.x), h = Math.abs(a.y - b.y);
-      const s = $("spy-box").style; s.left = l + "px"; s.top = t + "px"; s.width = w + "px"; s.height = h + "px";
-      const gA = screenToGeo(a.x, a.y), gB = screenToGeo(b.x, b.y);
-      if (gA) $("spy-lbl-tl").textContent = `+${gA.lat.toFixed(6)}`;
-      if (gB) $("spy-lbl-br").textContent = `${gB.lon.toFixed(6)}`;
+    function drawBox(a,b){
+      const l=Math.min(a.x,b.x),t=Math.min(a.y,b.y),w=Math.abs(a.x-b.x),h=Math.abs(a.y-b.y);
+      const s=$("spy-box").style; s.left=l+"px"; s.top=t+"px"; s.width=w+"px"; s.height=h+"px";
+      const gA=screenToGeo(a.x,a.y), gB=screenToGeo(b.x,b.y);
+      if(gA&&gB){
+        const m=geoMetrics(gA,gB);
+        fillSpyData({ id:spyId, lat:m.centerLat, lon:m.centerLon, dist:viewer.camera.positionCartographic.height,
+          elev:sampleElev(m.centerLon,m.centerLat), az:Cesium.Math.toDegrees(viewer.camera.heading)||0,
+          wpx:w, hpx:h, area:fmtArea(m.area), state:"TARGETING…" });
+      }
     }
-    $("spy-capture").addEventListener("mousedown", (e) => {
-      if (!spyMode) return; spyDown = true; spyA = { x: e.clientX, y: e.clientY };
-      $("spy-box").style.display = "block"; drawBox(spyA, spyA);
-    });
-    window.addEventListener("mousemove", (e) => { if (spyMode && spyDown) drawBox(spyA, { x: e.clientX, y: e.clientY }); });
-    window.addEventListener("mouseup", (e) => { if (spyMode && spyDown) { spyDown = false; finalizeSpy(spyA, { x: e.clientX, y: e.clientY }); } });
-    window.addEventListener("keydown", (e) => { if (e.key === "Escape" && spyMode) endSpy(); });
+    $("spy-capture").addEventListener("mousedown",(e)=>{ if(!spyMode)return; spyDown=true; spyA={x:e.clientX,y:e.clientY}; $("spy-box").style.display="block"; drawBox(spyA,spyA); });
+    window.addEventListener("mousemove",(e)=>{ if(spyMode&&spyDown) drawBox(spyA,{x:e.clientX,y:e.clientY}); });
+    window.addEventListener("mouseup",(e)=>{ if(spyMode&&spyDown){ spyDown=false; finalizeSpy(spyA,{x:e.clientX,y:e.clientY}); } });
+    window.addEventListener("keydown",(e)=>{ if(e.key==="Escape"&&spyMode) endSpy(); });
 
-    function finalizeSpy(a, b) {
-      const w = Math.abs(a.x - b.x), h = Math.abs(a.y - b.y);
-      const gA = screenToGeo(a.x, a.y), gB = screenToGeo(b.x, b.y);
-      if (w < 12 || h < 12 || !gA || !gB) { endSpy(); return; }
-      $("spy-capture").style.display = "none"; $("spy-hint").style.display = "none";
-      spyMode = false; $("spy-btn").classList.remove("active");
-      const centerLat = (gA.lat + gB.lat) / 2, centerLon = (gA.lon + gB.lon) / 2;
-      const span = Cesium.Cartesian3.distance(
-        Cesium.Cartesian3.fromDegrees(gA.lon, gA.lat), Cesium.Cartesian3.fromDegrees(gB.lon, gB.lat));
-      const alt = Math.min(200000, Math.max(60, span * 1.4));
-      const id = `${rnd(90000) + 10000}-${rnd(900) + 100}`;
-      $("spy-lbl-top").textContent = `SPYEYE ${id}`; $("spy-lbl-bot").textContent = `SPYEYE ${id}`;
-      $("spy-lbl-tl").textContent = `+${centerLat.toFixed(6)}`; $("spy-lbl-br").textContent = `${centerLon.toFixed(6)}`;
-      let elev = "—";
-      try {
-        if (viewer.scene.sampleHeightSupported) {
-          const hh = viewer.scene.sampleHeight(Cesium.Cartographic.fromDegrees(centerLon, centerLat));
-          if (hh != null && isFinite(hh)) elev = hh.toFixed(1) + " m";
-        }
-      } catch {}
-      const az = (Cesium.Math.toDegrees(viewer.camera.heading) || 0).toFixed(1);
-      $("spy-data").innerHTML =
-        `<b>SATELLITE DATA · SPYEYE ${id}</b><br>` +
-        `LAT <b>${centerLat.toFixed(6)}</b>&nbsp; LON <b>${centerLon.toFixed(6)}</b><br>` +
-        `DIST <b>${alt.toFixed(0)} m</b>&nbsp; ELEV <b>${elev}</b><br>` +
-        `AZ(t) <b>${az}°</b>&nbsp; FRAME <b>${w}×${h}px</b><br>` +
-        `TARGET LOCK <b style="color:#5fe08a">●</b> ACQUIRED`;
-      viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(centerLon, centerLat, alt),
-        orientation: { heading: 0, pitch: Cesium.Math.toRadians(-72), roll: 0 },
-        duration: 2.6, easingFunction: Cesium.EasingFunction.QUINTIC_IN_OUT,
-        complete: () => { setTimeout(() => { $("spy-hud").classList.add("fade"); setTimeout(endSpy, 700); }, 2200); },
-      });
+    function finalizeSpy(a,b){
+      const w=Math.abs(a.x-b.x),h=Math.abs(a.y-b.y);
+      const gA=screenToGeo(a.x,a.y), gB=screenToGeo(b.x,b.y);
+      if(w<12||h<12||!gA||!gB){ endSpy(); return; }
+      $("spy-capture").style.display="none"; $("spy-hint").style.display="none";
+      spyMode=false; $("spy-btn").classList.remove("active");
+      const m=geoMetrics(gA,gB), elevStr=sampleElev(m.centerLon,m.centerLat), DUR=2.8;
+      // El recuadro se desliza al centro (área marcada centrada mientras hace zoom dentro)
+      const vw=window.innerWidth, vh=window.innerHeight, aspect=w/h;
+      let th=Math.min(vh*0.62,(vw*0.66)/aspect), tw=th*aspect;
+      if(tw>vw*0.7){ tw=vw*0.7; th=tw/aspect; }
+      const s=$("spy-box").style;
+      s.transition=`left ${DUR}s cubic-bezier(.6,.02,.2,1), top ${DUR}s cubic-bezier(.6,.02,.2,1), width ${DUR}s cubic-bezier(.6,.02,.2,1), height ${DUR}s cubic-bezier(.6,.02,.2,1)`;
+      requestAnimationFrame(()=>{ s.left=((vw-tw)/2)+"px"; s.top=((vh-th)/2)+"px"; s.width=tw+"px"; s.height=th+"px"; });
+      // Números en vivo durante el zoom (leídos de la cámara real cada frame)
+      const rect=viewer.scene.canvas.getBoundingClientRect();
+      function live(){
+        const g=screenToGeo(rect.left+rect.width/2, rect.top+rect.height/2);
+        fillSpyData({ id:spyId, lat:g?g.lat:m.centerLat, lon:g?g.lon:m.centerLon,
+          dist:viewer.camera.positionCartographic.height, elev:elevStr,
+          az:Cesium.Math.toDegrees(viewer.camera.heading)||0, wpx:w, hpx:h, area:fmtArea(m.area), state:"ZOOMING…" });
+        spyAnimRAF=requestAnimationFrame(live);
+      }
+      live();
+      // Encuadre centrado y oblicuo (mantiene el objetivo en el centro)
+      viewer.camera.flyToBoundingSphere(
+        new Cesium.BoundingSphere(Cesium.Cartesian3.fromDegrees(m.centerLon,m.centerLat,0), Math.max(40,m.largerSpan/2)),
+        { offset:new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-72), Math.max(60,m.largerSpan*1.4)),
+          duration:DUR, easingFunction:Cesium.EasingFunction.QUINTIC_IN_OUT,
+          complete:()=>{
+            cancelAnimationFrame(spyAnimRAF);
+            $("spy-flash").classList.remove("on"); void $("spy-flash").offsetWidth; $("spy-flash").classList.add("on");
+            enhancePulse();
+            fillSpyData({ id:spyId, lat:m.centerLat, lon:m.centerLon, dist:viewer.camera.positionCartographic.height,
+              elev:elevStr, az:Cesium.Math.toDegrees(viewer.camera.heading)||0, wpx:Math.round(tw), hpx:Math.round(th),
+              area:fmtArea(m.area), state:'<b style="color:#5fe08a">● LOCK ACQUIRED</b>' });
+            setTimeout(()=>{ $("spy-hud").classList.add("fade"); setTimeout(endSpy,700); }, 2600);
+          },
+        });
     }
-    $("spy-btn").onclick = () => setSpyMode(!spyMode);
+    function enhancePulse(){
+      const base=PRESET_FILTERS[currentPreset]||"none";
+      $("cesiumContainer").style.filter=(base==="none"?"":base+" ")+"contrast(1.22) saturate(1.25) brightness(1.04)";
+      setTimeout(()=>{ $("cesiumContainer").style.filter=(base==="none"?"none":base); }, 1000);
+    }
+    $("spy-btn").onclick=()=>setSpyMode(!spyMode);
 
     connect();
   </script>
