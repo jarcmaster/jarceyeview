@@ -27,6 +27,7 @@ import asyncio
 import json
 import os
 import sys
+import time
 from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -94,6 +95,87 @@ class World:
 world = World()
 
 
+class AIS:
+    """Gestor del stream de barcos (AISStream) suscrito al bbox visible."""
+
+    def __init__(self) -> None:
+        self.enabled = False
+        self.task: asyncio.Task | None = None
+        self.ships: dict = {}
+        self.sub_bbox: tuple | None = None
+
+    def start(self) -> None:
+        self.enabled = True
+        if not self.task or self.task.done():
+            self.task = asyncio.create_task(self._run())
+
+    def stop(self) -> None:
+        self.enabled = False
+        self.ships = {}
+
+    def snapshot(self) -> list:
+        return list(self.ships.values())
+
+    @staticmethod
+    def _sub(key: str, bbox: tuple) -> dict:
+        lamin, lomin, lamax, lomax = bbox
+        return {"APIKey": key, "BoundingBoxes": [[[lamin, lomin], [lamax, lomax]]],
+                "FilterMessageTypes": ["PositionReport"]}
+
+    def _ingest(self, raw: str) -> None:
+        try:
+            m = json.loads(raw)
+        except Exception:
+            return
+        md = m.get("MetaData") or {}
+        rep = (m.get("Message") or {}).get("PositionReport") or {}
+        mmsi = md.get("MMSI")
+        lat = rep.get("Latitude", md.get("latitude"))
+        lon = rep.get("Longitude", md.get("longitude"))
+        if mmsi is None or lat is None or lon is None:
+            return
+        self.ships[mmsi] = {
+            "id": str(mmsi), "name": (md.get("ShipName", "") or "").strip() or str(mmsi),
+            "lat": lat, "lon": lon, "cog": rep.get("Cog"), "sog": rep.get("Sog"),
+            "heading": rep.get("TrueHeading"), "t": time.time(),
+        }
+
+    def _prune(self) -> None:
+        cut = time.time() - 180
+        for k in [k for k, v in self.ships.items() if v["t"] < cut]:
+            del self.ships[k]
+
+    async def _run(self) -> None:
+        key = os.getenv("AISSTREAM_KEY", "")
+        if not key:
+            return
+        try:
+            from websockets.asyncio.client import connect
+        except Exception:
+            from websockets.client import connect
+        while self.enabled:
+            try:
+                async with connect("wss://stream.aisstream.io/v0/stream", open_timeout=15) as ws:
+                    self.sub_bbox = world.bbox
+                    await ws.send(json.dumps(self._sub(key, world.bbox)))
+                    while self.enabled:
+                        if world.bbox != self.sub_bbox:   # el usuario movió el mapa
+                            self.sub_bbox = world.bbox
+                            await ws.send(json.dumps(self._sub(key, world.bbox)))
+                        try:
+                            raw = await asyncio.wait_for(ws.recv(), timeout=5)
+                        except asyncio.TimeoutError:
+                            continue
+                        self._ingest(raw)
+                        self._prune()
+            except Exception:
+                if self.enabled:
+                    await asyncio.sleep(3)
+
+
+ais = AIS()
+
+
 async def broadcast(obj: dict) -> None:
     payload = json.dumps(obj)
     for ws in list(world.clients):
@@ -138,6 +220,8 @@ async def poller() -> None:
         except Exception as e:
             world.last_error = f"{type(e).__name__}: {e}"
         await broadcast({"type": "state", "entities": world.snapshot, "error": world.last_error})
+        if ais.enabled:
+            await broadcast({"type": "ships", "vessels": ais.snapshot()})
         await asyncio.sleep(POLL_INTERVAL)
 
 
@@ -271,6 +355,9 @@ async def tracker() -> None:
 async def lifespan(app: FastAPI):
     tasks = [asyncio.create_task(poller()), asyncio.create_task(tracker())]
     yield
+    ais.stop()
+    if ais.task:
+        ais.task.cancel()
     for t in tasks:
         t.cancel()
     await aclose()
@@ -368,6 +455,7 @@ async def config() -> JSONResponse:
         "ai": bool(os.getenv("OPENAI_API_KEY", "")),
         "traffic": bool(os.getenv("TOMTOM_KEY", "")),
         "gmap2d": bool(os.getenv("GOOGLE_MAPS_API_KEY", "")),
+        "ais": bool(os.getenv("AISSTREAM_KEY", "")),
         "pollInterval": POLL_INTERVAL,
         "thresholds": THRESHOLDS,
     })
@@ -602,6 +690,8 @@ async def ws_endpoint(ws: WebSocket) -> None:
             elif kind == "untrack":
                 world.track = None
                 await broadcast({"type": "track", "phase": "off"})
+            elif kind == "ships":
+                ais.start() if msg.get("on") else ais.stop()
     except WebSocketDisconnect:
         world.clients.discard(ws)
 

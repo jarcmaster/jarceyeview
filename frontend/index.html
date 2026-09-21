@@ -730,6 +730,15 @@
            <div class="kv"><span>Velocidad</span><span>${issData.vel?issData.vel.toFixed(0)+" km/h":"—"}</span></div>`);
         return;
       }
+      if (ent && typeof ent.id === "string" && ent.id.startsWith("ship:")) {
+        const v = shipById.get(ent.id);
+        if(v) showPopup("Barco · " + (v.name||v.id),
+          `<div class="kv"><span>MMSI</span><span>${v.id}</span></div>
+           <div class="kv"><span>Velocidad</span><span>${v.sog!=null?v.sog+" kn":"—"}</span></div>
+           <div class="kv"><span>Rumbo (COG)</span><span>${v.cog!=null?Math.round(v.cog)+"°":"—"}</span></div>
+           <div class="kv"><span>Heading</span><span>${(v.heading!=null&&v.heading!==511)?v.heading+"°":"—"}</span></div>`);
+        return;
+      }
       const e = ent && entities.get(ent.id);
       if (!e) { $("sel").style.display="none"; selected=null; selectedRoute=null; return; }
       selected = e._data; selectedRoute = null;
@@ -1098,10 +1107,45 @@
       tileToggle("lyr-streets", "/tiles/labels/{z}/{x}/{y}.png", 1.0);
     }
 
-    // Barcos (AIS) — requiere key gratuita de AISStream
+    // Barcos (AIS) en vivo
+    const SHIP_IMG = "data:image/svg+xml," + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24">'+
+      '<path fill="#4fd8ff" stroke="#0b1622" stroke-width="0.7" d="M12 2l3.2 6.5V14l-3.2 2-3.2-2V8.5z"/></svg>');
+    const shipEntities = new Map(), shipById = new Map();
+    function clearShips(){
+      for(const [,s] of shipEntities){ viewer.entities.remove(s.entity); if(s.trail) viewer.entities.remove(s.trail); }
+      shipEntities.clear(); shipById.clear();
+    }
+    function renderShips(vessels){
+      const seen=new Set();
+      for(const v of vessels){
+        if(v.lat==null||v.lon==null) continue;
+        seen.add(v.id); shipById.set("ship:"+v.id, v);
+        const hdg=(v.heading!=null && v.heading!==511) ? v.heading : (v.cog||0);
+        const rot=Cesium.Math.toRadians(-hdg), pos=Cesium.Cartesian3.fromDegrees(v.lon,v.lat,0);
+        let s=shipEntities.get(v.id);
+        if(!s){
+          const history=[];
+          const entity=viewer.entities.add({ id:"ship:"+v.id, position:pos,
+            billboard:{ image:SHIP_IMG, width:22, height:22, rotation:rot, alignedAxis:Cesium.Cartesian3.ZERO,
+              disableDepthTestDistance:Number.POSITIVE_INFINITY },
+            label:{ text:v.name||"", font:"10px monospace", pixelOffset:new Cesium.Cartesian2(0,-15),
+              fillColor:Cesium.Color.fromCssColorString("#4fd8ff"), showBackground:true,
+              backgroundColor:Cesium.Color.fromCssColorString("rgba(0,0,0,.5)"),
+              disableDepthTestDistance:Number.POSITIVE_INFINITY,
+              distanceDisplayCondition:new Cesium.DistanceDisplayCondition(0,300000) } });
+          const trail=viewer.entities.add({ polyline:{ positions:new Cesium.CallbackProperty(()=>s.history,false),
+            width:2, material:Cesium.Color.fromCssColorString("#4fd8ff").withAlpha(0.4), arcType:Cesium.ArcType.GEODESIC } });
+          s={entity,trail,history,_data:v}; shipEntities.set(v.id,s);
+        } else { s.entity.position=pos; s.entity.billboard.rotation=rot; s.entity.label.text=v.name||""; s._data=v; }
+        s.history.push(pos); if(s.history.length>20) s.history.shift();
+      }
+      for(const [id,s] of shipEntities){ if(!seen.has(id)){ viewer.entities.remove(s.entity); if(s.trail) viewer.entities.remove(s.trail); shipEntities.delete(id); shipById.delete("ship:"+id); } }
+    }
     $("lyr-ships").addEventListener("change", e=>{
-      if(e.target.checked){ e.target.checked=false;
-        alert("Los barcos (AIS) necesitan una key gratuita de AISStream.io. Pásamela y lo activo."); }
+      if(!cfg.ais){ e.target.checked=false; alert("Los barcos (AIS) necesitan una key de AISStream en .env."); return; }
+      if(e.target.checked){ if(ws) ws.send(JSON.stringify({type:"ships",on:true})); }
+      else { if(ws) ws.send(JSON.stringify({type:"ships",on:false})); clearShips(); }
     });
 
     // ---- Panel de rastreo ---------------------------------------------
@@ -1178,6 +1222,8 @@
           if (selected && selected.name===msg.callsign) renderFs(msg.fs, $("sel-status"));
         } else if (msg.type==="track") {
           renderTrack(msg);
+        } else if (msg.type==="ships") {
+          renderShips(msg.vessels||[]);
         }
       };
     }

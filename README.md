@@ -37,8 +37,9 @@ Telegram (avisos)┘
   en el globo y lista; clic → reproductor en vivo incrustado + enlace a Windy.
   Incluye toggle **«🚦 Solo cámaras de tráfico»** (cámaras de carretera en vivo).
 - **Búsqueda con pin + Street View**: al buscar un lugar cae un pin y un botón abre Street View.
-- **Capas globales** (panel CAPAS, sin API key): **terremotos** en vivo (USGS, coloreados por
-  magnitud), **ISS** en tiempo real con estela (wheretheiss.at) y **radar de lluvia** (RainViewer).
+- **Capas globales** (panel CAPAS): **aviones**, **terremotos** en vivo (USGS), **ISS** con estela
+  (wheretheiss.at), **radar de lluvia** (RainViewer) y **barcos (AIS)** en vivo por WebSocket
+  (AISStream, `AISSTREAM_KEY`) — marcadores de buques de la zona con nombre/MMSI/velocidad/rumbo.
 - **Dock de control** (barra inferior): **presets visuales** (Normal/CRT/NVG/FLIR/Anime/Noir/Snow),
   **fuentes de mapa** (Google 3D / Bing / ESRI / OSM) y **comandos de voz** con GPT.
 - **Comandos de voz**: el navegador transcribe (Web Speech API) y GPT (backend, `OPENAI_API_KEY`)
