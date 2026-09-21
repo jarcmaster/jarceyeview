@@ -146,6 +146,39 @@
     #spy-flash.on { animation:spyflash .7s ease-out; }
     @keyframes spyflash { 0%{opacity:0} 25%{opacity:1} 100%{opacity:0} }
 
+    /* ===== Viewfinder de cámara (TV flicker / glitch) ===== */
+    #cam-overlay { position:absolute; inset:0; z-index:24; display:none; pointer-events:none;
+      font-family:"Consolas", monospace; color:#e8ffff; }
+    #cam-overlay::before { content:""; position:absolute; inset:0; box-shadow:inset 0 0 170px 34px rgba(0,0,0,.55); }
+    .cam-bracket { position:absolute; width:54px; height:40px; border:3px solid rgba(232,255,255,.85); }
+    .cb-tl{top:22px;left:22px;border-right:none;border-bottom:none}
+    .cb-tr{top:22px;right:22px;border-left:none;border-bottom:none}
+    .cb-bl{bottom:56px;left:22px;border-right:none;border-top:none}
+    .cb-br{bottom:56px;right:22px;border-left:none;border-top:none}
+    .cam-grid { position:absolute; inset:22px 22px 56px 22px;
+      background:linear-gradient(rgba(232,255,255,.1) 1px, transparent 1px) 0 0/100% 33.33%,
+                 linear-gradient(90deg, rgba(232,255,255,.1) 1px, transparent 1px) 0 0/33.33% 100%; }
+    .cam-scan { position:absolute; inset:0;
+      background:repeating-linear-gradient(0deg, rgba(0,0,0,.14) 0, rgba(0,0,0,.14) 1px, transparent 1px, transparent 3px); }
+    .cam-reticle { position:absolute; top:50%; left:50%; width:230px; height:230px; transform:translate(-50%,-50%);
+      filter:drop-shadow(0 0 6px rgba(120,220,255,.5)); animation:campulse 3s ease-in-out infinite; }
+    .cam-reticle svg { width:100%; height:100%; }
+    @keyframes campulse { 0%,100%{transform:translate(-50%,-50%) scale(1)} 50%{transform:translate(-50%,-50%) scale(1.03)} }
+    .cam-hud { position:absolute; left:0; right:0; bottom:0; height:46px; display:flex; align-items:center; gap:22px;
+      padding:0 26px; font-size:15px; letter-spacing:1px; background:linear-gradient(0deg, rgba(0,0,0,.6), transparent); }
+    #cam-tc { min-width:118px; }
+    .cam-batt { width:26px; height:13px; border:1.5px solid #e8ffff; border-radius:2px; position:relative; }
+    .cam-batt::before{content:"";position:absolute;left:1.5px;top:1.5px;bottom:1.5px;width:60%;background:#5fe08a}
+    .cam-batt::after{content:"";position:absolute;right:-4px;top:3px;bottom:3px;width:2px;background:#e8ffff}
+    .cam-rec { margin-left:auto; color:#ff5252; }
+    .cam-rec b { animation:camblink 1s steps(1) infinite; }
+    @keyframes camblink { 50%{opacity:0} }
+    .cam-glitch { position:absolute; inset:0; opacity:0; mix-blend-mode:screen;
+      background:linear-gradient(90deg, rgba(255,0,0,.18), transparent 18%, transparent 82%, rgba(0,255,255,.18)); }
+    #cam-overlay.glitching .cam-glitch { opacity:1; }
+    #cam-overlay.glitching { animation:camshake .09s steps(2); }
+    @keyframes camshake { 0%{transform:translate(2px,0)} 50%{transform:translate(-2px,1px)} 100%{transform:translate(0,0)} }
+
     /* Reproductores flotantes (webcam / street view) */
     #wc-player, #sv-player { position:absolute; z-index:30; left:50%; transform:translateX(-50%); bottom:92px;
       width:380px; max-width:92vw; display:none; background:rgba(6,16,26,.96);
@@ -241,6 +274,33 @@
   </div>
 
   <div id="crt-overlay"></div>
+
+  <div id="cam-overlay">
+    <div class="cam-bracket cb-tl"></div><div class="cam-bracket cb-tr"></div>
+    <div class="cam-bracket cb-bl"></div><div class="cam-bracket cb-br"></div>
+    <div class="cam-grid"></div>
+    <div class="cam-scan"></div>
+    <div class="cam-reticle">
+      <svg viewBox="0 0 220 220">
+        <circle cx="110" cy="110" r="92" fill="none" stroke="rgba(230,255,255,.55)" stroke-width="5" stroke-dasharray="2 13"/>
+        <circle cx="110" cy="110" r="70" fill="none" stroke="rgba(230,255,255,.75)" stroke-width="1.4"/>
+        <circle cx="110" cy="110" r="34" fill="none" stroke="rgba(230,255,255,.5)" stroke-width="1"/>
+        <path d="M110 18 A92 92 0 0 1 191 71" fill="none" stroke="#ff5252" stroke-width="2.5"/>
+        <path d="M110 202 A92 92 0 0 1 29 149" fill="none" stroke="#ff5252" stroke-width="2.5"/>
+        <line x1="110" y1="88" x2="110" y2="132" stroke="#e8ffff" stroke-width="1"/>
+        <line x1="88" y1="110" x2="132" y2="110" stroke="#e8ffff" stroke-width="1"/>
+        <circle cx="110" cy="110" r="4" fill="none" stroke="#e8ffff" stroke-width="1"/>
+      </svg>
+    </div>
+    <div class="cam-glitch"></div>
+    <div class="cam-hud">
+      <span class="cam-batt"></span>
+      <span>1/60</span><span>F 5.6</span>
+      <span id="cam-tc">00:00:00:00</span>
+      <span>ISO 800</span>
+      <span class="cam-rec">REC <b>●</b></span>
+    </div>
+  </div>
 
   <div id="spy-capture"></div>
   <div id="spy-hint">◎ ARRASTRA PARA MARCAR LA ZONA · ESC PARA SALIR</div>
@@ -982,10 +1042,14 @@
                      ["anime","ANIME"],["noir","NOIR"],["snow","SNOW"]];
     $("preset-row").innerHTML = PRESETS.map(([k,l]) =>
       `<div class="pbtn ${k==="normal"?"active":""}" data-k="${k}">${icon("p_"+k)}<span>${l}</span></div>`).join("");
-    let currentPreset = "normal";
+    let currentPreset = "normal", focusFilter = "", glitchFilter = "", enhanceFilter = "";
+    function updateCanvasFilter() {
+      const base = PRESET_FILTERS[currentPreset];
+      const parts = [(base && base !== "none") ? base : "", focusFilter, glitchFilter, enhanceFilter].filter(Boolean);
+      $("cesiumContainer").style.filter = parts.length ? parts.join(" ") : "none";
+    }
     function applyPreset(k) {
-      currentPreset = k;
-      $("cesiumContainer").style.filter = PRESET_FILTERS[k] || "none";
+      currentPreset = k; updateCanvasFilter();
       $("crt-overlay").style.display = (k === "crt") ? "block" : "none";
       document.querySelectorAll("#preset-row .pbtn").forEach(b => b.classList.toggle("active", b.dataset.k === k));
     }
@@ -1147,7 +1211,7 @@
         `FRAME <b>${d.wpx}×${d.hpx}px</b>&nbsp; ${d.state}`;
     }
     function endSpy(){
-      spyMode=false; spyDown=false; cancelAnimationFrame(spyAnimRAF);
+      spyMode=false; spyDown=false; cancelAnimationFrame(spyAnimRAF); stopCam();
       $("spy-capture").style.display="none"; $("spy-hint").style.display="none";
       $("spy-hud").style.display="none"; $("spy-hud").classList.remove("fade");
       const s=$("spy-box"); s.style.display="none"; s.style.transition="";
@@ -1172,7 +1236,7 @@
           wpx:w, hpx:h, area:fmtArea(m.area), state:"TARGETING…" });
       }
     }
-    $("spy-capture").addEventListener("mousedown",(e)=>{ if(!spyMode)return; spyDown=true; spyA={x:e.clientX,y:e.clientY}; $("spy-box").style.display="block"; drawBox(spyA,spyA); });
+    $("spy-capture").addEventListener("mousedown",(e)=>{ if(!spyMode)return; spyDown=true; spyA={x:e.clientX,y:e.clientY}; autofocus(); $("spy-box").style.display="block"; drawBox(spyA,spyA); });
     window.addEventListener("mousemove",(e)=>{ if(spyMode&&spyDown) drawBox(spyA,{x:e.clientX,y:e.clientY}); });
     window.addEventListener("mouseup",(e)=>{ if(spyMode&&spyDown){ spyDown=false; finalizeSpy(spyA,{x:e.clientX,y:e.clientY}); } });
     window.addEventListener("keydown",(e)=>{ if(e.key==="Escape"){ if(spyMode) endSpy(); if(svHandler) exitStreetViewPick(); } });
@@ -1203,7 +1267,7 @@
           az:Cesium.Math.toDegrees(viewer.camera.heading)||0, wpx:w, hpx:h, area:fmtArea(m.area), state:"ZOOMING…" });
         spyAnimRAF=requestAnimationFrame(live);
       }
-      live();
+      startCam(); live();
       // Encuadre centrado y oblicuo (mantiene el objetivo en el centro)
       viewer.camera.flyToBoundingSphere(
         new Cesium.BoundingSphere(Cesium.Cartesian3.fromDegrees(m.centerLon,m.centerLat,0), Math.max(40,m.largerSpan/2)),
@@ -1221,9 +1285,31 @@
         });
     }
     function enhancePulse(){
-      const base=PRESET_FILTERS[currentPreset]||"none";
-      $("cesiumContainer").style.filter=(base==="none"?"":base+" ")+"contrast(1.22) saturate(1.25) brightness(1.04)";
-      setTimeout(()=>{ $("cesiumContainer").style.filter=(base==="none"?"none":base); }, 1000);
+      enhanceFilter = "contrast(1.22) saturate(1.25) brightness(1.04)"; updateCanvasFilter();
+      setTimeout(()=>{ enhanceFilter=""; updateCanvasFilter(); }, 1000);
+    }
+    // Autofocus: "caza" el enfoque (desenfoca y aclara) al empezar a marcar
+    function autofocus(){
+      const seq=[7,2,5,1,3,0]; let i=0;
+      (function step(){ focusFilter = seq[i] > 0 ? `blur(${seq[i]}px)` : ""; updateCanvasFilter();
+        if(++i < seq.length) setTimeout(step, 120); })();
+    }
+    // Glitch / TV flicker: ráfagas de aberración RGB + jitter durante el efecto
+    let glitchTimer=null, camTimer=null, camFrames=0;
+    function startCam(){
+      $("cam-overlay").style.display="block"; camFrames=0;
+      const pad=(n)=>String(n).padStart(2,"0");
+      camTimer=setInterval(()=>{ camFrames++; const ff=camFrames%25, s=Math.floor(camFrames/25);
+        $("cam-tc").textContent=`${pad(Math.floor(s/3600))}:${pad(Math.floor(s/60)%60)}:${pad(s%60)}:${pad(ff)}`; }, 42);
+      glitchTimer=setInterval(()=>{
+        glitchFilter="drop-shadow(2px 0 0 rgba(255,45,45,.65)) drop-shadow(-2px 0 0 rgba(45,255,255,.65)) contrast(1.12)";
+        $("cam-overlay").classList.add("glitching"); updateCanvasFilter();
+        setTimeout(()=>{ glitchFilter=""; $("cam-overlay").classList.remove("glitching"); updateCanvasFilter(); }, 90);
+      }, 650);
+    }
+    function stopCam(){
+      if(glitchTimer){clearInterval(glitchTimer);glitchTimer=null;} if(camTimer){clearInterval(camTimer);camTimer=null;}
+      glitchFilter=""; focusFilter=""; updateCanvasFilter(); $("cam-overlay").style.display="none"; $("cam-overlay").classList.remove("glitching");
     }
     $("spy-btn").onclick=()=>setSpyMode(!spyMode);
 
