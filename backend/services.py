@@ -360,13 +360,16 @@ Esquema exacto:
  "building":{"stories":"<p.ej. 1 STORY>","area":"<~X sq ft>","built":"<año est.>","use":"<Commercial / Residential / Industrial>","height":"<X ft>"},
  "roof_sections":[{"id":"ROOF SECTION A","material":"<material>","area":"<X sq ft>"}],
  "hvac":[{"id":"HVAC-1","spec":"<X Ton>"}],
- "vehicles":[{"id":"V01","plate":"<placa estimada>","make":"<marca modelo>","year":"<año>","color":"<color>"}],
+ "vehicles":[{"id":"V01","plate":"<placa estimada>","make":"<marca modelo>","year":"<año>","color":"<color REAL visto>","bbox":[x,y,w,h]}],
  "structural":[{"label":"ROOF EDGE","detail":"<material>"},{"label":"WALL PANEL","detail":"..."},{"label":"WINDOW SYSTEM","detail":"..."},{"label":"PARKING LOT","detail":"..."}],
  "summary":"<1-2 frases>"
 }
-Detecta lo que REALMENTE se vea: cuenta vehículos visibles (hasta 12), secciones de techo, unidades HVAC.
-Si no es un edificio (campo, agua, bosque), adapta building/roof a lo que corresponda y deja arrays vacíos.
-Las placas y modelos son ESTIMACIONES (no se pueden leer): invéntalas plausibles."""
+IMPORTANTE sobre vehículos: detecta TODOS los que realmente se vean en la imagen (hasta 14).
+- "bbox" = caja del vehículo en la imagen, NORMALIZADA 0..1 como [x, y, w, h] (origen arriba-izquierda). Ajústala al vehículo lo mejor posible.
+- "color" DEBE coincidir con el color real que se ve en la foto.
+- La marca/modelo/año/placa son ESTIMACIONES plausibles (la placa no se puede leer: invéntala con formato de matrícula).
+Cuenta también secciones de techo y unidades HVAC reales.
+Si no es un edificio (campo, agua, bosque), adapta building/roof y deja arrays vacíos."""
 
 
 async def analyze_scene(image: str, lat: float, lon: float) -> dict | None:
@@ -391,9 +394,18 @@ async def analyze_scene(image: str, lat: float, lon: float) -> dict | None:
         r.raise_for_status()
         d = json.loads(r.json()["choices"][0]["message"]["content"])
         d["coords"] = f"{lat:.6f}, {lon:.6f}"
+        rg = await revgeo(lat, lon)
+        if rg:
+            d["address"] = rg.get("address", "")
         return d
-    except Exception:
-        return None
+    except httpx.HTTPStatusError as e:
+        try:
+            msg = e.response.json().get("error", {}).get("message", "")
+        except Exception:
+            msg = ""
+        return {"error": msg or f"OpenAI HTTP {e.response.status_code}"}
+    except Exception as e:
+        return {"error": f"{type(e).__name__}"}
 
 
 async def enhance_image(image: str, prompt: str) -> str | None:

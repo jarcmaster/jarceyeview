@@ -233,6 +233,19 @@
     .lc-img .cap { position:absolute; left:0; right:0; bottom:0; font-size:11px; color:#cfefff; background:rgba(0,0,0,.6); padding:5px 8px; }
     .lc-img .ph { display:flex; align-items:center; justify-content:center; height:150px; color:#7a97ad; font-size:12px; text-align:center; }
     .lc-disc { font-size:10.5px; color:#7a97ad; margin-top:16px; line-height:1.5; }
+    .lc-hero { position:relative; }
+    .veh-ovl { position:absolute; inset:0; pointer-events:none; }
+    .vbox { position:absolute; border:1.5px solid #5fe08a; box-shadow:0 0 6px rgba(95,224,138,.5); box-sizing:border-box; }
+    .vtag { position:absolute; top:-15px; left:-1px; font-size:9px; line-height:1.3; background:rgba(0,0,0,.8);
+      color:#5fe08a; padding:1px 4px; white-space:nowrap; border-radius:3px; }
+    .hero-pin { position:absolute; top:8px; left:8px; font-size:11px; color:#fff; background:rgba(0,0,0,.62);
+      padding:4px 9px; border-radius:6px; display:inline-flex; align-items:center; gap:6px; max-width:80%; }
+    .veh-item { align-items:center; gap:10px; }
+    .vthumb { width:66px; height:44px; flex:0 0 auto; background:#0b1622 center/cover no-repeat; border-radius:4px; border:1px solid #234a63; }
+    .vinfo { flex:1; min-width:0; overflow:hidden; }
+    .vinfo .vplate { color:#ffcc55; font-weight:600; letter-spacing:1px; }
+    .vinfo .vmeta { color:#7a97ad; font-size:11px; }
+    .veh-item .vid { color:#5fe08a; font-weight:600; align-self:flex-start; }
 
     /* Reproductores flotantes (webcam / street view) */
     #wc-player, #sv-player { position:absolute; z-index:30; left:50%; transform:translateX(-50%); bottom:92px;
@@ -1462,24 +1475,27 @@
       if(liveImg){ try{ data=await (await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({image:liveImg,lat:c.lat,lon:c.lon})})).json(); }catch{} }
       stopLiveStatus(); renderDashboard(data, liveImg); modal.classList.add("done"); liveBusy=false;
-      if(data && !data.error) generateViews(liveImg);   // convierte la zona marcada en imagen(es) enhanced
     }
-    const vehHtml=(v)=>`<div class="veh-item"><span><span class="vid">${v.id||""}</span> ${v.make||""} ${v.year||""} · ${v.color||""}</span><span class="vplate">${v.plate||""}</span></div>`;
     function renderDashboard(d, img){
       if(!d || d.error){ $("live-content").innerHTML=`<div class="lc-head"><h2>ANÁLISIS NO DISPONIBLE</h2></div><div class="lc-meta">No se pudo analizar la vista. ${(d&&d.error)||""}</div>`; return; }
-      const b=d.building||{};
-      const veh=(d.vehicles||[]).map(vehHtml).join("")||'<div class="lc-meta">Sin vehículos detectados.</div>';
+      const b=d.building||{}, V=(d.vehicles||[]);
       const roofs=(d.roof_sections||[]).map(r=>`<div class="kv"><span>${r.id||""}</span><span>${r.material||""} · ${r.area||""}</span></div>`).join("");
       const hvac=(d.hvac||[]).map(h=>`<div class="kv"><span>${h.id||""}</span><span>${h.spec||""}</span></div>`).join("");
       const struct=(d.structural||[]).map(s=>`<div class="kv"><span>${s.label||""}</span><span>${s.detail||""}</span></div>`).join("");
+      const vehRows = V.map((v,i)=>`<div class="veh-item">
+          <div class="vthumb" id="vth-${i}"></div>
+          <div class="vinfo"><div class="vplate">${v.plate||""}</div><div>${v.make||""}</div>
+            <div class="vmeta">${v.year||""} · ${v.color||""}</div></div>
+          <div class="vid">${v.id||("V"+String(i+1).padStart(2,"0"))}</div></div>`).join("")
+          || '<div class="lc-meta">Sin vehículos detectados.</div>';
       $("live-content").innerHTML =
         `<div class="lc-head">${icon("globe")}
            <div><h2>SATELLITE ANALYSIS</h2>
-           <div class="lc-meta">${d.coords||""} · ${d.location||""}<br>
+           <div class="lc-meta">${d.address?d.address+"<br>":""}${d.coords||""} · ${d.location||""}<br>
            SAT: ${d.satellite||"—"} · RES: ${d.resolution||"—"} · MODE: ${d.mode||"—"}</div></div></div>
          <div class="lc-grid">
            <div>
-             <div class="lc-hero">${img?`<img src="${img}">`:""}</div>
+             <div class="lc-hero" id="lc-hero">${img?`<img id="lc-hero-img" src="${img}"><div class="veh-ovl" id="veh-ovl"></div>${d.address?`<div class="hero-pin">${icon("pin")} ${d.address}</div>`:""}`:""}</div>
              <div class="lc-panels">
                <div class="lc-panel"><h3>EDIFICIO</h3>
                  <div class="kv"><span>Plantas</span><span>${b.stories||"—"}</span></div>
@@ -1490,31 +1506,49 @@
                <div class="lc-panel"><h3>TECHOS · HVAC</h3>${roofs}${hvac}${(!roofs&&!hvac)?'<div class="lc-meta">—</div>':""}</div>
                <div class="lc-panel"><h3>ESTRUCTURA</h3>${struct||'<div class="lc-meta">—</div>'}</div>
              </div>
-             <div class="lc-panel" style="margin-top:14px"><h3>VISTAS IA (a partir de la imagen)</h3>
-               <button id="gen-imgs" style="width:auto;margin:4px 0 10px">${icon("satellite")} Generar vistas mejoradas</button>
+             <div class="lc-panel" style="margin-top:14px"><h3>ZONA REALZADA (IA)</h3>
+               <button id="gen-imgs" style="width:auto;margin:4px 0 10px">${icon("satellite")} Realzar esta zona</button>
                <div class="lc-imgs" id="lc-imgs"></div></div>
            </div>
-           <div class="lc-veh"><h3>IDENTIFICACIÓN DE VEHÍCULOS</h3>${veh}</div>
+           <div class="lc-veh"><h3>IDENTIFICACIÓN DE VEHÍCULOS (${V.length})</h3>${vehRows}</div>
          </div>
-         <div class="lc-disc">⚠ Análisis generado por IA a partir de la imagen del mapa: los datos (placas, modelos, dimensiones) son ESTIMACIONES para demostración, no información verificada.</div>`;
+         <div class="lc-disc">⚠ Análisis IA a partir de la imagen de la zona: placas, modelos y medidas son ESTIMACIONES para demostración, no datos verificados.</div>`;
+      if(img && V.length) decorateVehicles(img, V);
       const btn=$("gen-imgs"); if(btn) btn.onclick=()=>generateViews(img);
+    }
+    function cropThumb(el, bb){
+      const iw=el.naturalWidth, ih=el.naturalHeight;
+      let sx=bb[0]*iw, sy=bb[1]*ih, sw=bb[2]*iw, sh=bb[3]*ih;
+      sx=Math.max(0,sx); sy=Math.max(0,sy); sw=Math.min(iw-sx,sw); sh=Math.min(ih-sy,sh);
+      if(sw<4||sh<4) return "";
+      const c=document.createElement("canvas"); c.width=120; c.height=80;
+      try{ c.getContext("2d").drawImage(el, sx,sy,sw,sh, 0,0,120,80); return c.toDataURL("image/jpeg",0.8); }catch{ return ""; }
+    }
+    function decorateVehicles(img, V){
+      const el=new Image();
+      el.onload=()=>{
+        const ovl=$("veh-ovl"); if(ovl) ovl.innerHTML="";
+        V.forEach((v,i)=>{
+          const bb=v.bbox; if(!Array.isArray(bb)||bb.length<4) return;
+          if(ovl){ const box=document.createElement("div"); box.className="vbox";
+            box.style.left=(bb[0]*100)+"%"; box.style.top=(bb[1]*100)+"%";
+            box.style.width=(bb[2]*100)+"%"; box.style.height=(bb[3]*100)+"%";
+            box.innerHTML=`<span class="vtag">${v.id||("V"+(i+1))} · ${v.plate||""}</span>`; ovl.appendChild(box); }
+          const th=$("vth-"+i); if(th){ const u=cropThumb(el,bb); if(u) th.style.backgroundImage=`url(${u})`; }
+        });
+      };
+      el.src=img;
     }
     async function generateViews(img){
       const cont=$("lc-imgs");
-      const jobs=[
-        ["Vista frontal (nivel calle)","Photorealistic professional ground-level FRONT elevation photo of the main building seen in this aerial image, eye-level architectural photography, daylight."],
-        ["Detalle de azotea","Photorealistic close-up of the rooftop of the main building in this image, HVAC units and roofing membrane, high detail."],
-      ];
-      cont.innerHTML = jobs.map((j,i)=>`<div class="lc-img" id="lci-${i}"><div class="ph">generando…</div><div class="cap">${j[0]}</div></div>`).join("");
-      for(let i=0;i<jobs.length;i++){
-        try{
-          const r=await (await fetch("/api/enhance",{method:"POST",headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({image:img,prompt:jobs[i][1]})})).json();
-          const el=$("lci-"+i);
-          if(r.b64) el.innerHTML=`<img src="data:image/png;base64,${r.b64}"><div class="cap">${jobs[i][0]}</div>`;
-          else if(el) el.querySelector(".ph").textContent="no disponible";
-        }catch{ const el=$("lci-"+i); if(el) el.querySelector(".ph").textContent="error"; }
-      }
+      cont.innerHTML=`<div class="lc-img" id="lci-0"><div class="ph">realzando la zona…</div><div class="cap">Zona realzada</div></div>`;
+      try{
+        const r=await (await fetch("/api/enhance",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({image:img,prompt:"Enhance this exact aerial/satellite image: sharpen, upscale and increase detail and clarity, keeping the SAME scene, same buildings, streets, cars, colors and layout. Photorealistic high-resolution overhead imagery. Do NOT invent or add new structures."})})).json();
+        const el=$("lci-0");
+        if(r.b64) el.innerHTML=`<img src="data:image/png;base64,${r.b64}"><div class="cap">Zona realzada</div>`;
+        else if(el) el.querySelector(".ph").textContent="no disponible";
+      }catch{ const el=$("lci-0"); if(el) el.querySelector(".ph").textContent="error"; }
     }
     // LIVE ENV: marca una zona y esa (recortada) se manda a GPT para analizar y "enhance"
     $("live-btn").onclick=()=>{ if(cfg.ai) armMark("live"); };
