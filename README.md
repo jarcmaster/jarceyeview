@@ -52,8 +52,9 @@ Telegram (avisos)┘
 - **Live Environment** (IA): al acercarte a <100 ft (o desde el dock) captura la vista y GPT-4o
   la analiza (edificio, techos, HVAC, vehículos, estructura) en un modal estilo inteligencia,
   con animación de "satélite recibiendo feed" y generación de vistas con gpt-image-1.
-- **TomTom** (`TOMTOM_KEY`, proxied): **tráfico en vivo**, **nombres de calles** y **direcciones
-  reales** (reverse-geocode) en el HUD. Fuentes de mapa extra: **Google Normal** (2D) y **Street View**.
+- **TomTom** (`TOMTOM_KEY`, proxied): **tráfico en vivo**, **nombres de calles**, **direcciones
+  reales** (reverse-geocode) e **incidentes de tráfico** (accidentes/obras/cierres/atascos con
+  descripción y retraso). Fuentes de mapa extra: **Google Normal** (2D) y **Street View**.
 
 ## 1. Requisitos
 

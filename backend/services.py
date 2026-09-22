@@ -427,6 +427,51 @@ async def enhance_image(image: str, prompt: str) -> str | None:
         return None
 
 
+_inc_cache: dict[tuple, tuple[float, list]] = {}
+_INC_FIELDS = ("{incidents{type,geometry{type,coordinates},properties{iconCategory,"
+               "magnitudeOfDelay,delay,events{description},from,to,roadNumbers}}}")
+
+
+async def traffic_incidents(s: float, w: float, n: float, e: float) -> list[dict]:
+    """Incidentes de tráfico (accidentes, obras, cierres, atascos) — TomTom."""
+    key = os.getenv("TOMTOM_KEY", "")
+    if not key:
+        return []
+    ck = (round(s, 2), round(w, 2), round(n, 2), round(e, 2))
+    now = time.monotonic()
+    hit = _inc_cache.get(ck)
+    if hit and now - hit[0] < 60:
+        return hit[1]
+    out, seen = [], set()
+    try:
+        r = await _http.get("https://api.tomtom.com/traffic/services/5/incidentDetails",
+                            params={"key": key, "bbox": f"{w},{s},{e},{n}", "fields": _INC_FIELDS,
+                                    "language": "es-ES", "timeValidityFilter": "present"})
+        for i in (r.json().get("incidents") or []):
+            g = i.get("geometry") or {}
+            p = i.get("properties") or {}
+            c = g.get("coordinates")
+            if not c:
+                continue
+            pt = c[len(c) // 2] if g.get("type") == "LineString" else c
+            if not isinstance(pt, (list, tuple)) or len(pt) < 2:
+                continue
+            cat = p.get("iconCategory", 0)
+            k = (round(pt[1], 3), round(pt[0], 3), cat)   # dedup por ubicación+tipo
+            if k in seen:
+                continue
+            seen.add(k)
+            ev = (p.get("events") or [{}])[0]
+            out.append({"lat": pt[1], "lon": pt[0], "cat": cat,
+                        "mag": p.get("magnitudeOfDelay"), "delay": p.get("delay"),
+                        "desc": ev.get("description", ""), "from": p.get("from", ""),
+                        "to": p.get("to", ""), "roads": ", ".join(p.get("roadNumbers") or [])})
+    except Exception:
+        out = []
+    _inc_cache[ck] = (now, out[:400])
+    return _inc_cache[ck][1]
+
+
 _alpr_cache: dict[tuple, tuple[float, list]] = {}
 
 

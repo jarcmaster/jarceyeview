@@ -44,7 +44,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from services import (OpenSky, RouteService, Telegram, aclose, alpr_cameras,
                       analyze_scene, earthquakes, enhance_image, flight_status,
                       geoip, gmap_tile, haversine_km, iss_position, radio_stations,
-                      rain_radar, revgeo, tomtom_tile, voice_intent, webcams)
+                      rain_radar, revgeo, tomtom_tile, traffic_incidents,
+                      voice_intent, webcams)
 
 load_dotenv()
 
@@ -403,6 +404,11 @@ async def api_rain() -> JSONResponse:
 @app.get("/api/alpr")
 async def api_alpr(s: float, w: float, n: float, e: float) -> JSONResponse:
     return JSONResponse({"cameras": await alpr_cameras(s, w, n, e)})
+
+
+@app.get("/api/incidents")
+async def api_incidents(s: float, w: float, n: float, e: float) -> JSONResponse:
+    return JSONResponse({"incidents": await traffic_incidents(s, w, n, e)})
 
 
 @app.post("/api/voice")

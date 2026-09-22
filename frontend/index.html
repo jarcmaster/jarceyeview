@@ -392,6 +392,7 @@
       <label class="chk" id="lyr-streets-row"><input type="checkbox" id="lyr-streets" /> <span data-ic="pin"></span> Nombres de calles</label>
       <label class="chk"><input type="checkbox" id="lyr-ships" /> <span data-ic="anchor"></span> Barcos (AIS)</label>
       <label class="chk"><input type="checkbox" id="lyr-alpr" /> <span data-ic="crosshair"></span> Cámaras ALPR</label>
+      <label class="chk" id="lyr-inc-row"><input type="checkbox" id="lyr-inc" /> <span data-ic="car"></span> Incidentes de tráfico</label>
     </div>
 
     <div id="webcams" class="panel">
@@ -899,6 +900,18 @@
            <div class="kv"><span>Velocidad</span><span>${v.sog!=null?v.sog+" kn":"—"}</span></div>
            <div class="kv"><span>Rumbo (COG)</span><span>${v.cog!=null?Math.round(v.cog)+"°":"—"}</span></div>
            <div class="kv"><span>Heading</span><span>${(v.heading!=null&&v.heading!==511)?v.heading+"°":"—"}</span></div>`);
+        return;
+      }
+      if (ent && typeof ent.id === "string" && ent.id.startsWith("inc:")) {
+        const c = incById.get(ent.id);
+        if(c){ const cat=(INC_CAT[c.cat]||["Incidente","#4fd8ff"]);
+          showPopup(cat[0],
+            `<div class="kv"><span>Descripción</span><span>${c.desc||"—"}</span></div>`+
+            (c.from?`<div class="kv"><span>Desde</span><span>${c.from}</span></div>`:"")+
+            (c.to?`<div class="kv"><span>Hasta</span><span>${c.to}</span></div>`:"")+
+            (c.roads?`<div class="kv"><span>Vía</span><span>${c.roads}</span></div>`:"")+
+            `<div class="kv"><span>Retraso</span><span>${c.delay!=null?Math.round(c.delay/60)+" min":"—"}</span></div>`);
+        }
         return;
       }
       if (ent && typeof ent.id === "string" && ent.id.startsWith("alpr:")) {
@@ -1461,6 +1474,36 @@
       if(e.target.checked){ alprOn=true; hackFX("CAMARAS ALPR", scanALPR()); } else { alprOn=false; clearALPR(); }
     });
     viewer.camera.moveEnd.addEventListener(()=>{ if(alprOn){ clearTimeout(alprTimer); alprTimer=setTimeout(scanALPR,1500); } });
+
+    // Incidentes de tráfico (TomTom): accidentes, obras, cierres, atascos
+    const INC_IMG = "data:image/svg+xml," + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24">'+
+      '<path fill="#ffffff" stroke="#0b1622" stroke-width="0.7" d="M12 3 L22 20 H2 Z"/>'+
+      '<rect x="11" y="9" width="2" height="6" fill="#0b1622"/><rect x="11" y="16.5" width="2" height="2" fill="#0b1622"/></svg>');
+    const INC_CAT={1:["Accidente","#ff3b3b"],2:["Niebla","#9bd"],3:["Peligro","#ff7a1a"],4:["Lluvia","#4fd8ff"],
+      5:["Hielo","#8fe3ff"],6:["Atasco","#ff7a1a"],7:["Carril cerrado","#ffcc55"],8:["Vía cerrada","#ff3b3b"],
+      9:["Obras","#ffcc55"],10:["Viento","#9bd"],11:["Inundación","#4fd8ff"],14:["Vehículo averiado","#ffcc55"]};
+    const incEntities=new Map(), incById=new Map();
+    let incOn=false, incTimer=null;
+    function clearInc(){ for(const [,en] of incEntities) viewer.entities.remove(en); incEntities.clear(); incById.clear(); }
+    async function scanInc(){
+      const r=viewRect(); if(!r) return;
+      if((r.n-r.s)>3 || (r.e-r.w)>3){ clearInc(); statusEl.textContent="Acércate para ver incidentes"; return; }
+      let inc=[]; try{ inc=(await (await fetch(`/api/incidents?s=${r.s}&w=${r.w}&n=${r.n}&e=${r.e}`)).json()).incidents||[]; }catch{}
+      clearInc();
+      inc.forEach((c,i)=>{ const id="inc:"+i; incById.set(id,c);
+        const col=(INC_CAT[c.cat]||["Incidente","#4fd8ff"])[1];
+        incEntities.set(id, viewer.entities.add({ id, position:Cesium.Cartesian3.fromDegrees(c.lon,c.lat,0),
+          billboard:{ image:INC_IMG, width:20, height:20, color:Cesium.Color.fromCssColorString(col),
+            disableDepthTestDistance:Number.POSITIVE_INFINITY } })); });
+    }
+    if(!cfg.traffic) $("lyr-inc-row").style.display="none";
+    else {
+      $("lyr-inc").addEventListener("change", e=>{
+        if(e.target.checked){ incOn=true; hackFX("INCIDENTES DE TRAFICO", scanInc()); } else { incOn=false; clearInc(); }
+      });
+      viewer.camera.moveEnd.addEventListener(()=>{ if(incOn){ clearTimeout(incTimer); incTimer=setTimeout(scanInc,1500); } });
+    }
 
     // ---- Panel de rastreo ---------------------------------------------
     const world = { track:null };
