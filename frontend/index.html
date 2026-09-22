@@ -289,6 +289,24 @@
     #wc-player a, #sv-player a { color:#7fd3ff; text-decoration:none; display:inline-flex; align-items:center; gap:5px; }
     #wc-player .wc-close, #sv-player .wc-close { cursor:pointer; color:#ffdada; display:inline-flex; }
 
+    /* Panel "seguir cámara" */
+    #wc-follow { position:absolute; z-index:32; left:12px; top:64px; width:246px; display:none;
+      background:rgba(6,16,26,.96); border:1px solid #2a6a8f; border-radius:12px; overflow:hidden;
+      box-shadow:0 8px 34px rgba(0,0,0,.6); backdrop-filter:blur(8px); }
+    #wc-follow .wcf-head { display:flex; align-items:center; gap:7px; padding:9px 12px; cursor:move;
+      font-size:12px; letter-spacing:1px; color:#7fd3ff; font-weight:600; background:rgba(127,211,255,.08); }
+    #wc-follow .wcf-head .pulse { width:8px; height:8px; border-radius:50%; background:#5fe08a;
+      box-shadow:0 0 0 0 rgba(95,224,138,.6); animation:wcfpulse 1.6s infinite; }
+    @keyframes wcfpulse { 0%{box-shadow:0 0 0 0 rgba(95,224,138,.6);} 70%{box-shadow:0 0 0 8px rgba(95,224,138,0);} 100%{box-shadow:0 0 0 0 rgba(95,224,138,0);} }
+    #wc-follow .wcf-head .wcf-x { margin-left:auto; cursor:pointer; color:#ffdada; display:inline-flex; }
+    #wc-follow img.wcf-prev { width:100%; height:132px; object-fit:cover; display:block; background:#000; }
+    #wc-follow .wcf-body { padding:10px 12px; }
+    #wc-follow .wcf-title { font-size:13px; color:#dff; font-weight:600; margin-bottom:2px; }
+    #wc-follow .wcf-sub { font-size:11px; color:#8fb4cc; margin-bottom:8px; }
+    #wc-follow .wcf-row { display:flex; gap:7px; }
+    #wc-follow .wcf-row button { margin-top:0; padding:7px 8px; font-size:11px; }
+    #wc-follow label.chk { margin-top:10px; }
+
     /* Barra de resultado de búsqueda (con botón Street View) */
     #searchbox { position:absolute; z-index:12; top:12px; left:50%; transform:translateX(-50%);
       display:none; align-items:center; gap:12px; padding:8px 14px; font-size:13px; }
@@ -508,6 +526,7 @@
 
   <div id="wc-player"></div>
   <div id="sv-player"></div>
+  <div id="wc-follow"></div>
   <div id="searchbox" class="panel"></div>
   <div id="popup" class="panel"></div>
 
@@ -640,7 +659,7 @@
     document.querySelectorAll("[data-ic]").forEach(e => { e.innerHTML = icon(e.dataset.ic); });
     // Ventanas movibles: clic izquierdo, arrastrar, soltar. Agarra por casi cualquier parte.
     const DRAG_IGN = "input,textarea,select,button,a,iframe,img,label,.wc-fav,.wc-close,.sclose,"+
-                     ".wcg-close,.hj-exit,.dock-btn,.ritem,.wc-card,.veh-item,.pbtn,.sbtn2";
+                     ".wcg-close,.wcf-x,.hj-exit,.dock-btn,.ritem,.wc-card,.veh-item,.pbtn,.sbtn2";
     function makeDraggable(el, handle, onClick){
       handle = handle || el; handle.style.cursor="move";
       handle.addEventListener("mousedown",(e)=>{
@@ -672,7 +691,7 @@
       makeDraggable(p, p, (t)=>{ if(t.closest && t.closest("h1,h2")) p.classList.toggle("collapsed"); });
     });
     document.querySelectorAll("#right-col .panel").forEach(p => makeDraggable(p, p));
-    ["wc-player","sv-player","popup","searchbox"].forEach(id => { const el=$(id); if(el) makeDraggable(el, el); });
+    ["wc-player","sv-player","wc-follow","popup","searchbox"].forEach(id => { const el=$(id); if(el) makeDraggable(el, el); });
     { const g=$("wc-gallery"); if(g) makeDraggable(g, g.querySelector(".wcg-head")); }
 
     // Coloca una ventana en un area en blanco de la pantalla, sin caer encima de otra ventana visible
@@ -681,7 +700,7 @@
       el.style.right="auto"; el.style.bottom="auto";
       const w=el.offsetWidth, h=el.offsetHeight, vw=innerWidth, vh=innerHeight, pad=12;
       const SEL="#left-col .panel, #right-col .panel, #dock, #preset-panel,"+
-        "#wc-gallery, #wc-player, #sv-player, #popup, #searchbox";
+        "#wc-gallery, #wc-player, #sv-player, #wc-follow, #popup, #searchbox";
       const rects=[];
       document.querySelectorAll(SEL).forEach(win=>{
         if(win===el) return;
@@ -980,7 +999,7 @@
       }
       if (ent && typeof ent.id === "string" && ent.id.startsWith("webcam:")) {
         const w = webcamEntities.get(ent.id);
-        if (w) showWebcam(w.cam);
+        if (w) openWebcam(w.cam);
         return;
       }
       if (ent && ent.id === "searchpin" && lastSearch) {
@@ -1249,6 +1268,8 @@
     if (!cfg.webcams) $("webcams").style.display = "none";
 
     function clearWebcams() {
+      // si seguíamos una cámara del escaneo, soltar antes de borrar su entidad
+      if (wcFollow && !wcFollow.temp) stopFollow();
       for (const [, w] of webcamEntities) viewer.entities.remove(w.entity);
       webcamEntities.clear();
     }
@@ -1274,7 +1295,7 @@
       container.querySelectorAll(".wc-card").forEach((el,i)=>{
         const fav=el.querySelector(".wc-fav");
         if(fav) fav.onclick=(ev)=>{ ev.stopPropagation(); toggleFav(cams[i]); };
-        el.onclick=()=>showWebcam(cams[i]);
+        el.onclick=()=>openWebcam(cams[i]);
       });
     }
     function toggleFav(cam){
@@ -1340,6 +1361,62 @@
       placeFree(p);
       p.querySelector(".wc-close").onclick = () => { p.style.display = "none"; p.innerHTML = ""; };
     }
+
+    // ---- Seguir una cámara en el mapa ---------------------------------
+    let wcFollow = null;   // { cam, entity, temp }
+    function findWebcamEntity(cam){ const k=favKey(cam);
+      for(const [,w] of webcamEntities){ if(favKey(w.cam)===k) return w.entity; } return null; }
+    function stopFollow(){
+      if(!wcFollow) return;
+      viewer.trackedEntity = undefined;
+      const e=wcFollow.entity;
+      if(e){ if(wcFollow.temp) viewer.entities.remove(e);
+             else if(e.billboard){ e.billboard.width=26; e.billboard.height=26; } }
+      wcFollow=null; $("wc-follow").style.display="none";
+    }
+    function setWcFollowActive(on){ if(wcFollow) viewer.trackedEntity = on ? wcFollow.entity : undefined; }
+    function followWebcam(cam){
+      // localizar la entidad de la cámara (o crear una si es un favorito fuera del escaneo)
+      let entity=findWebcamEntity(cam), temp=false;
+      if(!entity){ entity=viewer.entities.add({ position:Cesium.Cartesian3.fromDegrees(cam.lon,cam.lat,0),
+          billboard:{ image:CAM_IMG, width:40, height:40, disableDepthTestDistance:Number.POSITIVE_INFINITY } });
+        temp=true;
+      } else if(entity.billboard){ entity.billboard.width=40; entity.billboard.height=40; }  // resaltar
+      // soltar el seguimiento anterior
+      if(wcFollow && wcFollow.entity!==entity){
+        if(wcFollow.temp) viewer.entities.remove(wcFollow.entity);
+        else if(wcFollow.entity.billboard){ wcFollow.entity.billboard.width=26; wcFollow.entity.billboard.height=26; }
+      }
+      entity.viewFrom = new Cesium.Cartesian3(0, -700, 520);   // encuadre oblicuo al seguir
+      wcFollow={ cam, entity, temp };
+      viewer.trackedEntity = entity;   // centra el mapa en la cámara y la sigue (activo por defecto)
+      showWcFollowPanel(cam);
+    }
+    function showWcFollowPanel(cam){
+      const p=$("wc-follow");
+      const sub=[cam.city,cam.country].filter(Boolean).join(", ");
+      const prev=cam.preview?`<img class="wcf-prev" src="${cam.preview}" onerror="this.style.display='none'">`:"";
+      p.innerHTML =
+        `<div class="wcf-head"><span class="pulse"></span> SIGUIENDO CÁMARA<span class="wcf-x">${icon("x")}</span></div>`+
+        prev+
+        `<div class="wcf-body">`+
+          `<div class="wcf-title">${cam.title}</div>`+
+          `<div class="wcf-sub">${sub||"—"}</div>`+
+          `<div class="wcf-row"><button class="wcf-live">${icon("play")} Ver en vivo</button>`+
+          `<button class="wcf-recenter">${icon("target")} Recentrar</button></div>`+
+          `<label class="chk"><input type="checkbox" class="wcf-lock" checked> Seguir en el mapa</label>`+
+        `</div>`;
+      const wasHidden=getComputedStyle(p).display==="none";
+      p.style.display="block";
+      if(wasHidden) placeFree(p);
+      p.querySelector(".wcf-x").onclick=stopFollow;
+      p.querySelector(".wcf-live").onclick=()=>showWebcam(cam);
+      p.querySelector(".wcf-recenter").onclick=()=>{ if(wcFollow){ p.querySelector(".wcf-lock").checked=true; viewer.trackedEntity=wcFollow.entity; } };
+      p.querySelector(".wcf-lock").onclick=(e)=>setWcFollowActive(e.target.checked);
+    }
+    // Clic en una cámara (marcador o tarjeta): seguir en el mapa + abrir el vivo
+    function openWebcam(cam){ followWebcam(cam); showWebcam(cam); }
+
     $("btn-scanwc").addEventListener("click", scanWebcams);
     $("wcg-close").onclick = () => { $("wc-gallery").style.display = "none"; };
 
