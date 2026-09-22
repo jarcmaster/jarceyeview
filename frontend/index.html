@@ -564,6 +564,15 @@
       background:conic-gradient(from 0deg, rgba(95,224,138,.5), rgba(95,224,138,0) 32%);
       transform-origin:center; animation:radarsweep 1.05s linear infinite; }
     @keyframes radarsweep { to { transform:rotate(360deg); } }
+    /* Indicador flotante de carga de calles (visible con o sin OBJETIVO) */
+    #veh-loading { display:none; position:fixed; top:16px; left:50%; transform:translateX(-50%);
+      z-index:1400; padding:8px 16px; border-radius:20px; font:600 13px/1 system-ui,sans-serif;
+      letter-spacing:.5px; color:#dfffe9; background:rgba(6,20,12,.82); border:1px solid rgba(95,224,138,.5);
+      box-shadow:0 4px 18px rgba(0,0,0,.5), 0 0 14px rgba(95,224,138,.25); backdrop-filter:blur(4px); }
+    #veh-loading.on { display:flex; align-items:center; gap:9px; }
+    #veh-loading .vl-dot { width:11px; height:11px; border-radius:50%; border:2px solid rgba(95,224,138,.35);
+      border-top-color:#5fe08a; animation:vlspin .7s linear infinite; }
+    @keyframes vlspin { to { transform:rotate(360deg); } }
     .surv-scan::after { content:""; position:absolute; inset:0; border-radius:50%;
       background:repeating-conic-gradient(from 0deg, rgba(127,211,255,.16) 0 1deg, transparent 1deg 45deg),
                  radial-gradient(circle, transparent 0 34%, rgba(127,211,255,.12) 34% 35%, transparent 35% 66%, rgba(127,211,255,.12) 66% 67%, transparent 67%); }
@@ -932,6 +941,7 @@
   <div id="scope-dark"></div>
   <div id="scope-optic"></div>
   <div id="shot-flash"></div>
+  <div id="veh-loading"><span class="vl-dot"></span><span>CARGANDO CALLES…</span></div>
   <div id="surv-hud">
     <div class="scope-ring"></div>
     <span class="sc-brk tl"></span><span class="sc-brk tr"></span><span class="sc-brk bl"></span><span class="sc-brk br"></span>
@@ -1898,6 +1908,15 @@
       const r = viewer.camera.computeViewRectangle();
       if (r) return { lat: Cesium.Math.toDegrees((r.south + r.north) / 2),
                       lon: Cesium.Math.toDegrees((r.west + r.east) / 2) };
+      // Vista oblicua: computeViewRectangle da null → apunta al suelo en el centro de la pantalla
+      try {
+        const cnv = viewer.scene.canvas;
+        const mid = new Cesium.Cartesian2(cnv.clientWidth/2, cnv.clientHeight/2);
+        let cart = viewer.scene.pickPosition(mid);
+        if (!cart) cart = viewer.camera.pickEllipsoid(mid, viewer.scene.globe.ellipsoid);
+        if (cart) { const cg = Cesium.Cartographic.fromCartesian(cart);
+          return { lat: Cesium.Math.toDegrees(cg.latitude), lon: Cesium.Math.toDegrees(cg.longitude) }; }
+      } catch(_) {}
       const c = viewer.camera.positionCartographic;
       return { lat: Cesium.Math.toDegrees(c.latitude), lon: Cesium.Math.toDegrees(c.longitude) };
     }
@@ -3373,9 +3392,11 @@
     $("lyr-veh").addEventListener("change", (e)=>{
       if(!e.target.checked){ showVeh(false); return; }
       if(!survActive || !survGeo){   // sin OBJETIVO: área fija (~900 m) alrededor del centro de la vista
-        const r=(typeof viewRect==="function")&&viewRect(); if(!r){ e.target.checked=false; return; }
-        const lat=(r.s+r.n)/2, lon=(r.w+r.e)/2, dLat=900/111320, dLon=900/(111320*Math.cos(lat*Math.PI/180)||1e-6);
-        survGeo={lat,lon}; survBox={aLon:lon-dLon,aLat:lat-dLat,bLon:lon+dLon,bLat:lat+dLat}; survMeta={area:"—",elev:"—"}; }
+        let c; try{ c=(typeof viewCenter==="function")&&viewCenter(); }catch{}
+        if(!c){ const r=(typeof viewRect==="function")&&viewRect(); if(r) c={lat:(r.s+r.n)/2, lon:(r.w+r.e)/2}; }
+        if(!c){ e.target.checked=false; return; }
+        const dLat=900/111320, dLon=900/(111320*Math.cos(c.lat*Math.PI/180)||1e-6);
+        survGeo={lat:c.lat,lon:c.lon}; survBox={aLon:c.lon-dLon,aLat:c.lat-dLat,bLon:c.lon+dLon,bLat:c.lat+dLat}; survMeta={area:"—",elev:"—"}; }
       showVeh(true);
     });
     document.querySelector(".veh-expand").onclick=()=>{ const f=$("veh-feed"), big=f.classList.toggle("big");
@@ -3743,8 +3764,9 @@
       stopTraffic();
       const token={}; trafficToken=token;
       $("surv-hud").classList.add("scanning");   // animación de carga/escaneo de cuadrantes
+      $("veh-loading").classList.add("on");      // indicador visible aunque OBJETIVO esté apagado
       const [els]=await Promise.all([ fetchFeatures("veh"), new Promise(r=>setTimeout(r,400)) ]);
-      if(trafficToken!==token || !survActive){ $("surv-hud").classList.remove("scanning"); return; }
+      if(trafficToken!==token || !survGeo){ $("surv-hud").classList.remove("scanning"); $("veh-loading").classList.remove("on"); return; }
       const V = els.length ? buildRoadGraph(els) : null;
       const keys = V ? [...V.keys()].filter(k=>V.get(k).out.size||V.get(k).all.size) : [];
       const dmul = densityByTime()*SIMCFG.DENSITY;
@@ -3759,12 +3781,13 @@
       }
       for(let i=0;i<trafficTargetN;i++) spawnCar();   // aparecen cuando terminan de "cargar"
       $("surv-hud").classList.remove("scanning");
+      $("veh-loading").classList.remove("on");
       trafficTimer=setInterval(tickTraffic, 120);
     }
     function stopTraffic(){
       trafficToken={}; if(trafficTimer){ clearInterval(trafficTimer); trafficTimer=null; }
       for(const [,c] of trafficCars){ if(c.ent) viewer.entities.remove(c.ent); }
-      trafficCars.clear(); trafficGraph=null; trafficFree=false; $("surv-hud").classList.remove("scanning"); cancelCarTracking(false);
+      trafficCars.clear(); trafficGraph=null; trafficFree=false; $("surv-hud").classList.remove("scanning"); { const vl=$("veh-loading"); if(vl) vl.classList.remove("on"); } cancelCarTracking(false);
     }
     function spawnCar(){
       const rad=scopeRadiusM();
