@@ -209,23 +209,49 @@ async def check_emergencies(aircraft: list[dict]) -> None:
 # --------------------------------------------------------------------------
 # Poller: aviones visibles en el bbox
 # --------------------------------------------------------------------------
+_poll_lock = asyncio.Lock()
+_bbox_fetch_task: asyncio.Task | None = None
+
+
+async def poll_once() -> None:
+    """Una consulta a OpenSky + broadcast (usada por el ciclo y por eventos)."""
+    if _poll_lock.locked():   # evita consultas solapadas
+        return
+    async with _poll_lock:
+        try:
+            aircraft = [asdict(a) for a in await opensky.fetch(bbox=world.bbox)]
+            world.snapshot = aircraft
+            world.last_error = ""
+            await check_emergencies(aircraft)
+        except httpx.HTTPStatusError as e:
+            world.last_error = f"OpenSky HTTP {e.response.status_code}" + (
+                " (cuota agotada)" if e.response.status_code == 429 else "")
+        except Exception as e:
+            world.last_error = f"{type(e).__name__}: {e}"
+        await broadcast({"type": "state", "entities": world.snapshot, "error": world.last_error})
+        if ais.enabled:
+            await broadcast({"type": "ships", "vessels": ais.snapshot()})
+
+
+def schedule_bbox_fetch() -> None:
+    """Consulta rápida (con debounce) cuando el usuario mueve el mapa."""
+    global _bbox_fetch_task
+    if _bbox_fetch_task and not _bbox_fetch_task.done():
+        _bbox_fetch_task.cancel()
+
+    async def _later():
+        try:
+            await asyncio.sleep(0.6)
+            await poll_once()
+        except asyncio.CancelledError:
+            pass
+    _bbox_fetch_task = asyncio.create_task(_later())
+
+
 async def poller() -> None:
     while True:
-        active = bool(world.clients) or (time.time() - world.last_kml < 30)
-        if active:   # solo consultar OpenSky si hay alguien mirando (ahorra cuota)
-            try:
-                aircraft = [asdict(a) for a in await opensky.fetch(bbox=world.bbox)]
-                world.snapshot = aircraft
-                world.last_error = ""
-                await check_emergencies(aircraft)
-            except httpx.HTTPStatusError as e:
-                world.last_error = f"OpenSky HTTP {e.response.status_code}" + (
-                    " (cuota agotada)" if e.response.status_code == 429 else "")
-            except Exception as e:
-                world.last_error = f"{type(e).__name__}: {e}"
-            await broadcast({"type": "state", "entities": world.snapshot, "error": world.last_error})
-            if ais.enabled:
-                await broadcast({"type": "ships", "vessels": ais.snapshot()})
+        if bool(world.clients) or (time.time() - world.last_kml < 30):
+            await poll_once()   # solo consulta si hay alguien mirando (ahorra cuota)
         await asyncio.sleep(POLL_INTERVAL)
 
 
@@ -684,6 +710,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
     await ws.accept()
     world.clients.add(ws)
     await ws.send_text(json.dumps({"type": "state", "entities": world.snapshot, "error": world.last_error}))
+    asyncio.create_task(poll_once())   # trae aviones de inmediato (sin esperar el ciclo)
     try:
         while True:
             raw = await ws.receive_text()
@@ -694,8 +721,9 @@ async def ws_endpoint(ws: WebSocket) -> None:
             kind = msg.get("type")
             if kind == "bbox":
                 bbox = _valid_bbox(msg)
-                if bbox:
+                if bbox and bbox != world.bbox:
                     world.bbox = bbox
+                    schedule_bbox_fetch()   # actualiza aviones al mover el mapa
             elif kind == "route":
                 asyncio.create_task(_handle_route_request(ws, msg.get("callsign", "")))
             elif kind == "status":
