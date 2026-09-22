@@ -607,12 +607,45 @@
     };
     const icon = (n) => IC[n] || "";
     document.querySelectorAll("[data-ic]").forEach(e => { e.innerHTML = icon(e.dataset.ic); });
-    // Paneles plegables (clic en el encabezado)
+    // Ventanas movibles: arrastrar por el encabezado/barra a cualquier posición
+    function makeDraggable(el, handle, onClick){
+      handle = handle || el; handle.style.cursor="move";
+      const IGN="input,textarea,select,button,a,iframe,img,.wc-fav,.wc-close,.sclose,.wcg-close,.hj-exit,.dock-btn,.ritem,.wc-card,.veh-item";
+      let sx,sy,ox,oy,w,down=false,moved=false;
+      handle.addEventListener("pointerdown",(e)=>{
+        if(e.button!==0 || (e.target.closest && e.target.closest(IGN))) return;
+        down=true; moved=false; sx=e.clientX; sy=e.clientY;
+        const r=el.getBoundingClientRect(); ox=r.left; oy=r.top; w=r.width;
+        try{ handle.setPointerCapture(e.pointerId); }catch{}
+      });
+      handle.addEventListener("pointermove",(e)=>{
+        if(!down) return; const dx=e.clientX-sx, dy=e.clientY-sy;
+        if(!moved && (Math.abs(dx)>4||Math.abs(dy)>4)){ moved=true;
+          if(el.parentElement!==document.body) document.body.appendChild(el);
+          el.style.position="absolute"; el.style.margin="0"; el.style.transform="none"; el.style.boxSizing="border-box";
+          el.style.right="auto"; el.style.bottom="auto"; el.style.width=w+"px"; el.style.zIndex=60;
+          el.style.left=ox+"px"; el.style.top=oy+"px";
+        }
+        if(moved){ el.style.left=(ox+dx)+"px"; el.style.top=(oy+dy)+"px"; }
+      });
+      handle.addEventListener("pointerup",(e)=>{ if(!down) return; down=false;
+        try{ handle.releasePointerCapture(e.pointerId); }catch{}
+        if(!moved && onClick) onClick(); });
+    }
+    // Paneles de la izquierda: arrastrar por su encabezado (y clic = plegar)
     document.querySelectorAll("#left-col .panel").forEach(p => {
       const hdr = p.querySelector(":scope > h1, :scope > h2"); if (!hdr) return;
       const chev = document.createElement("span"); chev.className = "chev"; chev.innerHTML = icon("chevron");
       hdr.appendChild(chev);
-      hdr.addEventListener("click", () => p.classList.toggle("collapsed"));
+      makeDraggable(p, hdr, () => p.classList.toggle("collapsed"));
+    });
+    // Paneles de la derecha (Selección/Rastreo) y ventanas flotantes
+    document.querySelectorAll("#right-col .panel").forEach(p => {
+      const hdr = p.querySelector(":scope > h2"); if(hdr) makeDraggable(p, hdr);
+    });
+    ["wc-gallery","wc-player","sv-player","popup","searchbox"].forEach(id => {
+      const el = $(id); if(!el) return;
+      makeDraggable(el, id==="wc-gallery" ? el.querySelector(".wcg-head") : el);
     });
 
     // ---- Efecto "hackeo con progreso" al activar capas ----
