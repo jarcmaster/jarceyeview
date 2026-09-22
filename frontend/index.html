@@ -2869,8 +2869,23 @@
     // --- Pan ---
     function panView(dir){
       if(hoverOn) setHover(false);
+      if(survActive && survGeo){   // PAN mueve el OJO OBJETIVO (el scope) sobre el mapa
+        const stepM=Math.max(15, scopeRadiusM()*0.14), dg=0.7071;
+        const dLat=stepM/111320, dLon=stepM/(111320*Math.cos(survGeo.lat*Math.PI/180)||1e-6);
+        const mv={ n:[dLat,0], s:[-dLat,0], e:[0,dLon], w:[0,-dLon],
+          ne:[dLat*dg,dLon*dg], nw:[dLat*dg,-dLon*dg], se:[-dLat*dg,dLon*dg], sw:[-dLat*dg,-dLon*dg] }[dir];
+        if(!mv) return;
+        survGeo={lat:survGeo.lat+mv[0], lon:survGeo.lon+mv[1]};
+        if(survBox){ survBox.aLat+=mv[0]; survBox.bLat+=mv[0]; survBox.aLon+=mv[1]; survBox.bLon+=mv[1]; }
+        computeTrafficInner();
+        if(trafficCenter){ const dd=hav(survGeo.lat,survGeo.lon,trafficCenter.lat,trafficCenter.lon);
+          if(dd>scopeRadiusM()*0.5){ clearTimeout(trafficRefetch);   // recarga calles si nos alejamos del grafo
+            trafficRefetch=setTimeout(()=>{ if(vehOn&&survActive) startTraffic(); }, 500); } }
+        survTick();
+        return;
+      }
+      // sin scope activo: mover la cámara (el mapa) en la dirección pulsada
       const h=viewer.camera.positionCartographic.height, amt=Math.max(20, h*0.12), dg=amt*0.7071;
-      // El MAPA se mueve en la dirección pulsada → la cámara se mueve al lado contrario
       ({ n:()=>viewer.camera.moveDown(amt), s:()=>viewer.camera.moveUp(amt),
          e:()=>viewer.camera.moveLeft(amt), w:()=>viewer.camera.moveRight(amt),
          ne:()=>{viewer.camera.moveDown(dg);viewer.camera.moveLeft(dg);},
@@ -3241,8 +3256,17 @@
     function showVehVideo(){ $("veh-feed").classList.add("on"); playRandomVeh(); }
 
     // ================= Tráfico de vehículos dentro del círculo del OBJETIVO =================
-    const trafficCars=new Map();   // "car:N" -> {id,num,plate,tag,cur,prev,target,lat,lon,speed,ent,tracked}
-    let trafficTimer=null, trafficGraph=null, trafficKeys=[], trafficTargetN=0, trafficSeq=0, trafficToken=null, trackedCarId=null;
+    const trafficCars=new Map();   // "car:N" -> {id,num,plate,tag,cur,prev,target,lat,lon,speed,hold,lane,ent,tracked}
+    let trafficTimer=null, trafficGraph=null, trafficKeys=[], trafficInner=[], trafficTargetN=0,
+        trafficSeq=0, trafficToken=null, trackedCarId=null, trafficCenter=null, trafficRefetch=null;
+    // Desplaza un punto a la derecha del rumbo (para separar carriles/sentidos)
+    const offsetRight=(lat,lon,hd,m)=>{ const b=(hd+90)*Math.PI/180;
+      return { lat:lat+(m*Math.cos(b))/111320, lon:lon+(m*Math.sin(b))/(111320*Math.cos(lat*Math.PI/180)||1e-6) }; };
+    function computeTrafficInner(){ if(!trafficGraph||!survGeo){ trafficInner=trafficKeys; return; }
+      const cC=Cesium.Cartesian3.fromDegrees(survGeo.lon,survGeo.lat,0), rad=scopeRadiusM();
+      trafficInner=trafficKeys.filter(k=>{ const v=trafficGraph.get(k);
+        return Cesium.Cartesian3.distance(cC,Cesium.Cartesian3.fromDegrees(v.lon,v.lat,0))<=rad*0.92; });
+      if(!trafficInner.length) trafficInner=trafficKeys; }
     const PLATE_L="ABCDEFGHJKLMNPRSTUVWXYZ";
     const randPlate=()=>{ let s=""; for(let i=0;i<3;i++) s+=PLATE_L[rnd(PLATE_L.length)]; return s+"-"+String(rnd(900)+100); };
     const carLabel=(c)=> (c.tag?("["+c.tag+"] "):"") + "V"+c.num+" · "+c.plate + (c.tracked?"  ◉":"");
@@ -3256,8 +3280,12 @@
       const V=buildRoadGraph(els);
       trafficKeys=[...V.keys()].filter(k=>V.get(k).out.size||V.get(k).all.size);
       if(!trafficKeys.length){ vehGone(); return; }
-      trafficGraph=V; trafficTargetN = 6 + rnd(10);   // cantidad aleatoria
-      for(let i=0;i<trafficTargetN;i++) spawnCar();
+      trafficGraph=V; trafficCenter={lat:survGeo.lat, lon:survGeo.lon};
+      computeTrafficInner();
+      // cantidad según la densidad de la zona (10 a 100)
+      trafficTargetN = Math.max(10, Math.min(100, Math.round(trafficInner.length*0.6) + 10 + rnd(20)));
+      trafficTargetN = Math.min(trafficTargetN, Math.max(10, trafficInner.length));
+      for(let i=0;i<trafficTargetN;i++) spawnCar();   // aparecen de inmediato
       trafficTimer=setInterval(tickTraffic, 120);
     }
     function stopTraffic(){
@@ -3266,15 +3294,14 @@
       trafficCars.clear(); trafficGraph=null; cancelCarTracking(false);
     }
     function spawnCar(){
-      if(!trafficGraph) return;
-      const rad=scopeRadiusM(), cC=Cesium.Cartesian3.fromDegrees(survGeo.lon,survGeo.lat,0);
-      let cur=null;
-      for(let t=0;t<25;t++){ const k=trafficKeys[rnd(trafficKeys.length)], v=trafficGraph.get(k);
-        if(Cesium.Cartesian3.distance(cC, Cesium.Cartesian3.fromDegrees(v.lon,v.lat,0))<=rad*0.8){ cur=k; break; } }
-      if(!cur) return;
-      const v=trafficGraph.get(cur), num=(++trafficSeq), id="car:"+num;
+      if(!trafficGraph || !trafficInner.length) return;
+      const cur=trafficInner[rnd(trafficInner.length)], v=trafficGraph.get(cur);
+      if(!v) return;
+      const r=Math.random();   // mezcla de velocidades: lentos / normales / rápidos
+      const speed = r<0.18 ? (0.8+Math.random()*1.4) : r<0.82 ? (2.5+Math.random()*3.5) : (6.5+Math.random()*6);
+      const num=(++trafficSeq), id="car:"+num;
       const car={ id, num, plate:randPlate(), tag:"", cur, prev:null, target:pickNb(trafficGraph,cur,null),
-        lat:v.lat, lon:v.lon, speed:(2.5+Math.random()*4), tracked:false };
+        lat:v.lat, lon:v.lon, speed, hold:(Math.random()<0.12?10+rnd(40):0), lane:3.0, tracked:false };
       car.ent=viewer.entities.add({ id, position:Cesium.Cartesian3.fromDegrees(car.lon,car.lat,0),
         billboard:{ image:CAR_IMG, width:32, height:32, rotation:0, alignedAxis:Cesium.Cartesian3.ZERO,
           disableDepthTestDistance:Number.POSITIVE_INFINITY },
@@ -3289,18 +3316,27 @@
       const V=trafficGraph; if(!V) return;
       const rad=scopeRadiusM(), cC=Cesium.Cartesian3.fromDegrees(survGeo.lon,survGeo.lat,0);
       for(const [id,c] of trafficCars){
-        if(!c.target){ c.target=pickNb(V,c.cur,c.prev); if(!c.target) continue; }
-        const tv=V.get(c.target); if(!tv){ c.target=null; continue; }
-        const d=hav(c.lat,c.lon,tv.lat,tv.lon), step=c.speed*0.12, hd=bearing(c.lat,c.lon,tv.lat,tv.lon);
-        if(d<=step){ c.lat=tv.lat; c.lon=tv.lon; c.prev=c.cur; c.cur=c.target; c.target=pickNb(V,c.cur,c.prev); }
-        else { c.lat+=(step*Math.cos(hd*Math.PI/180))/111320; c.lon+=(step*Math.sin(hd*Math.PI/180))/(111320*Math.cos(c.lat*Math.PI/180)||1e-6); }
-        c.ent.position=Cesium.Cartesian3.fromDegrees(c.lon,c.lat,0); c.ent.billboard.rotation=Cesium.Math.toRadians(-hd);
+        if(c.hold>0){ c.hold--; }   // detenido: esperando en intersección o parqueado
+        else {
+          if(!c.target){ c.target=pickNb(V,c.cur,c.prev); if(!c.target){ c.hold=10+rnd(20); } }
+          const tv=c.target && V.get(c.target);
+          if(tv){
+            const d=hav(c.lat,c.lon,tv.lat,tv.lon), step=c.speed*0.12; c.hd=bearing(c.lat,c.lon,tv.lat,tv.lon);
+            if(d<=step){ c.lat=tv.lat; c.lon=tv.lon; c.prev=c.cur; c.cur=c.target; c.target=pickNb(V,c.cur,c.prev);
+              const deg=V.get(c.cur).all.size;
+              if(deg>=3 && Math.random()<0.30) c.hold=6+rnd(22);        // espera en intersección
+              else if(Math.random()<0.03) c.hold=50+rnd(120);          // parquea un rato
+            } else { c.lat+=(step*Math.cos(c.hd*Math.PI/180))/111320; c.lon+=(step*Math.sin(c.hd*Math.PI/180))/(111320*Math.cos(c.lat*Math.PI/180)||1e-6); }
+          }
+        }
+        const hd=c.hd||0, p=offsetRight(c.lat,c.lon,hd,c.lane);   // carril derecho (separa sentidos)
+        c.ent.position=Cesium.Cartesian3.fromDegrees(p.lon,p.lat,0); c.ent.billboard.rotation=Cesium.Math.toRadians(-hd);
         if(Cesium.Cartesian3.distance(cC, Cesium.Cartesian3.fromDegrees(c.lon,c.lat,0))>rad){   // sale del círculo → desaparece
           const wasTracked=(trackedCarId===id); removeCar(id);
           if(wasTracked){ showLost("veh"); cancelCarTracking(false); }
         }
       }
-      while(trafficCars.size < trafficTargetN) spawnCar();   // repone para mantener el tráfico
+      while(trafficCars.size < trafficTargetN) spawnCar();   // mantiene el tráfico lleno
     }
     function cullCars(){ try{ _occ.cameraPosition=viewer.camera.positionWC; const t=viewer.clock.currentTime;
       for(const [,c] of trafficCars){ const p=c.ent.position.getValue(t); if(p) c.ent.show=_occ.isPointVisible(p); } }catch{} }
