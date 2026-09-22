@@ -237,13 +237,6 @@
     #shot-flash { position:absolute; inset:0; z-index:34; pointer-events:none; opacity:0; background:#eaffff; }
     #shot-flash.on { animation:shotflash .45s ease-out; }
     @keyframes shotflash { 0%{opacity:0} 12%{opacity:.9} 100%{opacity:0} }
-    /* Botón flotante de simulación de tráfico (siempre visible) */
-    #veh-toggle { position:absolute; z-index:35; right:12px; bottom:12px; width:44px; height:44px; display:flex;
-      align-items:center; justify-content:center; border-radius:11px; background:rgba(6,16,26,.92); border:1px solid #2a6a8f;
-      color:#7fd3ff; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,.5); backdrop-filter:blur(6px); }
-    #veh-toggle:hover { background:#123449; }
-    #veh-toggle.active { border-color:#5fe08a; color:#baffd0; box-shadow:0 0 14px rgba(95,224,138,.45); }
-
     /* Toggles de UI en OBJETIVO */
     #ui-toggle, #tools-toggle { position:absolute; z-index:29; display:none; align-items:center; justify-content:center;
       width:40px; height:40px; border-radius:10px; background:rgba(6,16,26,.92); border:1px solid #2a6a8f; color:#7fd3ff;
@@ -462,6 +455,7 @@
     #sim-cfg .cf { display:flex; align-items:center; gap:8px; }
     #sim-cfg .cf label { color:#9cc; flex:1; }
     #sim-cfg .cf input { width:70px; background:#0b1622; color:#dff; border:1px solid #2a4a63; border-radius:6px; padding:3px 6px; font-size:10px; }
+    #sim-apply { opacity:.55; } #sim-apply.dirty { opacity:1; background:#155; border-color:#5fe08a; color:#baffd0; box-shadow:0 0 10px rgba(95,224,138,.45); }
     #sim-log { max-height:120px; overflow-y:auto; font-size:9.5px; line-height:1.5; color:#8fb4cc; }
     #sim-log div:first-child { color:#bfe9ff; }
 
@@ -826,6 +820,7 @@
       <label class="chk"><input type="checkbox" id="lyr-alpr" /> <span data-ic="crosshair"></span> Cámaras ALPR</label>
       <label class="chk" id="lyr-inc-row"><input type="checkbox" id="lyr-inc" /> <span data-ic="car"></span> Incidentes de tráfico</label>
       <label class="chk" id="lyr-fires-row"><input type="checkbox" id="lyr-fires" /> <span class="dot" style="color:#ff6a1a">●</span> Incendios (NASA FIRMS)</label>
+      <label class="chk" id="lyr-veh-row"><input type="checkbox" id="lyr-veh" /> <span data-ic="car"></span> Vehículos (simulación)</label>
     </div>
 
     <div id="webcams" class="panel">
@@ -1112,6 +1107,7 @@
         <button id="sim-newseed">NUEVA</button></div>
       <div class="sm2-t">PARÁMETROS (config)</div>
       <div id="sim-cfg"></div>
+      <div class="sm2-btns"><button id="sim-defaults">POR DEFECTO</button><button id="sim-apply"><span data-ic="check"></span> APLICAR CAMBIOS</button></div>
       <div class="sm2-t">EVENT LOG</div>
       <div id="sim-log"></div>
     </div>
@@ -1120,8 +1116,6 @@
   <!-- Toggles para mostrar/ocultar la UI durante OBJETIVO -->
   <div id="ui-toggle" title="Mostrar/ocultar paneles y dock"><span data-ic="layers"></span></div>
   <div id="tools-toggle" title="Mostrar/ocultar herramientas"><span data-ic="crosshair"></span></div>
-  <!-- Botón flotante siempre visible: simulación de tráfico -->
-  <div id="veh-toggle" title="Simulación de vehículos (on/off)"><span data-ic="car"></span></div>
 
   <!-- Gestor de claves (.env) -->
   <div id="keys-modal">
@@ -2748,9 +2742,10 @@
     const CFG_FIELDS=[["MAX_SPEED","Vel. máx (m/s)"],["MIN_SPEED","Vel. mín"],["ACCEL","Aceleración"],["DECEL","Frenado"],
       ["SAFE_BASE","Dist. segura"],["REACTION","Reacción (s)"],["DENSITY","Densidad ×"],["P_PARK","Prob. parqueo"],
       ["P_REROUTE","Prob. reruteo"],["LIGHT_GREEN","Semáforo verde (s)"],["MAX_VEH","Máx. vehículos"]];
+    function simMarkDirty(){ $("sim-apply").classList.add("dirty"); }
     function renderSimCfg(){ const box=$("sim-cfg");
       box.innerHTML=CFG_FIELDS.map(([k,l])=>`<div class="cf"><label>${l}</label><input data-cf="${k}" type="number" step="0.001" value="${SIMCFG[k]}"></div>`).join("");
-      box.querySelectorAll("input[data-cf]").forEach(inp=>inp.onchange=()=>{ const v=parseFloat(inp.value); if(!isNaN(v)) SIMCFG[inp.dataset.cf]=v; }); }
+      box.querySelectorAll("input[data-cf]").forEach(inp=>inp.oninput=()=>{ const v=parseFloat(inp.value); if(!isNaN(v)){ SIMCFG[inp.dataset.cf]=v; simMarkDirty(); } }); }
     function renderSimDash(){ if(!$("sim-panel").classList.contains("on")) return;
       $("sim-stats").innerHTML=
         `<div><span class="k">Vehículos</span> <b>${simStats.n}</b></div><div><span class="k">En marcha</span> <b>${simStats.moving}</b></div>`+
@@ -2773,6 +2768,9 @@
       if(vehOn && survGeo) startTraffic(); logEvent("RESET simulación"); };
     $("sim-newseed").onclick=()=>{ const s=Math.floor(Math.random()*1e6); $("sim-seed").value=s; setSeed(s); logEvent("Seed "+s); };
     $("sim-seed").onchange=()=>{ setSeed(parseInt($("sim-seed").value)||0); };
+    $("sim-apply").onclick=()=>{ $("sim-apply").classList.remove("dirty");   // ejecuta los nuevos valores
+      if(vehOn && survGeo) startTraffic(); logEvent("Config aplicada"); };
+    $("sim-defaults").onclick=()=>{ Object.assign(SIMCFG, JSON.parse(JSON.stringify(SIM_DEFAULTS))); renderSimCfg(); simMarkDirty(); logEvent("Config por defecto"); };
     // Debug overlay: ruta prevista + destino del vehículo rastreado
     let dbgLine=null, dbgDest=null;
     function bestToward(V,cur,prev,dest){ const v=V.get(cur); if(!v) return null; let outs=[...v.out]; if(!outs.length) outs=[...v.all];
@@ -3261,18 +3259,18 @@
     $("veh-video").addEventListener("ended", ()=>{ if(vehOn) playRandomVeh(); });   // al terminar, otro clip al azar
     function showVeh(on){
       vehOn=on; $("tl-veh").classList.toggle("active",on);
-      const vt=$("veh-toggle"); if(vt) vt.classList.toggle("active",on);
+      const cb=$("lyr-veh"); if(cb) cb.checked=on;   // sincroniza la casilla de CAPAS
       if(on){ if(survGeo) startTraffic(); }   // usa el área (persiste aunque OBJETIVO esté apagado)
       else { stopTraffic(); }
     }
     $("tl-veh").onclick=()=>showVeh(!vehOn);
-    // Botón flotante: activar/parar la simulación de tráfico sin entrar a OBJETIVO
-    $("veh-toggle").onclick=()=>{
-      if(vehOn){ showVeh(false); return; }
-      if(!survGeo){ const r=(typeof viewRect==="function")&&viewRect(); if(!r) return;
+    // CAPAS → Vehículos (simulación): activa/para el tráfico sin necesitar OBJETIVO
+    $("lyr-veh").addEventListener("change", (e)=>{
+      if(!e.target.checked){ showVeh(false); return; }
+      if(!survGeo){ const r=(typeof viewRect==="function")&&viewRect(); if(!r){ e.target.checked=false; return; }
         survGeo={lat:(r.s+r.n)/2, lon:(r.w+r.e)/2}; survBox={aLon:r.w,aLat:r.s,bLon:r.e,bLat:r.n}; survMeta={area:"—",elev:"—"}; }
       showVeh(true);
-    };
+    });
     document.querySelector(".veh-expand").onclick=()=>{ const f=$("veh-feed"), big=f.classList.toggle("big");
       f.querySelector(".veh-expand span").innerHTML=icon(big?"compress":"expand"); };
 
@@ -3324,7 +3322,7 @@
     async function fetchFeatures(kind){
       const r=scopeBbox(1.4), bb=`(${r.s},${r.w},${r.n},${r.e})`;
       const q = kind==="veh"
-        ? `[out:json][timeout:25];(way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|road|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"]["access"!~"^(no|private)$"]${bb};);out geom 3000;`
+        ? `[out:json][timeout:40];(way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|road|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"]["access"!~"^(no|private)$"]${bb};);out geom 5000;`
         : `[out:json][timeout:20];(way["building"]${bb};way["leisure"~"park|garden|pitch|playground|recreation_ground|golf_course"]${bb};way["landuse"~"grass|recreation_ground|forest|meadow|cemetery"]${bb};);out geom 400;`;
       try{ const j=await (await fetch("https://overpass-api.de/api/interpreter",{method:"POST",body:q})).json();
         return (j.elements||[]).filter(el=>el.geometry&&el.geometry.length>1); }catch{ return []; }
@@ -3517,7 +3515,8 @@
     // ============= MOTOR DE SIMULACIÓN DE VEHÍCULOS (agentes autónomos · datos 100% ficticios) =============
     const SIMCFG = { MAX_SPEED:12, MIN_SPEED:1, ACCEL:0.9, DECEL:3.2, SAFE_BASE:6, REACTION:0.9, SAFE_CRIT:5,
       P_PARK:0.004, P_REROUTE:0.006, DENSITY:1.0, LIGHT_GREEN:26, LIGHT_YELLOW:4,
-      SIM_SPEED:1, WEATHER:"CLEAR", DEBUG:false, SEED:0, MAX_VEH:110, DECISION_MIN:3, DECISION_MAX:20 };
+      SIM_SPEED:1, WEATHER:"CLEAR", DEBUG:false, SEED:0, MAX_VEH:160, DECISION_MIN:3, DECISION_MAX:20 };
+    const SIM_DEFAULTS = JSON.parse(JSON.stringify(SIMCFG));   // valores por defecto de SIM
     const WEATHER_FX = { CLEAR:{spd:1,safe:1}, CLOUDY:{spd:0.96,safe:1.05}, RAIN:{spd:0.78,safe:1.5}, FOG:{spd:0.68,safe:1.7} };
     const PROFILES = ["CAUTIOUS","NORMAL","AGGRESSIVE","COMMUTER","DELIVERY","DISTRACTED","INDECISIVE","LOCAL_DRIVER","RANDOM"];
     function profileParams(p){ switch(p){
@@ -3629,12 +3628,14 @@
       const V = els.length ? buildRoadGraph(els) : null;
       const keys = V ? [...V.keys()].filter(k=>V.get(k).out.size||V.get(k).all.size) : [];
       const dmul = densityByTime()*SIMCFG.DENSITY;
+      const areaKm2 = Math.PI*Math.pow(scopeRadiusM()/1000, 2);
       if(V && keys.length){   // tráfico por calles reales (direcciones correctas)
         trafficFree=false; trafficGraph=V; trafficKeys=keys; trafficCenter={lat:survGeo.lat, lon:survGeo.lon}; computeTrafficInner(); buildLights();
-        // llena las calles: ~1 coche por cada ~2 nodos internos, entre 30 y MAX_VEH
-        trafficTargetN = Math.round(Math.max(30, Math.min(SIMCFG.MAX_VEH, trafficInner.length*0.5)) * dmul);
-      } else {   // SIEMPRE hay vehículos: si no hay calles, tráfico libre dentro del círculo
-        trafficFree=true; trafficGraph=null; simLights.clear(); trafficTargetN=Math.max(8, Math.round((12+rnd(18))*dmul));
+        // llena las calles del círculo: por nº de nodos y por área, entre 40 y MAX_VEH
+        trafficTargetN = Math.round(Math.max(40, Math.min(SIMCFG.MAX_VEH, Math.min(trafficInner.length*0.9, areaKm2*22))) * dmul);
+      } else {   // SIEMPRE hay vehículos: si no hay calles, tráfico libre que concentra todo el círculo
+        trafficFree=true; trafficGraph=null; simLights.clear();
+        trafficTargetN = Math.round(Math.max(40, Math.min(SIMCFG.MAX_VEH, areaKm2*16)) * dmul);
       }
       for(let i=0;i<trafficTargetN;i++) spawnCar();   // aparecen cuando terminan de "cargar"
       $("surv-hud").classList.remove("scanning");
@@ -3672,7 +3673,7 @@
         label:{ text:carLabel(car), font:"bold 9px monospace", pixelOffset:new Cesium.Cartesian2(0,-23),
           fillColor:Cesium.Color.fromCssColorString("#5fe08a"), showBackground:true,
           backgroundColor:Cesium.Color.fromCssColorString("rgba(0,0,0,.6)"), disableDepthTestDistance:Number.POSITIVE_INFINITY,
-          distanceDisplayCondition:new Cesium.DistanceDisplayCondition(0,60000) } });
+          distanceDisplayCondition:new Cesium.DistanceDisplayCondition(0,2600) } });
       trafficCars.set(id, car);
     }
     function removeCar(id){ const c=trafficCars.get(id); if(c&&c.ent) viewer.entities.remove(c.ent); trafficCars.delete(id); }
