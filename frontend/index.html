@@ -300,7 +300,19 @@
       color:#bfe9ff; text-shadow:0 0 6px rgba(0,0,0,.7); }
     .surv-sig-bars { display:inline-flex; align-items:flex-end; gap:2px; height:20px; }
     .surv-sig-bars i { width:4px; background:#5fe08a; box-shadow:0 0 4px rgba(95,224,138,.6); transition:height .25s; }
-    .surv-sat { position:absolute; right:2px; top:2px; width:118px; height:74px; filter:drop-shadow(0 0 5px rgba(127,211,255,.4)); }
+    .surv-sat { position:absolute; right:2px; top:2px; width:132px; height:86px; filter:drop-shadow(0 0 6px rgba(127,211,255,.5)); }
+    @keyframes satwave { 0%{opacity:.12} 45%{opacity:.95} 100%{opacity:.12} }
+    .surv-sat .sw1 { animation:satwave 1.7s ease-in-out infinite; }
+    .surv-sat .sw2 { animation:satwave 1.7s ease-in-out .28s infinite; }
+    .surv-sat .sw3 { animation:satwave 1.7s ease-in-out .56s infinite; }
+    @keyframes satbeam { to { stroke-dashoffset:-14; } }
+    .surv-sat .sat-beam { animation:satbeam .55s linear infinite; }
+    @keyframes satground { 0%,100%{ r:2.2; opacity:.6 } 50%{ r:3.4; opacity:1 } }
+    .surv-sat .sat-ground { animation:satground 1.1s ease-in-out infinite; }
+    @keyframes satblink { 0%,55%{ opacity:1 } 56%,100%{ opacity:.2 } }
+    .surv-sat .sat-beacon { animation:satblink 1.1s steps(1) infinite; }
+    @keyframes satbob { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-1.6px) } }
+    .surv-sat .sat-body { transform-box:fill-box; transform-origin:center; animation:satbob 3.2s ease-in-out infinite; }
     .surv-data { position:absolute; left:2px; bottom:2px; font-size:10.5px; line-height:1.55; white-space:nowrap;
       text-shadow:0 0 6px rgba(0,0,0,.75); }
     .surv-data b { color:#dff; }
@@ -655,16 +667,25 @@
     </svg>
     <div class="surv-nums"></div>
     <div class="surv-sig"><span class="surv-sig-bars"></span><span class="surv-sig-txt"></span></div>
-    <svg class="surv-sat" viewBox="0 0 118 74">
-      <path d="M8 66 Q59 8 110 66" fill="none" stroke="#7fd3ff" stroke-opacity=".5" stroke-width="1"/>
-      <path d="M8 72 Q59 20 110 72" fill="none" stroke="#7fd3ff" stroke-opacity=".3" stroke-width="1"/>
-      <path d="M8 60 Q59 -2 110 60" fill="none" stroke="#7fd3ff" stroke-opacity=".2" stroke-width="1"/>
-      <g stroke="#8fe3ff" fill="#0b1622" stroke-width="1.1">
-        <rect x="52" y="10" width="12" height="9" rx="1"/>
-        <rect x="36" y="11" width="13" height="7" rx="1"/><rect x="67" y="11" width="13" height="7" rx="1"/>
-        <line x1="58" y1="19" x2="58" y2="30"/>
+    <svg class="surv-sat" viewBox="0 0 132 86">
+      <!-- ondas de señal emanando (pulsan escalonadas) -->
+      <g class="sat-waves" fill="none" stroke="#7fd3ff" stroke-width="1.4">
+        <path class="sw1" d="M34 62 Q66 30 98 62"/>
+        <path class="sw2" d="M24 68 Q66 22 108 68"/>
+        <path class="sw3" d="M14 74 Q66 14 118 74"/>
       </g>
-      <circle cx="58" cy="6" r="2.2" fill="#5fe08a"/>
+      <!-- haz de bajada (datos, dash animado) -->
+      <line class="sat-beam" x1="66" y1="32" x2="66" y2="80" stroke="#5fe08a" stroke-width="1.3" stroke-dasharray="3 4"/>
+      <circle class="sat-ground" cx="66" cy="80" r="2.6" fill="#5fe08a"/>
+      <!-- cuerpo del satélite -->
+      <g class="sat-body" stroke="#8fe3ff" fill="#0b1622" stroke-width="1.2">
+        <rect x="59" y="15" width="14" height="11" rx="1.5"/>
+        <rect x="40" y="16" width="16" height="9" rx="1"/><rect x="76" y="16" width="16" height="9" rx="1"/>
+        <line x1="43" y1="18.5" x2="53" y2="18.5" stroke-width=".7"/><line x1="43" y1="22.5" x2="53" y2="22.5" stroke-width=".7"/>
+        <line x1="79" y1="18.5" x2="89" y2="18.5" stroke-width=".7"/><line x1="79" y1="22.5" x2="89" y2="22.5" stroke-width=".7"/>
+        <line x1="66" y1="26" x2="66" y2="32" stroke-width="1.2"/>
+      </g>
+      <circle class="sat-beacon" cx="66" cy="10" r="2.6" fill="#5fe08a"/>
     </svg>
     <div class="surv-data"></div>
     <div class="surv-bar"><span>1/60</span><span>F 5.6</span><span class="surv-tc">00:00:00:00</span>
@@ -2628,7 +2649,8 @@
           wpx:w, hpx:h, area:fmtArea(m.area), state:"TARGETING…" });
       }
     }
-    $("spy-capture").addEventListener("mousedown",(e)=>{ if(!spyMode)return; spyDown=true; spyA={x:e.clientX,y:e.clientY}; autofocus(); $("spy-box").style.display="block"; drawBox(spyA,spyA); });
+    $("spy-capture").addEventListener("mousedown",(e)=>{ if(!spyMode)return; if(hoverOn) setHover(false);   // apagar órbita para que el zoom pueda bajar
+      spyDown=true; spyA={x:e.clientX,y:e.clientY}; autofocus(); $("spy-box").style.display="block"; drawBox(spyA,spyA); });
     window.addEventListener("mousemove",(e)=>{ if(spyMode&&spyDown) drawBox(spyA,{x:e.clientX,y:e.clientY}); });
     window.addEventListener("mouseup",(e)=>{ if(spyMode&&spyDown){ spyDown=false; finalizeSpy(spyA,{x:e.clientX,y:e.clientY}); } });
     window.addEventListener("keydown",(e)=>{ if(e.key==="Escape"){ if(spyMode||objetivoOn){ objetivoOn=false; $("spy-btn").classList.remove("active"); endSpy(); } if(svHandler) exitStreetViewPick(); } });
@@ -2646,6 +2668,7 @@
         return;
       }
       $("spy-capture").style.display="none"; $("spy-hint").style.display="none"; spyMode=false;
+      if(hoverOn) setHover(false);   // asegurar que la órbita no bloquee el descenso del zoom
       const m=geoMetrics(gA,gB), elevStr=sampleElev(m.centerLon,m.centerLat), DUR=2.8;
       spyAddr = "…";  // dirección real (TomTom reverse-geocode)
       fetch(`/api/revgeo?lat=${m.centerLat}&lon=${m.centerLon}`).then(r=>r.json())
