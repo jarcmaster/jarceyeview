@@ -326,12 +326,15 @@
     .satm-foot b { color:#dff; }
 
     /* Seguimiento de personas (ventana izquierda) */
-    #people-feed, #struct-feed { position:absolute; z-index:33; width:236px; display:none;
+    #people-feed, #struct-feed, #veh-feed { position:absolute; z-index:33; width:236px; display:none;
       background:rgba(4,10,20,.96); border:1px solid #2a6a8f; border-radius:12px; overflow:hidden;
       box-shadow:0 8px 30px rgba(0,0,0,.6); backdrop-filter:blur(8px); font-family:"Consolas",monospace; }
     #people-feed { left:12px; bottom:52px; }
     #struct-feed { right:12px; bottom:52px; }
-    #people-feed.on, #struct-feed.on { display:block; }
+    #veh-feed { right:12px; top:270px; }
+    #people-feed.on, #struct-feed.on, #veh-feed.on { display:block; }
+    #veh-feed .pf-body { height:176px; }
+    #veh-video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; pointer-events:none; }
     .pf-head { display:flex; align-items:center; gap:6px; padding:7px 10px; font-size:11px; letter-spacing:1px;
       color:#7fd3ff; font-weight:600; background:rgba(127,211,255,.08); }
     .pf-head .pf-live { color:#ff5252; animation:camblink 1s steps(1) infinite; }
@@ -801,6 +804,7 @@
     <div class="stool" id="tl-hover"><span data-ic="orbit"></span> HOVER</div>
     <div class="stool" id="tl-people"><span data-ic="people"></span> PERSONAS</div>
     <div class="stool" id="tl-struct"><span data-ic="building"></span> ESTRUCTURAS</div>
+    <div class="stool" id="tl-veh"><span data-ic="car"></span> VEHÍCULOS</div>
     <div class="stool" id="tl-optic"><span data-ic="thermal"></span> ÓPTICA</div>
     <div class="stool" id="tl-shot"><span data-ic="camera"></span> FOTO</div>
     <div class="stool" id="tl-shots"><span data-ic="images"></span> GALERÍA</div>
@@ -852,6 +856,15 @@
     <div class="pf-body">
       <div id="pf-embed"></div>
       <div class="pf-hud"><span>◉ AI TRACK</span></div>
+    </div>
+  </div>
+
+  <!-- Rastreo de vehículos (ventana movible, vídeo local) -->
+  <div id="veh-feed">
+    <div class="pf-head"><span class="pf-live">●</span> RASTREO DE VEHÍCULOS <span class="pf-count">TRK</span></div>
+    <div class="pf-body">
+      <video id="veh-video" muted loop playsinline preload="auto"><source src="assets/vehicle-tracking.mp4" type="video/mp4"></video>
+      <div class="pf-hud"><span>◉ VEHICLE TRACK</span></div>
     </div>
   </div>
 
@@ -1050,6 +1063,7 @@
     ["wc-player","sv-player","wc-follow","popup","searchbox"].forEach(id => { const el=$(id); if(el) makeDraggable(el, el); });
     { const pf=$("people-feed"); if(pf) makeDraggable(pf, pf.querySelector(".pf-head")); }   // seguimiento de personas: arrastrar por su encabezado
     { const sf=$("struct-feed"); if(sf) makeDraggable(sf, sf.querySelector(".pf-head")); }   // estructuras: arrastrar por su encabezado
+    { const vf=$("veh-feed"); if(vf) makeDraggable(vf, vf.querySelector(".pf-head")); }       // vehículos: arrastrar por su encabezado
     { const g=$("wc-gallery"); if(g) makeDraggable(g, g.querySelector(".wcg-head")); }
 
     // Coloca una ventana en un area en blanco de la pantalla, sin caer encima de otra ventana visible
@@ -2732,6 +2746,7 @@
       if(hoverOn) setHover(false);
       if(typeof peopleOn!=="undefined" && peopleOn) showPeople(false);
       if(typeof structOn!=="undefined" && structOn) showStruct(false);
+      if(typeof vehOn!=="undefined" && vehOn) showVeh(false);
       if(opticMode){ opticMode=""; const o=$("scope-optic"); o.style.backdropFilter=""; o.style.webkitBackdropFilter=""; o.style.display="none";
         document.querySelectorAll("#sub-optic .cbtn").forEach(b=>b.classList.remove("active")); }
       $("shots-modal").classList.remove("on");
@@ -2773,6 +2788,15 @@
       $("ss-embed").innerHTML = on ? ytEmbed("QlokeZrqtJM") : "";
     }
     $("tl-struct").onclick=()=>showStruct(!structOn);
+    // Rastreo de vehículos (vídeo local, mudo, no interactivo)
+    let vehOn=false;
+    function showVeh(on){
+      vehOn=on; $("tl-veh").classList.toggle("active",on);
+      $("veh-feed").classList.toggle("on",on);
+      const v=$("veh-video");
+      if(on){ try{ v.currentTime=0; v.play().catch(()=>{}); }catch{} } else { try{ v.pause(); }catch{} }
+    }
+    $("tl-veh").onclick=()=>showVeh(!vehOn);
 
     // --- Visor de captura a pantalla completa (con detalles) ---
     function openShotView(i){

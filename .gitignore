@@ -12,3 +12,6 @@ __pycache__/
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Vídeos locales servidos por el frontend (no subir al repo)
+frontend/assets/*.mp4
