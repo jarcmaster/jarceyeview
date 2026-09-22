@@ -1029,8 +1029,18 @@
     // Ventanas movibles: clic izquierdo, arrastrar, soltar. Agarra por casi cualquier parte.
     const DRAG_IGN = "input,textarea,select,button,a,iframe,img,label,.wc-fav,.wc-close,.sclose,"+
                      ".wcg-close,.wcf-x,.sv-max,#sv-pano,.hj-exit,.dock-btn,.ritem,.wc-card,.veh-item,.pbtn,.sbtn2";
+    // Persistencia de posición (localStorage por id)
+    function savePos(el){ if(!el.id) return;
+      try{ localStorage.setItem("jarceye_pos_"+el.id, JSON.stringify({l:el.style.left,t:el.style.top,w:el.style.width,z:el.style.zIndex})); }catch{} }
+    function restorePos(el){ if(!el.id) return; let p; try{ p=JSON.parse(localStorage.getItem("jarceye_pos_"+el.id)||"null"); }catch{}
+      if(!p||!p.l) return;
+      if(el.parentElement!==document.body) document.body.appendChild(el);
+      el.style.position="absolute"; el.style.margin="0"; el.style.transform="none"; el.style.boxSizing="border-box";
+      el.style.right="auto"; el.style.bottom="auto"; el.style.left=p.l; el.style.top=p.t; if(p.w) el.style.width=p.w; if(p.z) el.style.zIndex=p.z;
+    }
     function makeDraggable(el, handle, onClick){
       handle = handle || el; handle.style.cursor="move";
+      restorePos(el);   // aplicar la última posición guardada
       handle.addEventListener("mousedown",(e)=>{
         if(e.button!==0) return;
         if(e.target.closest && e.target.closest(DRAG_IGN)) return;
@@ -1048,6 +1058,7 @@
           if(moved){ el.style.left=(ox+dx)+"px"; el.style.top=(oy+dy)+"px"; }
         };
         const onUp=()=>{ document.removeEventListener("mousemove",onMove); document.removeEventListener("mouseup",onUp);
+          if(moved) savePos(el);   // recordar la posición al soltar
           if(!moved && onClick) onClick(startTarget); };
         document.addEventListener("mousemove",onMove); document.addEventListener("mouseup",onUp);
       });
