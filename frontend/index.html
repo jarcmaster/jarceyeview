@@ -863,7 +863,7 @@
   <div id="veh-feed">
     <div class="pf-head"><span class="pf-live">●</span> RASTREO DE VEHÍCULOS <span class="pf-count">TRK</span></div>
     <div class="pf-body">
-      <video id="veh-video" muted loop playsinline preload="auto"><source src="assets/vehicle-tracking.mp4" type="video/mp4"></video>
+      <video id="veh-video" muted playsinline preload="auto"></video>
       <div class="pf-hud"><span>◉ VEHICLE TRACK</span></div>
     </div>
   </div>
@@ -2788,13 +2788,16 @@
       $("ss-embed").innerHTML = on ? ytEmbed("QlokeZrqtJM") : "";
     }
     $("tl-struct").onclick=()=>showStruct(!structOn);
-    // Rastreo de vehículos (vídeo local, mudo, no interactivo)
+    // Rastreo de vehículos (vídeos locales, mudo, no interactivo) — alterna al azar entre los clips
     let vehOn=false;
+    const VEH_VIDEOS=["assets/vehicle-tracking.mp4","assets/lateral-tracking.mp4"];
+    function playRandomVeh(){ const v=$("veh-video");
+      v.src=VEH_VIDEOS[rnd(VEH_VIDEOS.length)]; try{ v.currentTime=0; v.play().catch(()=>{}); }catch{} }
+    $("veh-video").addEventListener("ended", ()=>{ if(vehOn) playRandomVeh(); });   // al terminar, otro clip al azar
     function showVeh(on){
       vehOn=on; $("tl-veh").classList.toggle("active",on);
       $("veh-feed").classList.toggle("on",on);
-      const v=$("veh-video");
-      if(on){ try{ v.currentTime=0; v.play().catch(()=>{}); }catch{} } else { try{ v.pause(); }catch{} }
+      if(on) playRandomVeh(); else { try{ $("veh-video").pause(); }catch{} }
     }
     $("tl-veh").onclick=()=>showVeh(!vehOn);
 
