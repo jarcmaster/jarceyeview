@@ -3265,6 +3265,24 @@
     let trafficTimer=null, trafficGraph=null, trafficKeys=[], trafficInner=[], trafficTargetN=0,
         trafficSeq=0, trafficToken=null, trackedCarId=null, trafficCenter=null, trafficRefetch=null;
     let carOrbitOn=false, carOrbitRAF=0, carOrbitHeading=0, carOrbitPitch=0, carOrbitRange=0;
+    let scopeHalf=null, refetchPending=false;   // el círculo OBJETIVO sigue al vehículo rastreado
+    function recenterScopeOnCar(c){
+      if(!scopeHalf) return;
+      survGeo={lat:c.lat, lon:c.lon};
+      survBox={ aLat:c.lat-scopeHalf.dLat, bLat:c.lat+scopeHalf.dLat, aLon:c.lon-scopeHalf.dLon, bLon:c.lon+scopeHalf.dLon };
+    }
+    function reanchorCars(){   // re-ancla cada coche al vértice más cercano del nuevo grafo
+      for(const [,c] of trafficCars){ let best=null,bd=1e9;
+        for(const k of trafficKeys){ const v=trafficGraph.get(k); const d=hav(c.lat,c.lon,v.lat,v.lon); if(d<bd){bd=d;best=k;} }
+        if(best){ const v=trafficGraph.get(best); c.cur=best; c.prev=null; c.target=pickNb(trafficGraph,best,null); c.lat=v.lat; c.lon=v.lon; } }
+    }
+    async function refetchRoadsFollow(){   // amplía las calles al seguir, SIN borrar los coches
+      const els=await fetchFeatures("veh"); if(!els.length) return;
+      const V=buildRoadGraph(els), keys=[...V.keys()].filter(k=>V.get(k).out.size||V.get(k).all.size);
+      if(!keys.length) return;
+      trafficGraph=V; trafficKeys=keys; trafficCenter={lat:survGeo.lat, lon:survGeo.lon};
+      computeTrafficInner(); reanchorCars();
+    }
     // Desplaza un punto a la derecha del rumbo (para separar carriles/sentidos)
     const offsetRight=(lat,lon,hd,m)=>{ const b=(hd+90)*Math.PI/180;
       return { lat:lat+(m*Math.cos(b))/111320, lon:lon+(m*Math.sin(b))/(111320*Math.cos(lat*Math.PI/180)||1e-6) }; };
@@ -3337,9 +3355,17 @@
         }
         const hd=c.hd||0, p=offsetRight(c.lat,c.lon,hd,c.lane);   // carril derecho (separa sentidos)
         c.ent.position=Cesium.Cartesian3.fromDegrees(p.lon,p.lat,0); c.ent.billboard.rotation=Cesium.Math.toRadians(-hd);
-        if(Cesium.Cartesian3.distance(cC, Cesium.Cartesian3.fromDegrees(c.lon,c.lat,0))>rad){   // sale del círculo → desaparece
-          const wasTracked=(trackedCarId===id); removeCar(id);
-          if(wasTracked){ showLost("veh"); cancelCarTracking(false); }
+        if(id!==trackedCarId && Cesium.Cartesian3.distance(cC, Cesium.Cartesian3.fromDegrees(c.lon,c.lat,0))>rad){   // otros salen → desaparecen
+          removeCar(id);
+        }
+      }
+      // El círculo OBJETIVO sigue al vehículo rastreado (se desplaza con él)
+      const tc=trackedCarId && trafficCars.get(trackedCarId);
+      if(tc && scopeHalf){
+        recenterScopeOnCar(tc); computeTrafficInner();
+        if(trafficCenter && !refetchPending){
+          const dd=hav(survGeo.lat, survGeo.lon, trafficCenter.lat, trafficCenter.lon);
+          if(dd > scopeRadiusM()*0.4){ refetchPending=true; refetchRoadsFollow().finally(()=>{ refetchPending=false; }); }
         }
       }
       while(trafficCars.size < trafficTargetN) spawnCar();   // mantiene el tráfico lleno
@@ -3356,12 +3382,15 @@
     function startCarTracking(c){
       cancelCarTracking(true);            // suelta el anterior (mantiene el vídeo)
       trackedCarId=c.id; c.tracked=true; styleCar(c,true);
+      // el círculo OBJETIVO seguirá a este vehículo (conserva su tamaño actual)
+      if(survBox){ scopeHalf={ dLat:Math.abs(survBox.bLat-survBox.aLat)/2, dLon:Math.abs(survBox.bLon-survBox.aLon)/2 }; }
+      trafficCenter={lat:survGeo.lat, lon:survGeo.lon};
       showVehVideo();                     // ventana de vídeo (tracking)
     }
     function cancelCarTracking(keepVideo){
       if(carOrbitOn) setCarOrbit(false);
       if(trackedCarId){ const c=trafficCars.get(trackedCarId); if(c){ c.tracked=false; styleCar(c,false); } }
-      trackedCarId=null; $("car-tag").classList.remove("on");
+      trackedCarId=null; scopeHalf=null; $("car-tag").classList.remove("on");
       if(!keepVideo){ $("veh-feed").classList.remove("on"); try{$("veh-video").pause();}catch{} }
     }
     // Seguir con la cámara + órbita suave alrededor del vehículo rastreado
