@@ -3304,7 +3304,7 @@
     async function fetchFeatures(kind){
       const r=scopeBbox(1.4), bb=`(${r.s},${r.w},${r.n},${r.e})`;
       const q = kind==="veh"
-        ? `[out:json][timeout:20];(way["highway"]${bb};way["amenity"="parking"]${bb};);out geom 600;`
+        ? `[out:json][timeout:25];(way["highway"]${bb};way["amenity"="parking"]${bb};);out geom 3000;`
         : `[out:json][timeout:20];(way["building"]${bb};way["leisure"~"park|garden|pitch|playground|recreation_ground|golf_course"]${bb};way["landuse"~"grass|recreation_ground|forest|meadow|cemetery"]${bb};);out geom 400;`;
       try{ const j=await (await fetch("https://overpass-api.de/api/interpreter",{method:"POST",body:q})).json();
         return (j.elements||[]).filter(el=>el.geometry&&el.geometry.length>1); }catch{ return []; }
@@ -3495,7 +3495,7 @@
         trafficSeq=0, trafficToken=null, trackedCarId=null, trafficCenter=null, trafficRefetch=null, trafficFree=false;
 
     // ============= MOTOR DE SIMULACIÓN DE VEHÍCULOS (agentes autónomos · datos 100% ficticios) =============
-    const SIMCFG = { MAX_SPEED:16, MIN_SPEED:1, ACCEL:0.9, DECEL:3.2, SAFE_BASE:6, REACTION:0.9, SAFE_CRIT:5,
+    const SIMCFG = { MAX_SPEED:12, MIN_SPEED:1, ACCEL:0.9, DECEL:3.2, SAFE_BASE:6, REACTION:0.9, SAFE_CRIT:5,
       P_PARK:0.004, P_REROUTE:0.006, DENSITY:1.0, LIGHT_GREEN:26, LIGHT_YELLOW:4,
       SIM_SPEED:1, WEATHER:"CLEAR", DEBUG:false, SEED:0, MAX_VEH:110, DECISION_MIN:3, DECISION_MAX:20 };
     const WEATHER_FX = { CLEAR:{spd:1,safe:1}, CLOUDY:{spd:0.96,safe:1.05}, RAIN:{spd:0.78,safe:1.5}, FOG:{spd:0.68,safe:1.7} };
@@ -3609,10 +3609,10 @@
       const V = els.length ? buildRoadGraph(els) : null;
       const keys = V ? [...V.keys()].filter(k=>V.get(k).out.size||V.get(k).all.size) : [];
       const dmul = densityByTime()*SIMCFG.DENSITY;
-      if(V && keys.length){   // tráfico por calles (direcciones correctas)
+      if(V && keys.length){   // tráfico por calles reales (direcciones correctas)
         trafficFree=false; trafficGraph=V; trafficKeys=keys; trafficCenter={lat:survGeo.lat, lon:survGeo.lon}; computeTrafficInner(); buildLights();
-        trafficTargetN = Math.round((Math.round(trafficInner.length*0.6) + 10 + rnd(20)) * dmul);
-        trafficTargetN = Math.max(8, Math.min(SIMCFG.MAX_VEH, trafficTargetN, trafficInner.length*2));
+        // llena las calles: ~1 coche por cada ~2 nodos internos, entre 30 y MAX_VEH
+        trafficTargetN = Math.round(Math.max(30, Math.min(SIMCFG.MAX_VEH, trafficInner.length*0.5)) * dmul);
       } else {   // SIEMPRE hay vehículos: si no hay calles, tráfico libre dentro del círculo
         trafficFree=true; trafficGraph=null; simLights.clear(); trafficTargetN=Math.max(8, Math.round((12+rnd(18))*dmul));
       }
@@ -3673,7 +3673,7 @@
           else if(r < 0.35){ c.cruise=c.maxSpeed*(0.45+srand()*0.55); }
         }
         // ---- velocidad deseada (crucero · clima · densidad · car-following · semáforo) ----
-        let desired=c.cruise*wx.spd*SIMCFG.DENSITY, st="DRIVING";
+        let desired=c.cruise*wx.spd, st="DRIVING";   // la densidad afecta la cantidad, no la velocidad
         if(c.hold>0){ c.hold--; desired=0; st=(c.state==="PARKED")?"PARKED":"STOPPED"; }
         else {
           c.state="DRIVING";
