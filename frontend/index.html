@@ -420,6 +420,22 @@
     .km-bar #km-msg { font-size:11px; color:#8fb4cc; }
     .km-bar #km-msg.ok { color:#5fe08a; } .km-bar #km-msg.err { color:#ff8080; }
 
+    /* Ventana de etiqueta / cancelar rastreo del vehículo */
+    #car-tag { position:absolute; z-index:35; top:120px; left:50%; transform:translateX(-50%); width:250px; display:none;
+      background:rgba(6,16,26,.97); border:1px solid #2a6a8f; border-radius:12px; overflow:hidden;
+      box-shadow:0 8px 30px rgba(0,0,0,.6); backdrop-filter:blur(8px); font-family:"Consolas",monospace; }
+    #car-tag.on { display:block; }
+    .ct-head { display:flex; align-items:center; gap:7px; padding:9px 12px; cursor:move; font-size:12px; letter-spacing:1px;
+      color:#7fd3ff; font-weight:600; background:rgba(127,211,255,.08); }
+    .ct-head .ct-x { margin-left:auto; cursor:pointer; color:#ffdada; }
+    .ct-body { padding:11px 12px; }
+    .ct-body label { display:block; font-size:11px; color:#9cc; margin-bottom:4px; }
+    #ct-input { width:100%; box-sizing:border-box; background:#0b1622; color:#dff; border:1px solid #2a4a63;
+      border-radius:7px; padding:8px 10px; font-size:12px; }
+    #ct-input:focus { outline:none; border-color:#3aa0ff; }
+    .ct-row { display:flex; gap:8px; margin-top:10px; }
+    .ct-row button { margin:0; padding:8px; font-size:11px; }
+
     /* Aviso animado de objetivo perdido */
     #lost-toast { position:absolute; z-index:44; top:44%; left:50%; transform:translate(-50%,-50%) scale(.8);
       display:none; pointer-events:none; font-family:"Consolas",monospace; text-align:center; opacity:0; }
@@ -947,6 +963,17 @@
     <div class="shv-info"></div>
   </div>
 
+  <!-- Ventana de etiqueta / cancelar rastreo del vehículo -->
+  <div id="car-tag">
+    <div class="ct-head"><span data-ic="crosshair"></span> <span class="ct-title"></span> <span class="ct-x" title="Cerrar">✕</span></div>
+    <div class="ct-body">
+      <label>Etiqueta del vehículo</label>
+      <input id="ct-input" type="text" placeholder="p.ej. SOSPECHOSO 1" maxlength="24" spellcheck="false" autocomplete="off">
+      <div class="ct-row"><button id="ct-apply"><span data-ic="check"></span> Aplicar tag</button>
+        <button id="ct-cancel" class="stop"><span data-ic="x"></span> Cancelar rastreo</button></div>
+    </div>
+  </div>
+
   <!-- Aviso animado de objetivo perdido -->
   <div id="lost-toast">
     <div class="lost-box">
@@ -1163,6 +1190,7 @@
     { const pf=$("people-feed"); if(pf) makeDraggable(pf, pf.querySelector(".pf-head")); }   // seguimiento de personas: arrastrar por su encabezado
     { const sf=$("struct-feed"); if(sf) makeDraggable(sf, sf.querySelector(".pf-head")); }   // estructuras: arrastrar por su encabezado
     { const vf=$("veh-feed"); if(vf) makeDraggable(vf, vf.querySelector(".pf-head")); }       // vehículos: arrastrar por su encabezado
+    { const ct=$("car-tag"); if(ct) makeDraggable(ct, ct.querySelector(".ct-head")); }         // etiqueta de vehículo: arrastrar por su encabezado
     { const g=$("wc-gallery"); if(g) makeDraggable(g, g.querySelector(".wcg-head")); }
 
     // Coloca una ventana en un area en blanco de la pantalla, sin caer encima de otra ventana visible
@@ -1269,6 +1297,7 @@
       } catch {}
       if(typeof cullShips==="function") cullShips();   // oculta barcos del lado opuesto del globo
       if(typeof cullFires==="function") cullFires();   // idem incendios FIRMS
+      if(typeof cullCars==="function") cullCars();     // idem tráfico de vehículos
     }
     viewer.camera.percentageChanged = 0.15;
     viewer.camera.changed.addEventListener(cullMarkers);
@@ -1541,6 +1570,7 @@
            <div class="rmeta" style="margin-top:6px;color:#7a97ad">Fuente: OpenStreetMap / DeFlock (ubicación pública)</div>`);
         return;
       }
+      if (ent && typeof ent.id === "string" && ent.id.startsWith("car:")) { handleCarClick(ent.id); return; }
       if (ent && typeof ent.id === "string" && ent.id.startsWith("fire:")) {
         const f = fireById.get(ent.id);
         if(f) showPopup("🔥 Incendio activo (NASA FIRMS)",
@@ -2801,13 +2831,14 @@
       clearInterval(survSigTimer); survSigTimer=setInterval(()=>{ paintSurvSig(); paintSurvData(); }, 600);
       if(!survHooked){ viewer.scene.preRender.addEventListener(survTick); survHooked=true; }
       survTick();
-      if(typeof vehOn!=="undefined" && vehOn) startWander("veh");         // reaparecen sobre la zona nueva
+      if(typeof vehOn!=="undefined" && vehOn) startTraffic();             // tráfico sobre la zona nueva
       if(typeof peopleOn!=="undefined" && peopleOn) startWander("person");
     }
     function stopSurv(){
       survActive=false; survGeo=null; survBox=null;
       clearInterval(survNumTimer); survNumTimer=null; clearInterval(survSigTimer); survSigTimer=null;
-      if(typeof stopWander==="function"){ stopWander("veh"); stopWander("person"); }
+      if(typeof stopTraffic==="function") stopTraffic();
+      if(typeof stopWander==="function") stopWander("person");
       $("surv-hud").style.display="none"; $("surv-fx").style.display="none";
       $("scope-dark").style.display="none"; $("scope-optic").style.display="none"; $("cam-overlay").classList.remove("surv-on");
     }
@@ -3041,8 +3072,8 @@
     $("veh-video").addEventListener("ended", ()=>{ if(vehOn) playRandomVeh(); });   // al terminar, otro clip al azar
     function showVeh(on){
       vehOn=on; $("tl-veh").classList.toggle("active",on);
-      if(on){ if(survActive) startWander("veh"); }   // el vídeo aparece SOLO cuando se coloca el vehículo (startVehOnRoads)
-      else { stopWander("veh"); $("veh-feed").classList.remove("on"); try{ $("veh-video").pause(); }catch{} }
+      if(on){ if(survActive) startTraffic(); }   // genera tráfico dentro del círculo; el vídeo abre al hacer clic en un coche
+      else { stopTraffic(); }
     }
     $("tl-veh").onclick=()=>showVeh(!vehOn);
 
@@ -3209,6 +3240,98 @@
       vehOn=false; $("tl-veh").classList.remove("active"); $("veh-feed").classList.remove("on"); try{$("veh-video").pause();}catch{} }
     function showVehVideo(){ $("veh-feed").classList.add("on"); playRandomVeh(); }
 
+    // ================= Tráfico de vehículos dentro del círculo del OBJETIVO =================
+    const trafficCars=new Map();   // "car:N" -> {id,num,plate,tag,cur,prev,target,lat,lon,speed,ent,tracked}
+    let trafficTimer=null, trafficGraph=null, trafficKeys=[], trafficTargetN=0, trafficSeq=0, trafficToken=null, trackedCarId=null;
+    const PLATE_L="ABCDEFGHJKLMNPRSTUVWXYZ";
+    const randPlate=()=>{ let s=""; for(let i=0;i<3;i++) s+=PLATE_L[rnd(PLATE_L.length)]; return s+"-"+String(rnd(900)+100); };
+    const carLabel=(c)=> (c.tag?("["+c.tag+"] "):"") + "V"+c.num+" · "+c.plate + (c.tracked?"  ◉":"");
+    async function startTraffic(){
+      if(!survActive||!survGeo) return;
+      stopTraffic();
+      const token={}; trafficToken=token;
+      const els=await fetchFeatures("veh");
+      if(trafficToken!==token || !survActive) return;
+      if(!els.length){ vehGone(); return; }
+      const V=buildRoadGraph(els);
+      trafficKeys=[...V.keys()].filter(k=>V.get(k).out.size||V.get(k).all.size);
+      if(!trafficKeys.length){ vehGone(); return; }
+      trafficGraph=V; trafficTargetN = 6 + rnd(10);   // cantidad aleatoria
+      for(let i=0;i<trafficTargetN;i++) spawnCar();
+      trafficTimer=setInterval(tickTraffic, 120);
+    }
+    function stopTraffic(){
+      trafficToken={}; if(trafficTimer){ clearInterval(trafficTimer); trafficTimer=null; }
+      for(const [,c] of trafficCars){ if(c.ent) viewer.entities.remove(c.ent); }
+      trafficCars.clear(); trafficGraph=null; cancelCarTracking(false);
+    }
+    function spawnCar(){
+      if(!trafficGraph) return;
+      const rad=scopeRadiusM(), cC=Cesium.Cartesian3.fromDegrees(survGeo.lon,survGeo.lat,0);
+      let cur=null;
+      for(let t=0;t<25;t++){ const k=trafficKeys[rnd(trafficKeys.length)], v=trafficGraph.get(k);
+        if(Cesium.Cartesian3.distance(cC, Cesium.Cartesian3.fromDegrees(v.lon,v.lat,0))<=rad*0.8){ cur=k; break; } }
+      if(!cur) return;
+      const v=trafficGraph.get(cur), num=(++trafficSeq), id="car:"+num;
+      const car={ id, num, plate:randPlate(), tag:"", cur, prev:null, target:pickNb(trafficGraph,cur,null),
+        lat:v.lat, lon:v.lon, speed:(2.5+Math.random()*4), tracked:false };
+      car.ent=viewer.entities.add({ id, position:Cesium.Cartesian3.fromDegrees(car.lon,car.lat,0),
+        billboard:{ image:CAR_IMG, width:32, height:32, rotation:0, alignedAxis:Cesium.Cartesian3.ZERO,
+          disableDepthTestDistance:Number.POSITIVE_INFINITY },
+        label:{ text:carLabel(car), font:"bold 9px monospace", pixelOffset:new Cesium.Cartesian2(0,-23),
+          fillColor:Cesium.Color.fromCssColorString("#5fe08a"), showBackground:true,
+          backgroundColor:Cesium.Color.fromCssColorString("rgba(0,0,0,.6)"), disableDepthTestDistance:Number.POSITIVE_INFINITY,
+          distanceDisplayCondition:new Cesium.DistanceDisplayCondition(0,60000) } });
+      trafficCars.set(id, car);
+    }
+    function removeCar(id){ const c=trafficCars.get(id); if(c&&c.ent) viewer.entities.remove(c.ent); trafficCars.delete(id); }
+    function tickTraffic(){
+      const V=trafficGraph; if(!V) return;
+      const rad=scopeRadiusM(), cC=Cesium.Cartesian3.fromDegrees(survGeo.lon,survGeo.lat,0);
+      for(const [id,c] of trafficCars){
+        if(!c.target){ c.target=pickNb(V,c.cur,c.prev); if(!c.target) continue; }
+        const tv=V.get(c.target); if(!tv){ c.target=null; continue; }
+        const d=hav(c.lat,c.lon,tv.lat,tv.lon), step=c.speed*0.12, hd=bearing(c.lat,c.lon,tv.lat,tv.lon);
+        if(d<=step){ c.lat=tv.lat; c.lon=tv.lon; c.prev=c.cur; c.cur=c.target; c.target=pickNb(V,c.cur,c.prev); }
+        else { c.lat+=(step*Math.cos(hd*Math.PI/180))/111320; c.lon+=(step*Math.sin(hd*Math.PI/180))/(111320*Math.cos(c.lat*Math.PI/180)||1e-6); }
+        c.ent.position=Cesium.Cartesian3.fromDegrees(c.lon,c.lat,0); c.ent.billboard.rotation=Cesium.Math.toRadians(-hd);
+        if(Cesium.Cartesian3.distance(cC, Cesium.Cartesian3.fromDegrees(c.lon,c.lat,0))>rad){   // sale del círculo → desaparece
+          const wasTracked=(trackedCarId===id); removeCar(id);
+          if(wasTracked){ showLost("veh"); cancelCarTracking(false); }
+        }
+      }
+      while(trafficCars.size < trafficTargetN) spawnCar();   // repone para mantener el tráfico
+    }
+    function cullCars(){ try{ _occ.cameraPosition=viewer.camera.positionWC; const t=viewer.clock.currentTime;
+      for(const [,c] of trafficCars){ const p=c.ent.position.getValue(t); if(p) c.ent.show=_occ.isPointVisible(p); } }catch{} }
+    // Clic en un vehículo: 1º trackear (vídeo) · 2º ventana de etiqueta/cancelar
+    function handleCarClick(id){ const c=trafficCars.get(id); if(!c) return;
+      if(trackedCarId!==id) startCarTracking(c); else openCarTag(c); }
+    function styleCar(c, on){ if(!c||!c.ent) return;
+      c.ent.billboard.width=on?46:32; c.ent.billboard.height=on?46:32;
+      c.ent.billboard.color = on?Cesium.Color.fromCssColorString("#ff5252"):Cesium.Color.WHITE;
+      c.ent.label.fillColor = Cesium.Color.fromCssColorString(on?"#ff9090":"#5fe08a"); c.ent.label.text=carLabel(c); }
+    function startCarTracking(c){
+      cancelCarTracking(true);            // suelta el anterior (mantiene el vídeo)
+      trackedCarId=c.id; c.tracked=true; styleCar(c,true);
+      showVehVideo();                     // ventana de vídeo (tracking)
+    }
+    function cancelCarTracking(keepVideo){
+      if(trackedCarId){ const c=trafficCars.get(trackedCarId); if(c){ c.tracked=false; styleCar(c,false); } }
+      trackedCarId=null; $("car-tag").classList.remove("on");
+      if(!keepVideo){ $("veh-feed").classList.remove("on"); try{$("veh-video").pause();}catch{} }
+    }
+    function openCarTag(c){
+      const w=$("car-tag"); w.dataset.car=c.id;
+      w.querySelector(".ct-title").textContent=`V${c.num} · ${c.plate}`;
+      $("ct-input").value=c.tag||"";
+      const wasHidden=getComputedStyle(w).display==="none"; w.classList.add("on"); if(wasHidden) placeFree(w);
+    }
+    $("ct-apply").onclick=()=>{ const c=trafficCars.get($("car-tag").dataset.car); if(!c) return;
+      c.tag=$("ct-input").value.trim().toUpperCase(); styleCar(c, c.tracked); };
+    $("ct-cancel").onclick=()=>{ cancelCarTracking(false); };
+    $("car-tag").querySelector(".ct-x").onclick=()=>$("car-tag").classList.remove("on");
+
     // --- Visor de captura a pantalla completa (con detalles) ---
     function openShotView(i){
       const s=spyShots[i]; if(!s) return; const dt=new Date(s.time).toLocaleString();
@@ -3324,7 +3447,12 @@
     function finalizeSpy(a,b){
       const w=Math.abs(a.x-b.x),h=Math.abs(a.y-b.y);
       const gA=screenToGeo(a.x,a.y), gB=screenToGeo(b.x,b.y);
-      if(w<12||h<12||!gA||!gB){   // clic accidental: no destruir la vigilancia en curso
+      if(w<12||h<12||!gA||!gB){   // clic (sin arrastrar): ¿sobre un vehículo? → tracking; si no, re-armar
+        try{ const rect=viewer.scene.canvas.getBoundingClientRect();
+          const picked=viewer.scene.pick(new Cesium.Cartesian2(b.x-rect.left, b.y-rect.top));
+          const pid=picked&&picked.id&&picked.id.id;
+          if(typeof pid==="string" && pid.startsWith("car:")){ if(objetivoOn){ $("spy-box").style.display="none"; armMark("zoom"); } handleCarClick(pid); return; }
+        }catch{}
         if(objetivoOn){ $("spy-box").style.display="none"; armMark("zoom"); } else endSpy(); return; }
       if(spyPurpose==="live"){   // LIVE ENV: recortar el recuadro y analizarlo con IA
         const l=Math.min(a.x,b.x), t=Math.min(a.y,b.y);
