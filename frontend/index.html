@@ -848,7 +848,7 @@
     <div class="pf-head"><span class="pf-live">●</span> SEGUIMIENTO DE PERSONAS <span class="pf-count">TRK 0</span></div>
     <div class="pf-body">
       <div id="pf-embed"></div>
-      <div class="pf-hud"><span>◉ AI TRACK</span><a class="pf-yt" href="https://www.youtube.com/shorts/wXDXFysTJIk" target="_blank" rel="noopener">YouTube ↗</a></div>
+      <div class="pf-hud"><span>◉ AI TRACK</span></div>
     </div>
   </div>
 
@@ -2746,7 +2746,7 @@
       const pf=$("people-feed"); pf.classList.toggle("on",on);
       const emb=$("pf-embed");
       if(on){
-        emb.innerHTML=`<iframe src="https://www.youtube.com/embed/${PF_YT_ID}?autoplay=1&mute=1&loop=1&playlist=${PF_YT_ID}&controls=0&disablekb=1&modestbranding=1&fs=0&rel=0&playsinline=1" `+
+        emb.innerHTML=`<iframe src="https://www.youtube.com/embed/${PF_YT_ID}?autoplay=1&mute=1&loop=1&playlist=${PF_YT_ID}&controls=0&disablekb=1&modestbranding=1&fs=0&rel=0&playsinline=1&cc_load_policy=0&iv_load_policy=3" `+
           `allow="autoplay; encrypted-media; picture-in-picture" tabindex="-1"></iframe>`;
         clearInterval(pfFpsTimer);
         pfFpsTimer=setInterval(()=>{ const c=document.querySelector(".pf-count"); if(c) c.textContent="TRK "+(3+rnd(3)); }, 900);
