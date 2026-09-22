@@ -381,6 +381,29 @@
     .shv-info b { color:#dff; }
     .shot img { cursor:zoom-in; }
     #sm-list { flex:1; min-height:0; }   /* asegura el scroll dentro del modal */
+
+    /* Aviso animado de objetivo perdido */
+    #lost-toast { position:absolute; z-index:44; top:44%; left:50%; transform:translate(-50%,-50%) scale(.8);
+      display:none; pointer-events:none; font-family:"Consolas",monospace; text-align:center; opacity:0; }
+    #lost-toast.on { display:block; animation:lostin .35s cubic-bezier(.2,1.4,.4,1) forwards, lostshake 2.6s steps(2) .35s infinite; }
+    #lost-toast.out { animation:lostout .4s ease forwards !important; }
+    @keyframes lostin { to { opacity:1; transform:translate(-50%,-50%) scale(1); } }
+    @keyframes lostout { to { opacity:0; transform:translate(-50%,-50%) scale(1.08); } }
+    @keyframes lostshake { 0%,100%{margin-left:0} 50%{margin-left:2px} }
+    .lost-box { background:rgba(30,4,8,.82); border:2px solid #ff3b3b; border-radius:12px; padding:20px 34px;
+      box-shadow:0 0 40px rgba(255,59,59,.45), inset 0 0 30px rgba(255,59,59,.2); backdrop-filter:blur(3px); }
+    .lost-title { font-size:30px; font-weight:800; letter-spacing:4px; color:#ff5252; position:relative;
+      text-shadow:0 0 14px rgba(255,59,59,.7); animation:lostglitch 1.1s steps(2) infinite; }
+    .lost-title::before, .lost-title::after { content:attr(data-txt); position:absolute; left:0; top:0; width:100%; }
+    .lost-title::before { color:#00e5ff; animation:lostg1 .9s steps(2) infinite; opacity:.7; }
+    .lost-title::after { color:#ff00d4; animation:lostg2 1.3s steps(2) infinite; opacity:.6; }
+    @keyframes lostglitch { 50%{opacity:.85} }
+    @keyframes lostg1 { 0%,100%{clip-path:inset(0 0 82% 0);transform:translate(-2px,0)} 50%{clip-path:inset(60% 0 0 0);transform:translate(2px,0)} }
+    @keyframes lostg2 { 0%,100%{clip-path:inset(30% 0 40% 0);transform:translate(2px,0)} 50%{clip-path:inset(0 0 60% 0);transform:translate(-2px,0)} }
+    .lost-sub { margin-top:8px; font-size:12px; letter-spacing:3px; color:#ffb4b4; animation:camblink 1.1s steps(1) infinite; }
+    .lost-bar { margin-top:12px; height:4px; background:rgba(255,80,80,.2); border-radius:3px; overflow:hidden; }
+    .lost-bar i { display:block; height:100%; width:0; background:#ff5252; box-shadow:0 0 8px #ff5252; animation:lostbar 3.4s linear forwards; }
+    @keyframes lostbar { to { width:100%; } }
     @keyframes survjit { 0%,90%,100%{filter:drop-shadow(0 0 5px rgba(120,220,255,.4))}
       93%{filter:drop-shadow(1.6px 0 0 rgba(255,45,45,.55)) drop-shadow(-1.6px 0 0 rgba(45,255,255,.55))} }
     .scope-ring { position:absolute; inset:0; border-radius:50%; border:2px solid rgba(143,227,255,.75);
@@ -882,6 +905,15 @@
     <span class="shv-close" title="Cerrar (Esc)">✕</span>
     <div class="shv-stage"><img class="shv-img" alt=""></div>
     <div class="shv-info"></div>
+  </div>
+
+  <!-- Aviso animado de objetivo perdido -->
+  <div id="lost-toast">
+    <div class="lost-box">
+      <div class="lost-title" data-txt="OBJETIVO PERDIDO">OBJETIVO PERDIDO</div>
+      <div class="lost-sub">▚ SEÑAL PERDIDA · FUERA DEL ÁREA ▚</div>
+      <div class="lost-bar"><i></i></div>
+    </div>
   </div>
 
   <div id="wc-player"></div>
@@ -2613,10 +2645,13 @@
       clearInterval(survSigTimer); survSigTimer=setInterval(()=>{ paintSurvSig(); paintSurvData(); }, 600);
       if(!survHooked){ viewer.scene.preRender.addEventListener(survTick); survHooked=true; }
       survTick();
+      if(typeof vehOn!=="undefined" && vehOn) startWander("veh");         // reaparecen sobre la zona nueva
+      if(typeof peopleOn!=="undefined" && peopleOn) startWander("person");
     }
     function stopSurv(){
       survActive=false; survGeo=null; survBox=null;
       clearInterval(survNumTimer); survNumTimer=null; clearInterval(survSigTimer); survSigTimer=null;
+      if(typeof stopWander==="function"){ stopWander("veh"); stopWander("person"); }
       $("surv-hud").style.display="none"; $("surv-fx").style.display="none";
       $("scope-dark").style.display="none"; $("scope-optic").style.display="none"; $("cam-overlay").classList.remove("surv-on");
     }
@@ -2789,6 +2824,7 @@
       peopleOn=on; $("tl-people").classList.toggle("active",on);
       $("people-feed").classList.toggle("on",on);
       $("pf-embed").innerHTML = on ? ytEmbed("wXDXFysTJIk") : "";   // vaciar detiene el vídeo
+      if(on){ if(survActive) startWander("person"); } else stopWander("person");
     }
     $("tl-people").onclick=()=>showPeople(!peopleOn);
     // Estructuras (derecha)
@@ -2809,8 +2845,74 @@
       vehOn=on; $("tl-veh").classList.toggle("active",on);
       $("veh-feed").classList.toggle("on",on);
       if(on) playRandomVeh(); else { try{ $("veh-video").pause(); }catch{} }
+      if(on){ if(survActive) startWander("veh"); } else stopWander("veh");
     }
     $("tl-veh").onclick=()=>showVeh(!vehOn);
+
+    // --- Objetos animados (vehículo/persona) que deambulan dentro del área del OBJETIVO ---
+    const CAR_IMG = "data:image/svg+xml,"+encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">'+
+      '<circle cx="22" cy="22" r="18" fill="none" stroke="#5fe08a" stroke-width="1.5" stroke-dasharray="4 4"/>'+
+      '<g fill="#7fd3ff" stroke="#04101c" stroke-width="1"><rect x="15" y="10" width="14" height="24" rx="4"/>'+
+      '<rect x="17" y="13" width="10" height="6" rx="1.5" fill="#04101c"/><rect x="17" y="25" width="10" height="5" rx="1.5" fill="#04101c"/></g></svg>');
+    const PERSON_IMG = "data:image/svg+xml,"+encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="38" height="38" viewBox="0 0 38 38">'+
+      '<circle cx="19" cy="19" r="15" fill="none" stroke="#ffd24a" stroke-width="1.5" stroke-dasharray="3 4"/>'+
+      '<g fill="#ffd24a" stroke="#04101c" stroke-width="1"><circle cx="19" cy="12" r="3.4"/>'+
+      '<path d="M19 15.5c-3 0-4 3-4 6.5v6h2.4v-5h3.2v5H23v-6c0-3.5-1-6.5-4-6.5z"/></g></svg>');
+    const wanderers={veh:null, person:null};
+    function scopeRadiusM(){
+      if(!survGeo||!survBox) return 200;
+      const c=Cesium.Cartesian3.fromDegrees(survGeo.lon,survGeo.lat,0); let r=0;
+      [[survBox.aLon,survBox.aLat],[survBox.bLon,survBox.bLat],[survBox.aLon,survBox.bLat],[survBox.bLon,survBox.aLat]]
+        .forEach(([lo,la])=>{ r=Math.max(r, Cesium.Cartesian3.distance(c, Cesium.Cartesian3.fromDegrees(lo,la,0))); });
+      return Math.max(60, r*0.94);
+    }
+    function startWander(kind){
+      if(!survActive||!survGeo) return;
+      stopWander(kind);
+      const radius=scopeRadiusM(), img=kind==="veh"?CAR_IMG:PERSON_IMG;
+      const speed = kind==="veh" ? (3+Math.random()*3) : (1+Math.random()*0.7);   // m/s (baja velocidad)
+      const a0=Math.random()*Math.PI*2, d0=radius*0.35*Math.random();
+      const st={ lat:survGeo.lat+(d0*Math.cos(a0))/111320,
+                 lon:survGeo.lon+(d0*Math.sin(a0))/(111320*Math.cos(survGeo.lat*Math.PI/180)||1e-6),
+                 heading:Math.random()*360, speed };
+      const ent=viewer.entities.add({ position:Cesium.Cartesian3.fromDegrees(st.lon,st.lat,0),
+        billboard:{ image:img, width:kind==="veh"?40:32, height:kind==="veh"?40:32,
+          rotation:Cesium.Math.toRadians(-st.heading), alignedAxis:Cesium.Cartesian3.ZERO,
+          scale:new Cesium.CallbackProperty(()=>1+0.07*Math.sin(performance.now()/280),false),
+          disableDepthTestDistance:Number.POSITIVE_INFINITY },
+        label:{ text:kind==="veh"?"TARGET-V":"TARGET-P", font:"10px monospace", pixelOffset:new Cesium.Cartesian2(0,-26),
+          fillColor:Cesium.Color.fromCssColorString(kind==="veh"?"#5fe08a":"#ffd24a"), showBackground:true,
+          backgroundColor:Cesium.Color.fromCssColorString("rgba(0,0,0,.55)"), disableDepthTestDistance:Number.POSITIVE_INFINITY } });
+      const cCart=Cesium.Cartesian3.fromDegrees(survGeo.lon,survGeo.lat,0);
+      const timer=setInterval(()=>{
+        const dt=0.12;
+        if(Math.random()<0.06) st.heading += (Math.random()*70-35);   // giros ocasionales (simula calles)
+        const dist=st.speed*dt, b=st.heading*Math.PI/180;
+        st.lat += (dist*Math.cos(b))/111320;
+        st.lon += (dist*Math.sin(b))/(111320*Math.cos(st.lat*Math.PI/180)||1e-6);
+        ent.position=Cesium.Cartesian3.fromDegrees(st.lon,st.lat,0);
+        ent.billboard.rotation=Cesium.Math.toRadians(-st.heading);
+        const dc=Cesium.Cartesian3.distance(cCart, Cesium.Cartesian3.fromDegrees(st.lon,st.lat,0));
+        if(dc>radius*0.86 && Math.random()<0.4) st.heading += 130+Math.random()*100;   // suele volver (deambula dentro)
+        if(dc>radius){ stopWander(kind); showLost(kind);
+          setTimeout(()=>{ const on = kind==="veh"?vehOn:peopleOn; if(on && survActive) startWander(kind); }, 4200); }   // reaparece otro
+      }, 120);
+      wanderers[kind]={ent,timer};
+    }
+    function stopWander(kind){ const w=wanderers[kind]; if(!w) return; clearInterval(w.timer);
+      if(w.ent) viewer.entities.remove(w.ent); wanderers[kind]=null; }
+    function showLost(kind){
+      const t=$("lost-toast"), title=kind==="veh"?"VEHÍCULO PERDIDO":"PERSONA PERDIDA";
+      const el=t.querySelector(".lost-title"); el.textContent=title; el.dataset.txt=title;
+      t.classList.remove("out"); t.classList.remove("on"); void t.offsetWidth; t.classList.add("on");
+      clearTimeout(t._h); t._h=setTimeout(()=>{ t.classList.add("out"); setTimeout(()=>t.classList.remove("on","out"), 400); }, 3400);
+      try{ const ac=ensureAudio(); if(ac){ const o=ac.createOscillator(),g=ac.createGain(); o.type="sawtooth";
+        o.frequency.setValueAtTime(300,ac.currentTime); o.frequency.exponentialRampToValueAtTime(70,ac.currentTime+0.5);
+        g.gain.setValueAtTime(0.0001,ac.currentTime); g.gain.exponentialRampToValueAtTime(0.13,ac.currentTime+0.03); g.gain.exponentialRampToValueAtTime(0.0001,ac.currentTime+0.55);
+        o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime+0.6); } }catch{}
+    }
 
     // --- Visor de captura a pantalla completa (con detalles) ---
     function openShotView(i){
