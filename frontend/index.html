@@ -334,6 +334,10 @@
     #veh-feed { right:12px; top:130px; }
     #people-feed.on, #struct-feed.on, #veh-feed.on { display:block; }
     #veh-feed .pf-body { height:176px; }
+    /* Selección de área para ESTRUCTURAS */
+    #struct-cap { position:absolute; inset:0; z-index:29; cursor:crosshair; }
+    #struct-selbox { position:absolute; display:none; border:1.5px dashed #7fd3ff; background:rgba(127,211,255,.14);
+      box-shadow:0 0 0 100vmax rgba(0,0,0,.32); }
     #veh-video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; pointer-events:none; }
     .pf-head { display:flex; align-items:center; gap:6px; padding:7px 10px; font-size:11px; letter-spacing:1px;
       color:#7fd3ff; font-weight:600; background:rgba(127,211,255,.08); }
@@ -2791,7 +2795,7 @@
       document.querySelectorAll("#spy-tools .stool").forEach(b=>b.classList.remove("active"));
       if(hoverOn) setHover(false);
       if(typeof peopleOn!=="undefined" && peopleOn) showPeople(false);
-      if(typeof structOn!=="undefined" && structOn) showStruct(false);
+      if(typeof structOn!=="undefined" && (structOn||structSelecting)) showStruct(false);
       if(typeof vehOn!=="undefined" && vehOn) showVeh(false);
       if(opticMode){ opticMode=""; const o=$("scope-optic"); o.style.backdropFilter=""; o.style.webkitBackdropFilter=""; o.style.display="none";
         document.querySelectorAll("#sub-optic .cbtn").forEach(b=>b.classList.remove("active")); }
@@ -2827,14 +2831,46 @@
       if(on){ if(survActive) startWander("person"); } else stopWander("person");
     }
     $("tl-people").onclick=()=>showPeople(!peopleOn);
-    // Estructuras (derecha)
-    let structOn=false;
-    function showStruct(on){
-      structOn=on; $("tl-struct").classList.toggle("active",on);
-      $("struct-feed").classList.toggle("on",on);
-      $("ss-embed").innerHTML = on ? ytEmbed("QlokeZrqtJM") : "";
+    // Estructuras (derecha) — pide seleccionar un área antes de mostrar el vídeo
+    let structOn=false, structSelecting=false, structCap=null;
+    function openStructVideo(rect){
+      structOn=true; $("tl-struct").classList.add("active");
+      const sf=$("struct-feed");
+      if(rect){ sf.style.left=Math.max(8, Math.min(innerWidth-250, rect.right+10))+"px";
+        sf.style.top=Math.max(52, Math.min(innerHeight-260, rect.top))+"px"; sf.style.right="auto"; sf.style.bottom="auto"; }
+      sf.classList.add("on"); $("ss-embed").innerHTML=ytEmbed("QlokeZrqtJM");
     }
-    $("tl-struct").onclick=()=>showStruct(!structOn);
+    function cancelStructSelect(){ structSelecting=false;
+      if(structCap){ structCap.remove(); structCap=null; }
+      $("spy-hint").style.display="none"; $("spy-hint").textContent="◎ ARRASTRA PARA MARCAR LA ZONA (repetible) · ESC PARA SALIR";
+      if(!structOn) $("tl-struct").classList.remove("active");
+    }
+    function selectStructArea(){
+      structSelecting=true; $("tl-struct").classList.add("active");
+      $("spy-hint").textContent="◎ ARRASTRA PARA SELECCIONAR EL ÁREA DE ESTRUCTURAS · ESC PARA CANCELAR";
+      $("spy-hint").style.display="block";
+      const cap=document.createElement("div"); cap.id="struct-cap"; structCap=cap;
+      const box=document.createElement("div"); box.id="struct-selbox"; cap.appendChild(box); document.body.appendChild(cap);
+      let down=false, a=null;
+      const draw=(p,q)=>{ box.style.left=Math.min(p.x,q.x)+"px"; box.style.top=Math.min(p.y,q.y)+"px";
+        box.style.width=Math.abs(p.x-q.x)+"px"; box.style.height=Math.abs(p.y-q.y)+"px"; };
+      const mm=(e)=>{ if(down) draw(a,{x:e.clientX,y:e.clientY}); };
+      const mu=(e)=>{ if(!down) return; down=false;
+        window.removeEventListener("mousemove",mm); window.removeEventListener("mouseup",mu);
+        const b={x:e.clientX,y:e.clientY}, rect={left:Math.min(a.x,b.x),top:Math.min(a.y,b.y),right:Math.max(a.x,b.x),bottom:Math.max(a.y,b.y)};
+        const ok=(rect.right-rect.left)>10 && (rect.bottom-rect.top)>10;
+        cancelStructSelect(); openStructVideo(ok?rect:null);
+      };
+      cap.addEventListener("mousedown",(e)=>{ if(e.button!==0)return; down=true; a={x:e.clientX,y:e.clientY};
+        box.style.display="block"; draw(a,a); window.addEventListener("mousemove",mm); window.addEventListener("mouseup",mu); });
+    }
+    function showStruct(on){
+      if(on){ if(structOn||structSelecting) return; selectStructArea(); }
+      else { structOn=false; if(structCap){ structCap.remove(); structCap=null; } structSelecting=false;
+        $("tl-struct").classList.remove("active"); $("struct-feed").classList.remove("on"); $("ss-embed").innerHTML="";
+        $("spy-hint").style.display="none"; }
+    }
+    $("tl-struct").onclick=()=>{ (structOn||structSelecting) ? showStruct(false) : showStruct(true); };
     // Rastreo de vehículos (vídeos locales, mudo, no interactivo) — alterna al azar entre los clips
     let vehOn=false;
     const VEH_VIDEOS=["assets/vehicle-tracking.mp4","assets/lateral-tracking.mp4"];
@@ -2900,7 +2936,7 @@
         ? `[out:json][timeout:20];(way["highway"]${bb};way["amenity"="parking"]${bb};);out geom 600;`
         : `[out:json][timeout:20];(way["building"]${bb};way["leisure"~"park|garden|pitch|playground|recreation_ground|golf_course"]${bb};way["landuse"~"grass|recreation_ground|forest|meadow|cemetery"]${bb};);out geom 400;`;
       try{ const j=await (await fetch("https://overpass-api.de/api/interpreter",{method:"POST",body:q})).json();
-        return (j.elements||[]).map(el=>el.geometry).filter(g=>g&&g.length>1); }catch{ return []; }
+        return (j.elements||[]).filter(el=>el.geometry&&el.geometry.length>1); }catch{ return []; }
     }
     async function startWander(kind){
       if(!survActive||!survGeo) return;
@@ -2912,17 +2948,26 @@
     }
     function stopWander(kind){ wanderTokens[kind]={};   // invalida cargas pendientes
       const w=wanderers[kind]; if(!w) return; clearInterval(w.timer); if(w.ent) viewer.entities.remove(w.ent); wanderers[kind]=null; }
-    // --- Vehículo: siempre sobre calles / parking (grafo de vías) ---
-    function buildRoadGraph(roads){ const V=new Map(); const key=(p)=>p.lat.toFixed(6)+","+p.lon.toFixed(6);
-      roads.forEach(rd=>{ for(let i=0;i<rd.length;i++){ const k=key(rd[i]); if(!V.has(k)) V.set(k,{lat:rd[i].lat,lon:rd[i].lon,nb:new Set()});
-        if(i>0){ const k0=key(rd[i-1]); V.get(k).nb.add(k0); if(V.has(k0)) V.get(k0).nb.add(k); } } });
+    // --- Vehículo: siempre sobre calles / parking, respetando el sentido (grafo dirigido) ---
+    const rndi=(n)=>Math.floor(Math.random()*n);
+    function buildRoadGraph(els){ const V=new Map(); const key=(p)=>p.lat.toFixed(6)+","+p.lon.toFixed(6);
+      const ensure=(p)=>{ const k=key(p); if(!V.has(k)) V.set(k,{lat:p.lat,lon:p.lon,out:new Set(),all:new Set()}); return k; };
+      els.forEach(el=>{ const g=el.geometry; if(!g||g.length<2) return;
+        let ow=String((el.tags&&el.tags.oneway)||"").toLowerCase();
+        const oneway=(ow==="yes"||ow==="true"||ow==="1"||ow==="-1"||ow==="reverse");
+        const forward=!(ow==="-1"||ow==="reverse");
+        for(let i=1;i<g.length;i++){ const a=ensure(g[i-1]), b=ensure(g[i]);
+          V.get(a).all.add(b); V.get(b).all.add(a);
+          if(oneway){ if(forward) V.get(a).out.add(b); else V.get(b).out.add(a); }
+          else { V.get(a).out.add(b); V.get(b).out.add(a); } } });
       return V; }
-    const pickNb=(V,cur,prev)=>{ const nb=[...V.get(cur).nb]; if(!nb.length) return null;
-      const opts=nb.filter(k=>k!==prev), pool=opts.length?opts:nb; return pool[Math.floor(Math.random()*pool.length)]; };
-    function startVehOnRoads(roads){
-      if(!roads.length){ freeWander("veh"); return; }
-      const V=buildRoadGraph(roads), keys=[...V.keys()];
-      let cur=null, bd=1e9; keys.forEach(k=>{ const v=V.get(k); if(!v.nb.size) return;
+    const pickNb=(V,cur,prev)=>{ const v=V.get(cur); if(!v) return null;
+      const o=[...v.out], oo=o.filter(k=>k!==prev); if(oo.length) return oo[rndi(oo.length)]; if(o.length) return o[rndi(o.length)];
+      const a=[...v.all], aa=a.filter(k=>k!==prev); if(aa.length) return aa[rndi(aa.length)]; return a.length?a[rndi(a.length)]:null; };
+    function startVehOnRoads(els){
+      if(!els.length){ freeWander("veh"); return; }
+      const V=buildRoadGraph(els), keys=[...V.keys()];
+      let cur=null, bd=1e9; keys.forEach(k=>{ const v=V.get(k); if(!v.out.size&&!v.all.size) return;
         const d=hav(survGeo.lat,survGeo.lon,v.lat,v.lon); if(d<bd){bd=d;cur=k;} });
       if(!cur){ freeWander("veh"); return; }
       let prev=null, target=pickNb(V,cur,prev);
@@ -2938,21 +2983,34 @@
       }, 120);
       wanderers.veh={ent,timer};
     }
-    // --- Persona: siempre dentro de un edificio / parque ---
-    function startPersonInAreas(polys){
-      polys=polys.filter(p=>p.length>=4);
+    // --- Persona: siempre dentro de un edificio / parque; cambia a otro cercano de vez en cuando ---
+    function startPersonInAreas(els){
+      const polys=els.map(e=>e.geometry).filter(p=>p&&p.length>=4);
       if(!polys.length){ freeWander("person"); return; }
       let poly=null, bd=1e9; polys.forEach(pg=>{ const c=centroidPg(pg); const d=hav(survGeo.lat,survGeo.lon,c.lat,c.lon); if(d<bd){bd=d;poly=pg;} });
       let c=centroidPg(poly); if(!pointInPoly(c.lon,c.lat,poly)) c={lat:poly[0].lat, lon:poly[0].lon};
-      const st={lat:c.lat, lon:c.lon, heading:Math.random()*360, speed:(0.8+Math.random()*0.6)};
+      const st={lat:c.lat, lon:c.lon, heading:Math.random()*360, speed:(0.8+Math.random()*0.6), poly, travelTo:null, hold:0};
       const ent=makeWanderEnt("person"), cC=Cesium.Cartesian3.fromDegrees(survGeo.lon,survGeo.lat,0), rad=scopeRadiusM();
       const timer=setInterval(()=>{
-        if(Math.random()<0.08) st.heading += (Math.random()*90-45);
-        const step=st.speed*0.12, b=st.heading*Math.PI/180;
-        const nlat=st.lat+(step*Math.cos(b))/111320, nlon=st.lon+(step*Math.sin(b))/(111320*Math.cos(st.lat*Math.PI/180)||1e-6);
-        if(pointInPoly(nlon,nlat,poly)){ st.lat=nlat; st.lon=nlon; } else { st.heading += 150+Math.random()*60; }   // rebota: se queda dentro
+        const step=st.speed*0.12;
+        // decidir cambio de edificio/parque cercano
+        if(!st.travelTo){ st.hold++;
+          if(polys.length>1 && st.hold>130 && Math.random()<0.02){ const cc=centroidPg(st.poly);
+            let best=null,bdd=1e9; polys.forEach(p=>{ if(p===st.poly) return; const c2=centroidPg(p);
+              const d=hav(cc.lat,cc.lon,c2.lat,c2.lon); if(d<bdd&&d<260){bdd=d;best=p;} });
+            if(best){ st.travelTo=best; st.hold=0; } } }
+        if(st.travelTo){   // caminar hacia el nuevo polígono
+          const tc=centroidPg(st.travelTo), hd=bearing(st.lat,st.lon,tc.lat,tc.lon); st.heading=hd;
+          st.lat+=(step*Math.cos(hd*Math.PI/180))/111320; st.lon+=(step*Math.sin(hd*Math.PI/180))/(111320*Math.cos(st.lat*Math.PI/180)||1e-6);
+          if(pointInPoly(st.lon,st.lat,st.travelTo)){ st.poly=st.travelTo; st.travelTo=null; }
+        } else {   // deambular confinado dentro del polígono actual
+          if(Math.random()<0.08) st.heading += (Math.random()*90-45);
+          const b=st.heading*Math.PI/180;
+          const nlat=st.lat+(step*Math.cos(b))/111320, nlon=st.lon+(step*Math.sin(b))/(111320*Math.cos(st.lat*Math.PI/180)||1e-6);
+          if(pointInPoly(nlon,nlat,st.poly)){ st.lat=nlat; st.lon=nlon; } else { st.heading += 150+Math.random()*60; }
+        }
         ent.position=Cesium.Cartesian3.fromDegrees(st.lon,st.lat,0); ent.billboard.rotation=Cesium.Math.toRadians(-st.heading);
-        if(Cesium.Cartesian3.distance(cC, Cesium.Cartesian3.fromDegrees(st.lon,st.lat,0))>rad*1.05) onLost("person");
+        if(Cesium.Cartesian3.distance(cC, Cesium.Cartesian3.fromDegrees(st.lon,st.lat,0))>rad*1.1) onLost("person");
       }, 120);
       wanderers.person={ent,timer};
     }
@@ -3075,6 +3133,7 @@
     window.addEventListener("mouseup",(e)=>{ if(spyMode&&spyDown){ spyDown=false; finalizeSpy(spyA,{x:e.clientX,y:e.clientY}); } });
     window.addEventListener("keydown",(e)=>{ if(e.key==="Escape"){
       if($("shot-view").classList.contains("on")){ $("shot-view").classList.remove("on"); return; }   // ESC cierra primero el visor
+      if(typeof structSelecting!=="undefined" && structSelecting){ cancelStructSelect(); return; }     // o cancela la selección de estructuras
       if(spyMode||objetivoOn){ objetivoOn=false; $("spy-btn").classList.remove("active"); endSpy(); } if(svHandler) exitStreetViewPick(); } });
 
     function finalizeSpy(a,b){
