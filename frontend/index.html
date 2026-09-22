@@ -208,7 +208,13 @@
     .cam-glitch { position:absolute; inset:0; opacity:0; mix-blend-mode:screen;
       background:linear-gradient(90deg, rgba(255,0,0,.18), transparent 18%, transparent 82%, rgba(0,255,255,.18)); }
     #cam-overlay.glitching .cam-glitch { opacity:1; }
-    #cam-overlay.surv-on .cam-reticle { display:none; }   /* la retícula la pone la HUD de vigilancia anclada */
+    /* Con el scope activo, el viewfinder de pantalla completa se oculta (el scope pone corchetes/REC/oscurecido);
+       se conservan las scanlines y el glitch para mantener el flicker. */
+    #cam-overlay.surv-on::before { display:none; }
+    #cam-overlay.surv-on .cam-bracket,
+    #cam-overlay.surv-on .cam-grid,
+    #cam-overlay.surv-on .cam-reticle,
+    #cam-overlay.surv-on .cam-hud { display:none; }
     #cam-overlay.glitching { animation:camshake .09s steps(2); }
     @keyframes camshake { 0%{transform:translate(2px,0)} 50%{transform:translate(-2px,1px)} 100%{transform:translate(0,0)} }
 
@@ -218,29 +224,43 @@
       animation:survflick 2.6s steps(2) infinite; }
     #surv-fx::before { content:""; position:absolute; inset:0; box-shadow:inset 0 0 170px 34px rgba(0,0,0,.5); }
     @keyframes survflick { 0%,100%{opacity:.9} 47%{opacity:.66} 50%{opacity:1} 53%{opacity:.7} }
-    #surv-hud { position:absolute; z-index:24; width:460px; height:460px; display:none; pointer-events:none;
-      transform:translate(-50%,-50%); font-family:"Consolas",monospace; color:#8fe3ff; will-change:left,top;
+    /* Máscara oscura del scope (círculo transparente, resto del mapa oscurecido). Debajo de los paneles. */
+    #scope-dark { position:absolute; z-index:5; display:none; pointer-events:none; border-radius:50%;
+      transform:translate(-50%,-50%); box-shadow:0 0 0 100vmax rgba(0,0,0,.72), inset 0 0 44px 8px rgba(0,0,0,.55); }
+    #surv-hud { position:absolute; z-index:24; display:none; pointer-events:none;
+      transform:translate(-50%,-50%); font-family:"Consolas",monospace; color:#8fe3ff; will-change:left,top,width,height;
       animation:survjit 2.2s steps(3) infinite; }
     @keyframes survjit { 0%,90%,100%{filter:drop-shadow(0 0 5px rgba(120,220,255,.4))}
       93%{filter:drop-shadow(1.6px 0 0 rgba(255,45,45,.55)) drop-shadow(-1.6px 0 0 rgba(45,255,255,.55))} }
-    .surv-reticle { position:absolute; top:50%; left:50%; width:300px; height:300px; transform:translate(-50%,-50%); }
-    .surv-rot { transform-origin:150px 150px; animation:survspin 9s linear infinite; }
+    .scope-ring { position:absolute; inset:0; border-radius:50%; border:2px solid rgba(143,227,255,.75);
+      box-shadow:inset 0 0 26px rgba(127,211,255,.3), 0 0 16px rgba(127,211,255,.25); }
+    .sc-brk { position:absolute; width:24px; height:24px; border:3px solid rgba(143,227,255,.9); }
+    .sc-brk.tl{top:-3px;left:-3px;border-right:none;border-bottom:none}
+    .sc-brk.tr{top:-3px;right:-3px;border-left:none;border-bottom:none}
+    .sc-brk.bl{bottom:-3px;left:-3px;border-right:none;border-top:none}
+    .sc-brk.br{bottom:-3px;right:-3px;border-left:none;border-top:none}
+    .surv-reticle { position:absolute; inset:0; width:100%; height:100%; }
+    .surv-rot { transform-box:fill-box; transform-origin:center; animation:survspin 9s linear infinite; }
     @keyframes survspin { to{ transform:rotate(360deg); } }
     .surv-nums { position:absolute; inset:0; }
     .surv-num { position:absolute; font-size:10px; color:#7fd3ff; letter-spacing:1px; white-space:nowrap;
       text-shadow:0 0 5px rgba(127,211,255,.6); transform:translate(-50%,-50%); }
-    .surv-coord { position:absolute; left:8px; top:8px; font-size:10.5px; line-height:1.55;
-      text-shadow:0 0 6px rgba(127,211,255,.6); }
-    .surv-coord b { color:#dff; }
-    .surv-sat { position:absolute; right:8px; top:6px; width:118px; height:74px;
-      filter:drop-shadow(0 0 5px rgba(127,211,255,.4)); }
-    .surv-sig { position:absolute; left:8px; bottom:10px; display:flex; align-items:flex-end; gap:6px; font-size:10px;
-      color:#bfe9ff; text-shadow:0 0 6px rgba(127,211,255,.6); }
+    /* Elementos en las esquinas de la zona marcada (sobre el área oscurecida) */
+    .surv-tag { position:absolute; left:2px; top:2px; font-size:10px; letter-spacing:1px; line-height:1.4;
+      color:#8fe3ff; text-shadow:0 0 6px rgba(0,0,0,.7); }
+    .surv-tag b { color:#5fe08a; }
+    .surv-sig { position:absolute; left:2px; top:38px; display:flex; align-items:flex-end; gap:6px; font-size:10px;
+      color:#bfe9ff; text-shadow:0 0 6px rgba(0,0,0,.7); }
     .surv-sig-bars { display:inline-flex; align-items:flex-end; gap:2px; height:20px; }
     .surv-sig-bars i { width:4px; background:#5fe08a; box-shadow:0 0 4px rgba(95,224,138,.6); transition:height .25s; }
-    .surv-tag { position:absolute; right:10px; bottom:10px; font-size:10px; letter-spacing:1px; text-align:right;
-      color:#8fe3ff; text-shadow:0 0 6px rgba(127,211,255,.6); }
-    .surv-tag b { color:#5fe08a; }
+    .surv-sat { position:absolute; right:2px; top:2px; width:118px; height:74px; filter:drop-shadow(0 0 5px rgba(127,211,255,.4)); }
+    .surv-data { position:absolute; left:2px; bottom:2px; font-size:10.5px; line-height:1.55; white-space:nowrap;
+      text-shadow:0 0 6px rgba(0,0,0,.75); }
+    .surv-data b { color:#dff; }
+    .surv-bar { position:absolute; right:2px; bottom:2px; display:flex; align-items:center; gap:14px;
+      font-size:13px; letter-spacing:1px; color:#e8ffff; text-shadow:0 0 7px rgba(0,0,0,.85); white-space:nowrap; }
+    .surv-tc { min-width:104px; }
+    .surv-rec { color:#ff5252; } .surv-rec b { animation:camblink 1s steps(1) infinite; }
 
     /* ===== Live Environment (análisis IA) ===== */
     #live-modal { position:absolute; inset:0; z-index:40; display:none; background:rgba(2,7,14,.5);
@@ -565,14 +585,17 @@
     </div>
   </div>
 
-  <!-- Flicker persistente + HUD de vigilancia anclada a la zona (mientras OBJETIVO está activo) -->
+  <!-- Scope de vigilancia: círculo + máscara oscura + HUD, anclado y dimensionado a la zona marcada -->
   <div id="surv-fx"></div>
+  <div id="scope-dark"></div>
   <div id="surv-hud">
-    <svg class="surv-reticle" viewBox="0 0 300 300">
-      <circle cx="150" cy="150" r="95" fill="none" stroke="#8fe3ff" stroke-opacity=".45" stroke-width="1"/>
-      <circle cx="150" cy="150" r="60" fill="none" stroke="#8fe3ff" stroke-opacity=".35" stroke-width="1"/>
+    <div class="scope-ring"></div>
+    <span class="sc-brk tl"></span><span class="sc-brk tr"></span><span class="sc-brk bl"></span><span class="sc-brk br"></span>
+    <svg class="surv-reticle" viewBox="0 0 300 300" preserveAspectRatio="none">
+      <circle cx="150" cy="150" r="95" fill="none" stroke="#8fe3ff" stroke-opacity=".4" stroke-width="1"/>
+      <circle cx="150" cy="150" r="60" fill="none" stroke="#8fe3ff" stroke-opacity=".3" stroke-width="1"/>
       <g class="surv-rot">
-        <circle cx="150" cy="150" r="120" fill="none" stroke="#8fe3ff" stroke-opacity=".6" stroke-width="1.6" stroke-dasharray="3 12"/>
+        <circle cx="150" cy="150" r="120" fill="none" stroke="#8fe3ff" stroke-opacity=".55" stroke-width="1.4" stroke-dasharray="3 12"/>
         <path d="M150 24v12M150 276v-12M24 150h12M276 150h-12" stroke="#8fe3ff" stroke-width="2"/>
       </g>
       <path d="M150 22 A128 128 0 0 1 263 96" fill="none" stroke="#ff3b3b" stroke-width="3" stroke-linecap="round"/>
@@ -582,7 +605,7 @@
       <path d="M150 128v10M150 162v10M128 150h10M162 150h10" stroke="#8fe3ff" stroke-width="1.6"/>
     </svg>
     <div class="surv-nums"></div>
-    <div class="surv-coord"></div>
+    <div class="surv-sig"><span class="surv-sig-bars"></span><span class="surv-sig-txt"></span></div>
     <svg class="surv-sat" viewBox="0 0 118 74">
       <path d="M8 66 Q59 8 110 66" fill="none" stroke="#7fd3ff" stroke-opacity=".5" stroke-width="1"/>
       <path d="M8 72 Q59 20 110 72" fill="none" stroke="#7fd3ff" stroke-opacity=".3" stroke-width="1"/>
@@ -594,7 +617,9 @@
       </g>
       <circle cx="58" cy="6" r="2.2" fill="#5fe08a"/>
     </svg>
-    <div class="surv-sig"><span class="surv-sig-bars"></span><span class="surv-sig-txt"></span></div>
+    <div class="surv-data"></div>
+    <div class="surv-bar"><span>1/60</span><span>F 5.6</span><span class="surv-tc">00:00:00:00</span>
+      <span>ISO 800</span><span class="surv-rec">REC <b>●</b></span></div>
     <div class="surv-tag"></div>
   </div>
 
@@ -2192,50 +2217,70 @@
       else targetReticleEnt.position=pos;
     }
 
-    // ---- Vigilancia persistente: HUD anclada a la zona + flicker (mientras OBJETIVO activo) ----
-    let survActive=false, survGeo=null, survNumTimer=null, survSigTimer=null, survHooked=false;
-    const SURV_NUM_POS = (()=>{ const a=[]; for(let i=0;i<12;i++){ const ang=(i*30-90)*Math.PI/180, R=182;
-      a.push({x:230+Math.cos(ang)*R, y:230+Math.sin(ang)*R}); } return a; })();   // caja 460 → centro 230
+    // ---- Scope de vigilancia: círculo + oscurecido, anclado y dimensionado a la zona marcada ----
+    let survActive=false, survGeo=null, survBox=null, survMeta={area:"—",elev:"—"};
+    let survNumTimer=null, survSigTimer=null, survHooked=false;
+    // Posiciones de los números en % (relativas al círculo dinámico), sobre un anillo a ~44% del radio
+    const SURV_NUM_POS = (()=>{ const a=[]; for(let i=0;i<12;i++){ const ang=(i*30-90)*Math.PI/180, R=44;
+      a.push({x:50+Math.cos(ang)*R, y:50+Math.sin(ang)*R}); } return a; })();
+    function projectGeo(lon,lat){ const w=Cesium.Cartesian3.fromDegrees(lon,lat,0);
+      return Cesium.SceneTransforms.worldToWindowCoordinates
+        ? Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, w)
+        : Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, w); }
     function survRandNum(){ const t=rnd(4);
       return t===0 ? `0x${rnd(65535).toString(16).toUpperCase().padStart(4,"0")}`
            : t===1 ? `${rnd(9000)+1000}.${rnd(90)+10}`
            : t===2 ? `SEQ ${rnd(900)+100}`
            : `${["ΔT","AZ","EL","PWR","LNK"][rnd(5)]} ${rnd(99)}`; }
     function paintSurvNums(){ $("surv-hud").querySelector(".surv-nums").innerHTML =
-      SURV_NUM_POS.map(p=>`<span class="surv-num" style="left:${p.x}px;top:${p.y}px">${survRandNum()}</span>`).join(""); }
+      SURV_NUM_POS.map(p=>`<span class="surv-num" style="left:${p.x}%;top:${p.y}%">${survRandNum()}</span>`).join(""); }
     function paintSurvSig(){ const n=8; let sum=0, html="";
       for(let i=0;i<n;i++){ const h=6+rnd(15); sum+=h; const c=i<2?"#5fe08a":i<6?"#ffd24a":"#ff7a1a";
         html+=`<i style="height:${h}px;background:${c}"></i>`; }
       $("surv-hud").querySelector(".surv-sig-bars").innerHTML=html;
       const pct=Math.min(99, 55+Math.round(sum/(n*21)*44));
       $("surv-hud").querySelector(".surv-sig-txt").textContent=`SIGNAL ${pct}%`; }
+    function paintSurvData(){ if(!survGeo) return;
+      const dist=viewer.camera.positionCartographic.height, az=Cesium.Math.toDegrees(viewer.camera.heading)||0;
+      $("surv-hud").querySelector(".surv-data").innerHTML =
+        `<b>SATELLITE · SPYEYE ${spyId}</b><br>`+
+        `LAT <b>${survGeo.lat.toFixed(6)}</b>&nbsp; LON <b>${survGeo.lon.toFixed(6)}</b><br>`+
+        `DIST <b>${fmtDist(dist)}</b>&nbsp; ELEV <b>${survMeta.elev}</b><br>`+
+        `AREA <b>${survMeta.area}</b>&nbsp; AZ <b>${az.toFixed(1)}°</b>`; }
     function survTick(){
       if(!survActive || !survGeo) return;
-      const hud=$("surv-hud"), world=Cesium.Cartesian3.fromDegrees(survGeo.lon, survGeo.lat, 0);
+      const hud=$("surv-hud"), dark=$("scope-dark"), world=Cesium.Cartesian3.fromDegrees(survGeo.lon,survGeo.lat,0);
       _occ.cameraPosition = viewer.camera.positionWC;
-      const win = Cesium.SceneTransforms.worldToWindowCoordinates
-        ? Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, world)
-        : Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, world);
-      if(!win || !_occ.isPointVisible(world)){ hud.style.visibility="hidden"; return; }
-      hud.style.visibility="visible"; hud.style.left=win.x+"px"; hud.style.top=win.y+"px";
+      const win=projectGeo(survGeo.lon,survGeo.lat);
+      if(!win || !_occ.isPointVisible(world)){ hud.style.visibility="hidden"; dark.style.display="none"; return; }
+      // diámetro dinámico = tamaño de la caja marcada proyectada en pantalla (se ciñe a la zona)
+      let d=320;
+      if(survBox){ const pa=projectGeo(survBox.aLon,survBox.aLat), pb=projectGeo(survBox.bLon,survBox.bLat);
+        if(pa&&pb) d=Math.max(Math.abs(pa.x-pb.x), Math.abs(pa.y-pb.y))*1.08; }
+      d=Math.max(150, Math.min(d, Math.min(innerWidth,innerHeight)*0.94));
+      hud.style.visibility="visible";
+      hud.style.left=win.x+"px"; hud.style.top=win.y+"px"; hud.style.width=d+"px"; hud.style.height=d+"px";
+      dark.style.display="block";
+      dark.style.left=win.x+"px"; dark.style.top=win.y+"px"; dark.style.width=d+"px"; dark.style.height=d+"px";
     }
-    function startSurv(lon, lat){
+    function startSurv(lon, lat, opts){
       survGeo={lon,lat}; survActive=true;
+      survBox = (opts&&opts.box) || null;
+      survMeta = { area:(opts&&opts.area)||"—", elev:(opts&&opts.elev)||"—" };
       if(targetReticleEnt){ viewer.entities.remove(targetReticleEnt); targetReticleEnt=null; }   // evita doble reticle
-      const hud=$("surv-hud");
-      hud.querySelector(".surv-coord").innerHTML=`LAT <b>${lat.toFixed(6)}</b><br>LON <b>${lon.toFixed(6)}</b>`;
-      hud.querySelector(".surv-tag").innerHTML=`SPYEYE ${spyId}<br><b>● TRACKING</b>`;
-      paintSurvNums(); paintSurvSig();
-      hud.style.display="block"; $("surv-fx").style.display="block"; $("cam-overlay").classList.add("surv-on");
+      $("surv-hud").querySelector(".surv-tag").innerHTML=`SPYEYE ${spyId}<br><b>● TRACKING</b>`;
+      paintSurvNums(); paintSurvSig(); paintSurvData();
+      $("surv-hud").style.display="block"; $("surv-fx").style.display="block"; $("cam-overlay").classList.add("surv-on");
       clearInterval(survNumTimer); survNumTimer=setInterval(paintSurvNums, 420);
-      clearInterval(survSigTimer); survSigTimer=setInterval(paintSurvSig, 600);
+      clearInterval(survSigTimer); survSigTimer=setInterval(()=>{ paintSurvSig(); paintSurvData(); }, 600);
       if(!survHooked){ viewer.scene.preRender.addEventListener(survTick); survHooked=true; }
       survTick();
     }
     function stopSurv(){
-      survActive=false; survGeo=null;
+      survActive=false; survGeo=null; survBox=null;
       clearInterval(survNumTimer); survNumTimer=null; clearInterval(survSigTimer); survSigTimer=null;
-      $("surv-hud").style.display="none"; $("surv-fx").style.display="none"; $("cam-overlay").classList.remove("surv-on");
+      $("surv-hud").style.display="none"; $("surv-fx").style.display="none";
+      $("scope-dark").style.display="none"; $("cam-overlay").classList.remove("surv-on");
     }
     function screenToGeo(x,y){
       const rect=viewer.scene.canvas.getBoundingClientRect();
@@ -2355,7 +2400,8 @@
           area:fmtArea(m.area), state:'<b style="color:#5fe08a">● LOCK ACQUIRED</b>' });
         if(objetivoOn){
           // Vigilancia persistente sobre la zona (+ flicker) hasta que se apague OBJETIVO
-          startSurv(m.centerLon, m.centerLat);
+          startSurv(m.centerLon, m.centerLat, {
+            box:{ aLon:gA.lon, aLat:gA.lat, bLon:gB.lon, bLat:gB.lat }, area:fmtArea(m.area), elev:elevStr });
           setTimeout(()=>{ $("spy-hud").classList.add("fade"); setTimeout(()=>{
             $("spy-hud").style.display="none"; $("spy-hud").classList.remove("fade");
             const sb=$("spy-box"); sb.style.display="none"; sb.style.transition="";
@@ -2389,7 +2435,8 @@
       $("cam-overlay").style.display="block"; camFrames=0;
       const pad=(n)=>String(n).padStart(2,"0");
       camTimer=setInterval(()=>{ camFrames++; const ff=camFrames%25, s=Math.floor(camFrames/25);
-        $("cam-tc").textContent=`${pad(Math.floor(s/3600))}:${pad(Math.floor(s/60)%60)}:${pad(s%60)}:${pad(ff)}`; }, 42);
+        const tc=`${pad(Math.floor(s/3600))}:${pad(Math.floor(s/60)%60)}:${pad(s%60)}:${pad(ff)}`;
+        $("cam-tc").textContent=tc; const st=document.querySelector(".surv-tc"); if(st) st.textContent=tc; }, 42);
       glitchTimer=setInterval(()=>{
         glitchFilter="drop-shadow(2px 0 0 rgba(255,45,45,.65)) drop-shadow(-2px 0 0 rgba(45,255,255,.65)) contrast(1.12)";
         $("cam-overlay").classList.add("glitching"); updateCanvasFilter();
