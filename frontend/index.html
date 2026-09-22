@@ -429,6 +429,35 @@
     .shot img { cursor:zoom-in; }
     #sm-list { flex:0 1 auto; min-height:0; }   /* no encoger los tiles */
 
+    /* Dashboard de simulación */
+    #sim-panel { position:absolute; z-index:34; right:12px; bottom:52px; width:280px; max-height:78vh; display:none;
+      flex-direction:column; background:rgba(6,16,26,.97); border:1px solid #2a6a8f; border-radius:12px; overflow:hidden;
+      backdrop-filter:blur(8px); box-shadow:0 8px 34px rgba(0,0,0,.6); font-family:"Consolas",monospace; }
+    #sim-panel.on { display:flex; }
+    .sm2-head { display:flex; align-items:center; gap:7px; padding:9px 12px; font-size:13px; letter-spacing:1px;
+      color:#7fd3ff; font-weight:600; background:rgba(127,211,255,.08); cursor:move; }
+    .sm2-head .sm2-x { margin-left:auto; cursor:pointer; color:#ffdada; }
+    .sm2-body { overflow-y:auto; padding:10px 12px; font-size:11px; color:#bfe9ff; }
+    .sm2-stats { display:grid; grid-template-columns:1fr 1fr; gap:3px 10px; margin-bottom:8px; }
+    .sm2-stats .k { color:#8fb4cc; } .sm2-stats b { color:#dff; }
+    .sm2-row { display:flex; align-items:center; gap:8px; margin:6px 0; }
+    .sm2-row > span:first-child { color:#9cc; min-width:78px; }
+    .sm2-spd button, .sm2-btns button, #sim-newseed, #sim-cfg button { margin:0; padding:5px 8px; font-size:10px; width:auto; }
+    .sm2-spd { display:flex; gap:3px; margin-left:auto; }
+    .sm2-spd button.active, #sim-debug.active { background:#155; border-color:#3aa0ff; color:#bfe9ff; }
+    #sim-weather, #sim-seed { background:#0b1622; color:#dff; border:1px solid #2a4a63; border-radius:6px; padding:4px 6px; font-size:11px; }
+    #sim-seed { width:96px; }
+    #sim-hour { flex:1; } #sim-hour-v { color:#dff; min-width:42px; text-align:right; }
+    .sm2-btns { display:flex; gap:8px; margin-top:8px; }
+    .sm2-btns button { flex:1; }
+    .sm2-t { color:#5fe08a; font-weight:600; letter-spacing:.5px; margin:10px 0 4px; }
+    #sim-cfg { display:grid; grid-template-columns:1fr; gap:4px; }
+    #sim-cfg .cf { display:flex; align-items:center; gap:8px; }
+    #sim-cfg .cf label { color:#9cc; flex:1; }
+    #sim-cfg .cf input { width:70px; background:#0b1622; color:#dff; border:1px solid #2a4a63; border-radius:6px; padding:3px 6px; font-size:10px; }
+    #sim-log { max-height:120px; overflow-y:auto; font-size:9.5px; line-height:1.5; color:#8fb4cc; }
+    #sim-log div:first-child { color:#bfe9ff; }
+
     /* Gestor de claves (.env) */
     #keys-modal { position:absolute; inset:0; z-index:46; display:none; align-items:center; justify-content:center;
       background:rgba(2,7,14,.6); backdrop-filter:blur(3px); }
@@ -1052,6 +1081,32 @@
     <div class="dock-btn" id="mic-btn"><span data-ic="mic"></span><span id="mic-status">Pide o comanda</span></div>
     <div class="dock-btn" id="presets-btn"><span data-ic="layers"></span> PRESETS</div>
     <div class="dock-btn" id="keys-btn"><span data-ic="key"></span> CLAVES</div>
+    <div class="dock-btn" id="sim-btn"><span data-ic="car"></span> SIM</div>
+  </div>
+
+  <!-- Dashboard de simulación de vehículos -->
+  <div id="sim-panel">
+    <div class="sm2-head"><span data-ic="car"></span> SIMULACIÓN <span class="sm2-x" title="Cerrar">✕</span></div>
+    <div class="sm2-body">
+      <div class="sm2-stats" id="sim-stats"></div>
+      <div class="sm2-row">
+        <span>Velocidad sim</span>
+        <span class="sm2-spd"><button data-sp="1">1x</button><button data-sp="2">2x</button><button data-sp="5">5x</button><button data-sp="10">10x</button><button data-sp="50">50x</button></span>
+      </div>
+      <div class="sm2-row"><span>Clima</span>
+        <select id="sim-weather"><option>CLEAR</option><option>CLOUDY</option><option>RAIN</option><option>FOG</option></select></div>
+      <div class="sm2-row"><span>Hora sim</span><input id="sim-hour" type="range" min="0" max="23" step="1"><span id="sim-hour-v">08:00</span></div>
+      <div class="sm2-btns">
+        <button id="sim-debug"><span data-ic="crosshair"></span> DEBUG</button>
+        <button id="sim-reset" class="stop"><span data-ic="stop"></span> RESET</button>
+      </div>
+      <div class="sm2-row"><span>Seed</span><input id="sim-seed" type="number" min="0" placeholder="0 = aleatorio">
+        <button id="sim-newseed">NUEVA</button></div>
+      <div class="sm2-t">PARÁMETROS (config)</div>
+      <div id="sim-cfg"></div>
+      <div class="sm2-t">EVENT LOG</div>
+      <div id="sim-log"></div>
+    </div>
   </div>
 
   <!-- Toggles para mostrar/ocultar la UI durante OBJETIVO -->
@@ -1245,6 +1300,7 @@
     { const sf=$("struct-feed"); if(sf) makeDraggable(sf, sf.querySelector(".pf-head")); }   // estructuras: arrastrar por su encabezado
     { const vf=$("veh-feed"); if(vf) makeDraggable(vf, vf.querySelector(".pf-head")); }       // vehículos: arrastrar por su encabezado
     { const ct=$("car-tag"); if(ct) makeDraggable(ct, ct.querySelector(".ct-head")); }         // etiqueta de vehículo: arrastrar por su encabezado
+    { const sp=$("sim-panel"); if(sp) makeDraggable(sp, sp.querySelector(".sm2-head")); }        // dashboard de simulación
     { const g=$("wc-gallery"); if(g) makeDraggable(g, g.querySelector(".wcg-head")); }
 
     // Coloca una ventana en un area en blanco de la pantalla, sin caer encima de otra ventana visible
@@ -2677,6 +2733,52 @@
     $("keys-modal").onclick=(e)=>{ if(e.target.id==="keys-modal") closeKeys(); };
     $("km-show").onchange=applyKeyReveal;
     $("km-save").onclick=saveKeys;
+
+    // --- Dashboard de simulación de vehículos ---
+    const CFG_FIELDS=[["MAX_SPEED","Vel. máx (m/s)"],["MIN_SPEED","Vel. mín"],["ACCEL","Aceleración"],["DECEL","Frenado"],
+      ["SAFE_BASE","Dist. segura"],["REACTION","Reacción (s)"],["DENSITY","Densidad ×"],["P_PARK","Prob. parqueo"],
+      ["P_REROUTE","Prob. reruteo"],["LIGHT_GREEN","Semáforo verde (s)"],["MAX_VEH","Máx. vehículos"]];
+    function renderSimCfg(){ const box=$("sim-cfg");
+      box.innerHTML=CFG_FIELDS.map(([k,l])=>`<div class="cf"><label>${l}</label><input data-cf="${k}" type="number" step="0.001" value="${SIMCFG[k]}"></div>`).join("");
+      box.querySelectorAll("input[data-cf]").forEach(inp=>inp.onchange=()=>{ const v=parseFloat(inp.value); if(!isNaN(v)) SIMCFG[inp.dataset.cf]=v; }); }
+    function renderSimDash(){ if(!$("sim-panel").classList.contains("on")) return;
+      $("sim-stats").innerHTML=
+        `<div><span class="k">Vehículos</span> <b>${simStats.n}</b></div><div><span class="k">En marcha</span> <b>${simStats.moving}</b></div>`+
+        `<div><span class="k">Detenidos</span> <b>${simStats.stopped}</b></div><div><span class="k">Parqueados</span> <b>${simStats.parked}</b></div>`+
+        `<div><span class="k">Vel. media</span> <b>${simStats.avg.toFixed(0)} mph</b></div><div><span class="k">Densidad</span> <b>${simStats.density}%</b></div>`+
+        `<div><span class="k">Congestión</span> <b>${simStats.congestion}</b></div><div><span class="k">Hora</span> <b>${simClock()}</b></div>`; }
+    function renderSimLog(){ if(!$("sim-panel").classList.contains("on")) return; $("sim-log").innerHTML=simLog.map(l=>`<div>${l}</div>`).join(""); }
+    function openSim(){ $("sim-panel").classList.add("on"); $("sim-btn").classList.add("active"); renderSimCfg(); renderSimDash(); renderSimLog();
+      document.querySelectorAll(".sm2-spd button").forEach(b=>b.classList.toggle("active",+b.dataset.sp===SIMCFG.SIM_SPEED));
+      $("sim-weather").value=SIMCFG.WEATHER; $("sim-hour").value=Math.floor(simTime/3600)%24; $("sim-hour-v").textContent=simClock(); $("sim-debug").classList.toggle("active",SIMCFG.DEBUG); }
+    function closeSim(){ $("sim-panel").classList.remove("on"); $("sim-btn").classList.remove("active"); }
+    $("sim-btn").onclick=()=>{ $("sim-panel").classList.contains("on")?closeSim():openSim(); };
+    $("sim-panel").querySelector(".sm2-x").onclick=closeSim;
+    document.querySelectorAll(".sm2-spd button").forEach(b=>b.onclick=()=>{ SIMCFG.SIM_SPEED=+b.dataset.sp;
+      document.querySelectorAll(".sm2-spd button").forEach(x=>x.classList.toggle("active",x===b)); });
+    $("sim-weather").onchange=(e)=>{ SIMCFG.WEATHER=e.target.value; logEvent("Clima → "+e.target.value); };
+    $("sim-hour").oninput=(e)=>{ simTime=(+e.target.value)*3600; $("sim-hour-v").textContent=simClock(); };
+    $("sim-debug").onclick=()=>{ SIMCFG.DEBUG=!SIMCFG.DEBUG; $("sim-debug").classList.toggle("active",SIMCFG.DEBUG); if(!SIMCFG.DEBUG) clearSimDebug(); };
+    $("sim-reset").onclick=()=>{ setSeed(parseInt($("sim-seed").value)||0); simTime=((+$("sim-hour").value)||8)*3600; simLog.length=0; renderSimLog();
+      if(vehOn && survActive) startTraffic(); logEvent("RESET simulación"); };
+    $("sim-newseed").onclick=()=>{ const s=Math.floor(Math.random()*1e6); $("sim-seed").value=s; setSeed(s); logEvent("Seed "+s); };
+    $("sim-seed").onchange=()=>{ setSeed(parseInt($("sim-seed").value)||0); };
+    // Debug overlay: ruta prevista + destino del vehículo rastreado
+    let dbgLine=null, dbgDest=null;
+    function bestToward(V,cur,prev,dest){ const v=V.get(cur); if(!v) return null; let outs=[...v.out]; if(!outs.length) outs=[...v.all];
+      const pool=outs.filter(k=>k!==prev), cand=pool.length?pool:outs; if(!cand.length) return null;
+      if(!dest) return cand[0]; let best=null,bd=1e9,bD=bearing(v.lat,v.lon,dest.lat,dest.lon);
+      for(const k of cand){ const w=V.get(k), b=bearing(v.lat,v.lon,w.lat,w.lon), diff=Math.abs(((b-bD+540)%360)-180); if(diff<bd){bd=diff;best=k;} } return best; }
+    function updateSimDebug(){ const c=trackedCarId&&trafficCars.get(trackedCarId); if(!c||!trafficGraph){ clearSimDebug(); return; }
+      const pts=[[c.lon,c.lat]]; let cur=c.cur,prev=c.prev;
+      for(let i=0;i<10;i++){ const nx=bestToward(trafficGraph,cur,prev,c.dest); if(!nx) break; const v=trafficGraph.get(nx); pts.push([v.lon,v.lat]); prev=cur; cur=nx; }
+      const arr=pts.flat();
+      if(!dbgLine){ dbgLine=viewer.entities.add({ polyline:{ positions:new Cesium.CallbackProperty(()=>Cesium.Cartesian3.fromDegreesArray(dbgLine._pts||[]),false), width:2, material:Cesium.Color.fromCssColorString("#ffd24a").withAlpha(0.85) } }); }
+      dbgLine._pts=arr; dbgLine.show=true;
+      if(c.dest){ if(!dbgDest){ dbgDest=viewer.entities.add({ position:Cesium.Cartesian3.fromDegrees(c.dest.lon,c.dest.lat,0),
+          point:{ pixelSize:10, color:Cesium.Color.fromCssColorString("#ffd24a"), outlineColor:Cesium.Color.fromCssColorString("#0b1622"), outlineWidth:1, disableDepthTestDistance:Number.POSITIVE_INFINITY } }); }
+        else dbgDest.position=Cesium.Cartesian3.fromDegrees(c.dest.lon,c.dest.lat,0); dbgDest.show=true; } }
+    function clearSimDebug(){ if(dbgLine) dbgLine.show=false; if(dbgDest) dbgDest.show=false; }
     // Cerrar PRESETS al hacer clic fuera (mapa u otro sitio)
     document.addEventListener("click", (ev) => {
       const p = $("preset-panel");
@@ -3333,10 +3435,16 @@
       const d=$("veh-data"), i=c.info; if(!i){ return; }
       const ini=i.owner.split(" ").map(w=>w[0]).slice(0,2).join("");
       d.innerHTML =
-        `<div class="vd-t">PROPIETARIO (est.)</div>`+
+        `<div class="vd-t">VEHÍCULO SIMULADO</div>`+
+        `<div class="vd-r"><span>SIM-ID</span><span>${c.simId||("SIM-V-"+String(c.num).padStart(4,"0"))}</span></div>`+
+        `<div class="vd-r"><span>Estado</span><span id="vd-state">—</span></div>`+
+        `<div class="vd-r"><span>Perfil</span><span>${c.profile||"NORMAL"}</span></div>`+
+        `<div class="vd-r"><span>Destino</span><span id="vd-dest">—</span></div>`+
+        `<div class="vd-t">PROPIETARIO (ficticio)</div>`+
         `<div class="vd-owner"><div class="vd-avatar">${ini}</div>`+
           `<div><div style="color:#dff">${i.owner}</div>`+
-          `<div style="color:#8fb4cc">Lic ${i.lic} · ${i.sex==="M"?"♂":"♀"} · n.${i.dob}</div></div></div>`+
+          `<div style="color:#8fb4cc">Lic ${i.lic} · ${i.sex==="M"?"♂":"♀"} · n.${i.dob}</div>`+
+          `<div style="color:#8fb4cc">Tel ${i.phone} (ficticio)</div></div></div>`+
         `<div class="vd-t">IDENTIFICACIÓN</div>`+
         `<div class="vd-r"><span>Placa</span><span>${c.plate}</span></div>`+
         `<div class="vd-r"><span>Etiqueta</span><span>${c.tag||("V"+c.num)}</span></div>`+
@@ -3365,10 +3473,15 @@
     function updateVehData(){
       const c = trackedCarId && trafficCars.get(trackedCarId); if(!c) return;
       const st=carStreets(c), set=(id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
-      const stopped=(c.hold>0);
-      set("vd-spd", (stopped?0:Math.round(c.speed*3.6))+" km/h");
+      const stopped=(c.speed<0.4);
+      set("vd-spd", Math.round(c.speed*3.6)+" km/h");
       set("vd-lat", c.lat.toFixed(6)); set("vd-lon", c.lon.toFixed(6));
       set("vd-cur", st.cur); set("vd-next", st.next);
+      set("vd-state", c.state||"—");
+      if(c.dest){ const dm=hav(c.lat,c.lon,c.dest.lat,c.dest.lon); let dn="";
+        if(trafficGraph){ const dv=trafficGraph.get(c.dest.key); if(dv){ for(const n of dv.all){ const nm=trafficEdgeNames.get(c.dest.key+"|"+n); if(nm){dn=nm;break;} } } }
+        set("vd-dest", (dn?dn+" · ":"ZONA SIM · ")+(dm>1000?(dm/1000).toFixed(1)+" km":Math.round(dm)+" m")); }
+      else set("vd-dest","—");
       if(carOrbitOn){ const v=$("veh-video");   // pausa el vídeo cuando el vehículo está detenido (mantiene el mismo clip)
         if(stopped){ if(!v.paused) v.pause(); } else { if(v.paused) v.play().catch(()=>{}); } }
       if(c.info){ const s=document.getElementById("vd-stops"), rr=document.getElementById("vd-reds");
@@ -3380,6 +3493,55 @@
     const trafficCars=new Map();   // "car:N" -> {id,num,plate,tag,cur,prev,target,lat,lon,speed,hold,lane,ent,tracked}
     let trafficTimer=null, trafficGraph=null, trafficKeys=[], trafficInner=[], trafficTargetN=0,
         trafficSeq=0, trafficToken=null, trackedCarId=null, trafficCenter=null, trafficRefetch=null, trafficFree=false;
+
+    // ============= MOTOR DE SIMULACIÓN DE VEHÍCULOS (agentes autónomos · datos 100% ficticios) =============
+    const SIMCFG = { MAX_SPEED:16, MIN_SPEED:1, ACCEL:0.9, DECEL:3.2, SAFE_BASE:6, REACTION:0.9, SAFE_CRIT:5,
+      P_PARK:0.004, P_REROUTE:0.006, DENSITY:1.0, LIGHT_GREEN:26, LIGHT_YELLOW:4,
+      SIM_SPEED:1, WEATHER:"CLEAR", DEBUG:false, SEED:0, MAX_VEH:110, DECISION_MIN:3, DECISION_MAX:20 };
+    const WEATHER_FX = { CLEAR:{spd:1,safe:1}, CLOUDY:{spd:0.96,safe:1.05}, RAIN:{spd:0.78,safe:1.5}, FOG:{spd:0.68,safe:1.7} };
+    const PROFILES = ["CAUTIOUS","NORMAL","AGGRESSIVE","COMMUTER","DELIVERY","DISTRACTED","INDECISIVE","LOCAL_DRIVER","RANDOM"];
+    function profileParams(p){ switch(p){
+      case "CAUTIOUS": return {spd:0.8,accel:0.75,safe:1.4,ppark:1};
+      case "AGGRESSIVE": return {spd:1.28,accel:1.6,safe:0.6,ppark:0.8};
+      case "COMMUTER": return {spd:1.08,accel:1.05,safe:1,ppark:0.6};
+      case "DELIVERY": return {spd:0.9,accel:0.9,safe:1.1,ppark:2.6};
+      case "DISTRACTED": return {spd:0.95,accel:0.85,safe:1.25,ppark:1};
+      case "INDECISIVE": return {spd:0.9,accel:0.8,safe:1.15,ppark:1};
+      case "RANDOM": return {spd:0.8+srand()*0.6,accel:0.7+srand()*0.9,safe:0.7+srand()*0.8,ppark:0.5+srand()*2};
+      default: return {spd:1,accel:1,safe:1,ppark:1}; } }
+    // RNG con semilla (reproducibilidad)
+    function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+    let srand=Math.random, srnd=(n)=>Math.floor(Math.random()*n);
+    function setSeed(s){ SIMCFG.SEED=s>>>0; srand = s? mulberry32(s>>>0) : Math.random; srnd=(n)=>Math.floor(srand()*n); }
+    // Tiempo y clima simulados
+    let simTime=8*3600;
+    function simClock(){ const t=Math.floor(simTime)%86400; return String(Math.floor(t/3600)).padStart(2,"0")+":"+String(Math.floor((t%3600)/60)).padStart(2,"0"); }
+    function timeBand(){ const h=(Math.floor(simTime/3600))%24; return h<6?"NIGHT":h<10?"MORNING":h<15?"MIDDAY":h<19?"AFTERNOON":h<22?"EVENING":"NIGHT"; }
+    function densityByTime(){ return ({MORNING:1.15,MIDDAY:0.85,AFTERNOON:1.15,EVENING:0.9,NIGHT:0.5})[timeBand()]||1; }
+    // Semáforos por intersección (eje alterno NS/EW)
+    let simLights=new Set();
+    function buildLights(){ simLights.clear(); if(!trafficGraph) return; for(const [k,v] of trafficGraph){ if(v.all.size>=3) simLights.add(k); } }
+    function headingAxis(hd){ hd=((hd%360)+360)%360; return (hd>=45&&hd<135)||(hd>=225&&hd<315)?"EW":"NS"; }
+    function lightState(nodeKey, hd){ if(!simLights.has(nodeKey)) return "GREEN";
+      const cyc=SIMCFG.LIGHT_GREEN+SIMCFG.LIGHT_YELLOW, off=(nodeKey.length*7)%(cyc*2);
+      const ph=Math.floor((simTime+off)/cyc)%2, inPhase=(headingAxis(hd)==="NS")?(ph===0):(ph===1), tin=((simTime+off)%cyc);
+      return !inPhase ? "RED" : (tin>SIMCFG.LIGHT_GREEN ? "YELLOW" : "GREEN"); }
+    // Índice espacial (grid) para car-following (evita O(n²))
+    let simGrid=new Map(); const GCELL_LAT=0.00022, GCELL_LON=0.00028;
+    function gcell(lat,lon){ return Math.round(lat/GCELL_LAT)+","+Math.round(lon/GCELL_LON); }
+    function rebuildGrid(){ simGrid.clear(); for(const [,c] of trafficCars){ const k=gcell(c.lat,c.lon); let a=simGrid.get(k); if(!a){a=[];simGrid.set(k,a);} a.push(c); } }
+    function nearbyCars(c){ const out=[], bl=Math.round(c.lat/GCELL_LAT), bo=Math.round(c.lon/GCELL_LON);
+      for(let i=-1;i<=1;i++)for(let j=-1;j<=1;j++){ const a=simGrid.get((bl+i)+","+(bo+j)); if(a) for(const o of a) out.push(o); } return out; }
+    // Rutas: destino aleatorio + elección de giro sesgada al destino
+    function getRandomDest(){ if(!trafficKeys.length) return null; const k=trafficKeys[srnd(trafficKeys.length)], v=trafficGraph.get(k); return v?{key:k,lat:v.lat,lon:v.lon}:null; }
+    function pickNbToward(V,cur,prev,dest){ const v=V.get(cur); if(!v) return null;
+      let outs=[...v.out]; if(!outs.length) outs=[...v.all]; const opts=outs.filter(k=>k!==prev), pool=opts.length?opts:outs; if(!pool.length) return null;
+      if(dest && srand()<0.75){ let best=null,bd=1e9; const bD=bearing(v.lat,v.lon,dest.lat,dest.lon);
+        for(const k of pool){ const w=V.get(k), b=bearing(v.lat,v.lon,w.lat,w.lon), diff=Math.abs(((b-bD+540)%360)-180); if(diff<bd){bd=diff;best=k;} } if(best) return best; }
+      return pool[srnd(pool.length)]; }
+    // Log de eventos + estadísticas
+    const simLog=[]; function logEvent(t){ simLog.unshift(simClock()+" · "+t); if(simLog.length>50) simLog.pop(); if(typeof renderSimLog==="function") renderSimLog(); }
+    let simStats={n:0,moving:0,stopped:0,parked:0,avg:0,density:0,congestion:"—"};
     let carOrbitOn=false, carOrbitRAF=0, carOrbitHeading=0, carOrbitPitch=0, carOrbitRange=0;
     let scopeHalf=null, refetchPending=false;   // el círculo OBJETIVO sigue al vehículo rastreado
     function recenterScopeOnCar(c){
@@ -3432,6 +3594,7 @@
       return { color:CAR_COLORS[rnd(CAR_COLORS.length)], make:c.mk, model:m[0], year:2005+rnd(20),
         occ:1+rnd(m[1]), vin:randVIN(),
         owner, sex, lic:randVIN().slice(0,3)+"-"+(rnd(9000)+1000), dob:1965+rnd(45),
+        phone:"+1 (555) "+String(rnd(900)+100)+"-"+String(rnd(9000)+1000),
         stops:rnd(6), reds:rnd(4), speeding:rnd(12), tickets:rnd(9),
         risk:["BAJO","MEDIO","ALTO","ALTO"][rnd(4)], reg:["AL DÍA","VENCIDA","EN REVISIÓN"][rnd(3)] };
     }
@@ -3445,12 +3608,13 @@
       if(trafficToken!==token || !survActive){ $("surv-hud").classList.remove("scanning"); return; }
       const V = els.length ? buildRoadGraph(els) : null;
       const keys = V ? [...V.keys()].filter(k=>V.get(k).out.size||V.get(k).all.size) : [];
+      const dmul = densityByTime()*SIMCFG.DENSITY;
       if(V && keys.length){   // tráfico por calles (direcciones correctas)
-        trafficFree=false; trafficGraph=V; trafficKeys=keys; trafficCenter={lat:survGeo.lat, lon:survGeo.lon}; computeTrafficInner();
-        trafficTargetN = Math.max(10, Math.min(100, Math.round(trafficInner.length*0.6) + 10 + rnd(20)));
-        trafficTargetN = Math.min(trafficTargetN, Math.max(10, trafficInner.length));
+        trafficFree=false; trafficGraph=V; trafficKeys=keys; trafficCenter={lat:survGeo.lat, lon:survGeo.lon}; computeTrafficInner(); buildLights();
+        trafficTargetN = Math.round((Math.round(trafficInner.length*0.6) + 10 + rnd(20)) * dmul);
+        trafficTargetN = Math.max(8, Math.min(SIMCFG.MAX_VEH, trafficTargetN, trafficInner.length*2));
       } else {   // SIEMPRE hay vehículos: si no hay calles, tráfico libre dentro del círculo
-        trafficFree=true; trafficGraph=null; trafficTargetN=12+rnd(18);
+        trafficFree=true; trafficGraph=null; simLights.clear(); trafficTargetN=Math.max(8, Math.round((12+rnd(18))*dmul));
       }
       for(let i=0;i<trafficTargetN;i++) spawnCar();   // aparecen cuando terminan de "cargar"
       $("surv-hud").classList.remove("scanning");
@@ -3463,21 +3627,25 @@
     }
     function spawnCar(){
       const rad=scopeRadiusM();
-      let lat,lon,cur=null,target=null,hd=Math.random()*360;
+      let lat,lon,cur=null,hd=srand()*360;
       if(trafficFree){
-        const a=Math.random()*Math.PI*2, d=rad*0.85*Math.sqrt(Math.random());
+        const a=srand()*Math.PI*2, d=rad*0.85*Math.sqrt(srand());
         lat=survGeo.lat+(d*Math.cos(a))/111320; lon=survGeo.lon+(d*Math.sin(a))/(111320*Math.cos(survGeo.lat*Math.PI/180)||1e-6);
       } else {
         if(!trafficGraph || !trafficInner.length) return;
-        cur=trafficInner[rnd(trafficInner.length)]; const v=trafficGraph.get(cur); if(!v) return;
-        lat=v.lat; lon=v.lon; target=pickNb(trafficGraph,cur,null);
+        cur=trafficInner[srnd(trafficInner.length)]; const v=trafficGraph.get(cur); if(!v) return; lat=v.lat; lon=v.lon;
       }
-      const r=Math.random();   // velocidad de crucero: lentos / normales / rápidos
-      const cruise = r<0.18 ? (1+Math.random()*1.5) : r<0.82 ? (3+Math.random()*4) : (8+Math.random()*7);
+      const profile=PROFILES[srnd(PROFILES.length)], pp=profileParams(profile);
+      const maxSpeed=Math.max(SIMCFG.MIN_SPEED, SIMCFG.MAX_SPEED*pp.spd*(0.85+srand()*0.3));
+      const dest = trafficFree?null:getRandomDest();
       const num=(++trafficSeq), id="car:"+num;
-      const car={ id, num, plate:randPlate(), tag:"", cur, prev:null, target, lat, lon, hd,
-        cruise, speed:cruise*0.5, accel:0.6+Math.random()*0.9,
-        hold:(Math.random()<0.1?20+rnd(80):0), lane:3.0, tracked:false, info:genCarInfo() };
+      const car={ id, num, simId:"SIM-V-"+String(num).padStart(4,"0"), plate:randPlate(), tag:"",
+        cur, prev:null, target:(cur?pickNbToward(trafficGraph,cur,null,dest):null), lat, lon, hd,
+        profile, pp, dest, maxSpeed, cruise:maxSpeed*(0.7+srand()*0.3), speed:maxSpeed*0.4,
+        accel:SIMCFG.ACCEL*pp.accel*(0.8+srand()*0.4), decel:SIMCFG.DECEL*(0.8+srand()*0.4),
+        reaction:SIMCFG.REACTION*(0.7+srand()*0.8), hold:0, lane:3.0, state:"DRIVING",
+        decisionAt: simTime + (SIMCFG.DECISION_MIN + srand()*(SIMCFG.DECISION_MAX-SIMCFG.DECISION_MIN)),
+        tracked:false, info:genCarInfo() };
       car.ent=viewer.entities.add({ id, position:Cesium.Cartesian3.fromDegrees(car.lon,car.lat,0),
         billboard:{ image:CAR_IMG, width:32, height:32, rotation:0, alignedAxis:Cesium.Cartesian3.ZERO,
           disableDepthTestDistance:Number.POSITIVE_INFINITY },
@@ -3490,52 +3658,69 @@
     function removeCar(id){ const c=trafficCars.get(id); if(c&&c.ent) viewer.entities.remove(c.ent); trafficCars.delete(id); }
     function tickTraffic(){
       if(!trafficCars.size && !trafficGraph && !trafficFree) return;
+      const dt=0.12*SIMCFG.SIM_SPEED; simTime+=dt;
       const V=trafficGraph, rad=scopeRadiusM(), cC=Cesium.Cartesian3.fromDegrees(survGeo.lon,survGeo.lat,0);
+      const wx=WEATHER_FX[SIMCFG.WEATHER]||WEATHER_FX.CLEAR;
+      rebuildGrid();
+      let moving=0,stopped=0,parked=0,sumspd=0;
       for(const [id,c] of trafficCars){
-        // ---- IA: velocidad deseada (crucero, eventos, evitar colisión) ----
-        let desired=c.cruise;
-        if(c.hold>0){ c.hold--; desired=0; }
-        else {
-          if(Math.random()<0.004) c.hold=80+rnd(1600);            // se parquea (segundos a minutos)
-          else if(Math.random()<0.008) c.cruise=1+Math.random()*2;   // reduce marcha
-          else if(Math.random()<0.008) c.cruise=9+Math.random()*7;   // acelera fuerte
-          // coche adelante → frenar (casi colisión)
-          let gap=Infinity;
-          for(const [oid,o] of trafficCars){ if(oid===id) continue;
-            if(Math.abs(o.lat-c.lat)>0.0004 || Math.abs(o.lon-c.lon)>0.0005) continue;
-            const dm=hav(c.lat,c.lon,o.lat,o.lon); if(dm>=gap||dm>18) continue;
-            const brg=bearing(c.lat,c.lon,o.lat,o.lon), diff=Math.abs(((brg-(c.hd||0)+540)%360)-180);
-            if(diff<35) gap=dm; }
-          if(gap<Infinity){ desired=Math.min(desired, Math.max(0,(gap-4)*0.7)); if(gap<6) desired=0; }
+        // ---- decisiones puntuales (no cada frame) ----
+        if(simTime>=c.decisionAt){
+          c.decisionAt = simTime + (SIMCFG.DECISION_MIN + srand()*(SIMCFG.DECISION_MAX-SIMCFG.DECISION_MIN));
+          const r=srand();
+          if(r < SIMCFG.P_PARK*c.pp.ppark){ c.state="PARKED"; c.hold = 25 + srnd(300); logEvent(c.simId+" estaciona"); }
+          else if(r < SIMCFG.P_PARK*c.pp.ppark + SIMCFG.P_REROUTE){ c.dest=getRandomDest(); logEvent(c.simId+" cambia de ruta"); }
+          else if(r < 0.35){ c.cruise=c.maxSpeed*(0.45+srand()*0.55); }
         }
-        // acelera suave, frena fuerte (frenazo)
-        const dv=c.accel*0.12;
-        if(c.speed<desired) c.speed=Math.min(desired, c.speed+dv);
-        else c.speed=Math.max(desired, c.speed-dv*3);
-        const step=c.speed*0.12;
+        // ---- velocidad deseada (crucero · clima · densidad · car-following · semáforo) ----
+        let desired=c.cruise*wx.spd*SIMCFG.DENSITY, st="DRIVING";
+        if(c.hold>0){ c.hold--; desired=0; st=(c.state==="PARKED")?"PARKED":"STOPPED"; }
+        else {
+          c.state="DRIVING";
+          let gap=Infinity;
+          for(const o of nearbyCars(c)){ if(o===c) continue;
+            const dm=hav(c.lat,c.lon,o.lat,o.lon); if(dm>=gap||dm>22) continue;
+            const b=bearing(c.lat,c.lon,o.lat,o.lon), diff=Math.abs(((b-(c.hd||0)+540)%360)-180);
+            if(diff<32) gap=dm; }
+          const safe=(SIMCFG.SAFE_BASE + c.speed*c.reaction)*c.pp.safe*wx.safe;
+          if(gap<safe){ desired=Math.min(desired, Math.max(0,(gap-SIMCFG.SAFE_CRIT)*0.6));
+            st = gap<SIMCFG.SAFE_CRIT ? (desired=0,"STOPPING") : "DECELERATING"; }
+          if(!trafficFree && c.target){ const tvn=V.get(c.target);
+            if(tvn){ const dNode=hav(c.lat,c.lon,tvn.lat,tvn.lon), ls=lightState(c.target,c.hd||0);
+              if(dNode<15){ if(ls==="RED"){ desired=0; st="WAITING"; } else if(ls==="YELLOW" && dNode>7){ desired=0; st="WAITING"; } } } }
+        }
+        // ---- aceleración / frenado progresivo ----
+        const acc=(desired>c.speed?c.accel:c.decel), dv=acc*dt;
+        if(c.speed<desired) c.speed=Math.min(desired,c.speed+dv); else c.speed=Math.max(desired,c.speed-dv);
+        if(c.hold<=0) c.state = c.speed<0.3?st : (desired>c.speed+0.1?"ACCELERATING":st);
+        const step=c.speed*dt;
         // ---- movimiento ----
-        if(trafficFree){   // tráfico libre dentro del círculo (rebota en el borde)
+        if(trafficFree){
           if(step>0){ const b=(c.hd||0)*Math.PI/180;
             let nlat=c.lat+(step*Math.cos(b))/111320, nlon=c.lon+(step*Math.sin(b))/(111320*Math.cos(c.lat*Math.PI/180)||1e-6);
-            if(Cesium.Cartesian3.distance(cC, Cesium.Cartesian3.fromDegrees(nlon,nlat,0))>rad*0.95) c.hd=(c.hd+150+Math.random()*60)%360;
-            else { c.lat=nlat; c.lon=nlon; if(Math.random()<0.02) c.hd=(c.hd+(Math.random()*40-20))%360; } }
-        } else {           // tráfico por calles (grafo dirigido)
-          if(!c.target){ c.target=pickNb(V,c.cur,c.prev); }
+            if(Cesium.Cartesian3.distance(cC, Cesium.Cartesian3.fromDegrees(nlon,nlat,0))>rad*0.95) c.hd=(c.hd+150+srand()*60)%360;
+            else { c.lat=nlat; c.lon=nlon; if(srand()<0.02) c.hd=(c.hd+(srand()*40-20))%360; } }
+        } else {
+          if(!c.target){ c.target=pickNbToward(V,c.cur,c.prev,c.dest); }
           const tv=c.target && V.get(c.target);
           if(tv){ const d=hav(c.lat,c.lon,tv.lat,tv.lon); c.hd=bearing(c.lat,c.lon,tv.lat,tv.lon);
-            if(step>0 && d<=step){ c.lat=tv.lat; c.lon=tv.lon; c.prev=c.cur; c.cur=c.target; c.target=pickNb(V,c.cur,c.prev);
+            if(step>0 && d<=step){ c.lat=tv.lat; c.lon=tv.lon; c.prev=c.cur; c.cur=c.target;
+              if(c.dest && c.cur===c.dest.key){ c.dest=getRandomDest(); }
+              c.target=pickNbToward(V,c.cur,c.prev,c.dest);
               const deg=V.get(c.cur).all.size;
-              if(id===trackedCarId && c.info && deg>=3 && Math.random()<0.22){ if(Math.random()<0.5) c.info.reds++; else c.info.stops++; }
+              if(id===trackedCarId && c.info && deg>=3 && srand()<0.22){ if(srand()<0.5) c.info.reds++; else c.info.stops++; }
             } else if(step>0){ c.lat+=(step*Math.cos(c.hd*Math.PI/180))/111320; c.lon+=(step*Math.sin(c.hd*Math.PI/180))/(111320*Math.cos(c.lat*Math.PI/180)||1e-6); } }
         }
-        const hd=c.hd||0, p=offsetRight(c.lat,c.lon,hd,c.lane);   // carril derecho (apunta al sentido de marcha)
+        const hd=c.hd||0, p=offsetRight(c.lat,c.lon,hd,c.lane);
         c.ent.position=Cesium.Cartesian3.fromDegrees(p.lon,p.lat,0); c.ent.billboard.rotation=Cesium.Math.toRadians(-hd);
-        if(Cesium.Cartesian3.distance(cC, Cesium.Cartesian3.fromDegrees(c.lon,c.lat,0))>rad){   // sale del círculo
+        // stats
+        if(c.state==="PARKED") parked++; else if(c.speed<0.4) stopped++; else { moving++; sumspd+=c.speed; }
+        if(Cesium.Cartesian3.distance(cC, Cesium.Cartesian3.fromDegrees(c.lon,c.lat,0))>rad){
           if(id!==trackedCarId) removeCar(id);
-          else if(!carOrbitOn){ removeCar(id); showLost("veh"); cancelCarTracking(false); }   // rastreado sin órbita → perdido
+          else if(!carOrbitOn){ removeCar(id); showLost("veh"); cancelCarTracking(false); }
         }
       }
-      // El círculo OBJETIVO sigue al vehículo rastreado (se desplaza con él)
+      // El círculo OBJETIVO sigue al vehículo rastreado (con órbita)
       const tc=trackedCarId && trafficCars.get(trackedCarId);
       if(tc && scopeHalf){
         recenterScopeOnCar(tc); if(!trafficFree) computeTrafficInner();
@@ -3544,7 +3729,14 @@
           if(dd > scopeRadiusM()*0.4){ refetchPending=true; refetchRoadsFollow().finally(()=>{ refetchPending=false; }); }
         }
       }
-      while(trafficCars.size < trafficTargetN) spawnCar();   // mantiene el tráfico lleno
+      while(trafficCars.size < trafficTargetN) spawnCar();
+      // ---- estadísticas del dashboard ----
+      simStats.n=trafficCars.size; simStats.moving=moving; simStats.stopped=stopped; simStats.parked=parked;
+      simStats.avg = moving ? (sumspd/moving)*2.237 : 0;
+      simStats.density = Math.round(Math.min(100, (trafficCars.size/Math.max(1,SIMCFG.MAX_VEH))*100));
+      simStats.congestion = simStats.density>75?"ALTA":simStats.density>45?"MEDIA":"BAJA";
+      if(typeof renderSimDash==="function") renderSimDash();
+      if(SIMCFG.DEBUG && typeof updateSimDebug==="function") updateSimDebug(); else if(typeof clearSimDebug==="function") clearSimDebug();
     }
     function cullCars(){ try{ _occ.cameraPosition=viewer.camera.positionWC; const t=viewer.clock.currentTime;
       for(const [,c] of trafficCars){ const p=c.ent.position.getValue(t); if(p) c.ent.show=_occ.isPointVisible(p); } }catch{} }
