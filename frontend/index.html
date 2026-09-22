@@ -246,7 +246,9 @@
     #tools-toggle { top:12px; left:50%; transform:translateX(-50%); }
     #ui-toggle:hover, #tools-toggle:hover { background:#123449; }
     #ui-toggle.active, #tools-toggle.active { border-color:#3aa0ff; color:#bfe9ff; box-shadow:0 0 12px rgba(58,160,255,.4); }
-    body.ui-hidden #left-col, body.ui-hidden #right-col, body.ui-hidden #dock { display:none !important; }
+    body.ui-hidden #left-col, body.ui-hidden #right-col, body.ui-hidden #dock,
+    body.ui-hidden #hud, body.ui-hidden #filters, body.ui-hidden #layers, body.ui-hidden #webcams, body.ui-hidden #radio,
+    body.ui-hidden #sel, body.ui-hidden #trk { display:none !important; }
     body.tools-hidden #spy-tools, body.tools-hidden #sub-pan, body.tools-hidden #sub-card, body.tools-hidden #sub-optic { display:none !important; }
 
     /* Barra de herramientas del OBJETIVO (arriba-centro) */
@@ -499,14 +501,21 @@
     .sc-brk.bl{bottom:-3px;left:-3px;border-right:none;border-top:none}
     .sc-brk.br{bottom:-3px;right:-3px;border-left:none;border-top:none}
     .surv-reticle { position:absolute; inset:0; width:100%; height:100%; }
-    .surv-rot { transform-box:fill-box; transform-origin:center; animation:survspin 9s linear infinite; }
-    /* Iris de cámara (siempre enfocando) en el centro del scope */
-    .surv-iris { transform-box:fill-box; transform-origin:center; animation:irisspin 16s linear infinite; }
-    @keyframes irisspin { to { transform:rotate(360deg); } }
-    .surv-iris .iris-hole { transform-box:fill-box; transform-origin:center; animation:irisfocus 1.7s ease-in-out infinite; }
-    @keyframes irisfocus { 0%,100%{ transform:scale(1); opacity:1 } 50%{ transform:scale(2.1); opacity:.45 } }
-    .surv-iris .iris-ring { transform-box:fill-box; transform-origin:center; animation:irisbreath 2.6s ease-in-out infinite; }
-    @keyframes irisbreath { 0%,100%{ transform:scale(1) } 50%{ transform:scale(1.12) } }
+    /* Enfoque central: círculos que respiran (sin dientes ni palas) */
+    .surv-focus { transform-box:fill-box; transform-origin:center; animation:focusbreath 2.4s ease-in-out infinite; }
+    @keyframes focusbreath { 0%,100%{ transform:scale(1); opacity:1 } 50%{ transform:scale(1.14); opacity:.72 } }
+    /* Animación de carga/escaneo de cuadrantes al generar el tráfico */
+    .surv-scan { display:none; position:absolute; inset:0; border-radius:50%; overflow:hidden; }
+    #surv-hud.scanning .surv-scan { display:block; }
+    .surv-scan::before { content:""; position:absolute; inset:0; border-radius:50%;
+      background:conic-gradient(from 0deg, rgba(95,224,138,.5), rgba(95,224,138,0) 32%);
+      transform-origin:center; animation:radarsweep 1.05s linear infinite; }
+    @keyframes radarsweep { to { transform:rotate(360deg); } }
+    .surv-scan::after { content:""; position:absolute; inset:0; border-radius:50%;
+      background:repeating-conic-gradient(from 0deg, rgba(127,211,255,.16) 0 1deg, transparent 1deg 45deg),
+                 radial-gradient(circle, transparent 0 34%, rgba(127,211,255,.12) 34% 35%, transparent 35% 66%, rgba(127,211,255,.12) 66% 67%, transparent 67%); }
+    .surv-scan span { position:absolute; left:50%; top:57%; transform:translateX(-50%); white-space:nowrap;
+      color:#5fe08a; font-size:11px; letter-spacing:2px; text-shadow:0 0 7px rgba(0,0,0,.85); animation:camblink 1s steps(1) infinite; }
     @keyframes survspin { to{ transform:rotate(360deg); } }
     .surv-nums { position:absolute; inset:0; }
     .surv-num { position:absolute; font-size:10px; color:#7fd3ff; letter-spacing:1px; white-space:nowrap;
@@ -873,15 +882,16 @@
     <div class="scope-ring"></div>
     <span class="sc-brk tl"></span><span class="sc-brk tr"></span><span class="sc-brk bl"></span><span class="sc-brk br"></span>
     <svg class="surv-reticle" viewBox="0 0 300 300" preserveAspectRatio="none">
+      <circle cx="150" cy="150" r="120" fill="none" stroke="#8fe3ff" stroke-opacity=".45" stroke-width="1.2"/>
       <circle cx="150" cy="150" r="95" fill="none" stroke="#8fe3ff" stroke-opacity=".4" stroke-width="1"/>
       <circle cx="150" cy="150" r="60" fill="none" stroke="#8fe3ff" stroke-opacity=".3" stroke-width="1"/>
-      <g class="surv-rot">
-        <circle cx="150" cy="150" r="120" fill="none" stroke="#8fe3ff" stroke-opacity=".55" stroke-width="1.4" stroke-dasharray="3 12"/>
-        <path d="M150 24v12M150 276v-12M24 150h12M276 150h-12" stroke="#8fe3ff" stroke-width="2"/>
-      </g>
       <path d="M150 22 A128 128 0 0 1 263 96" fill="none" stroke="#ff3b3b" stroke-width="3" stroke-linecap="round"/>
       <path d="M150 278 A128 128 0 0 1 37 204" fill="none" stroke="#ff3b3b" stroke-width="3" stroke-linecap="round"/>
-      <g class="surv-iris"></g>
+      <g class="surv-focus">
+        <circle cx="150" cy="150" r="24" fill="none" stroke="#8fe3ff" stroke-opacity=".7" stroke-width="1.4"/>
+        <circle cx="150" cy="150" r="12" fill="none" stroke="#8fe3ff" stroke-opacity=".85" stroke-width="1.4"/>
+        <circle cx="150" cy="150" r="3" fill="#8fe3ff"/>
+      </g>
     </svg>
     <div class="surv-nums"></div>
     <div class="surv-sig"><span class="surv-sig-bars"></span><span class="surv-sig-txt"></span></div>
@@ -909,6 +919,7 @@
     <div class="surv-bar"><span>1/60</span><span>F 5.6</span><span class="surv-tc">00:00:00:00</span>
       <span>ISO 800</span><span class="surv-rec">REC <b>●</b></span></div>
     <div class="surv-tag"></div>
+    <div class="surv-scan"><span>ESCANEANDO CUADRANTES…</span></div>
   </div>
 
   <!-- Barra de herramientas del OBJETIVO -->
@@ -1184,16 +1195,6 @@
     };
     const icon = (n) => IC[n] || "";
     document.querySelectorAll("[data-ic]").forEach(e => { e.innerHTML = icon(e.dataset.ic); });
-    // Iris de cámara del scope (palas de apertura)
-    (function buildIris(){ const g=document.querySelector(".surv-iris"); if(!g) return;
-      const cx=150, cy=150, R=27, r=10, N=7, tw=(2*Math.PI/N)*0.9; let s="";
-      for(let i=0;i<N;i++){ const a=i*2*Math.PI/N;
-        const x1=cx+R*Math.cos(a), y1=cy+R*Math.sin(a), x2=cx+r*Math.cos(a+tw), y2=cy+r*Math.sin(a+tw),
-              x3=cx+R*Math.cos(a+2*Math.PI/N), y3=cy+R*Math.sin(a+2*Math.PI/N);
-        s+=`<path d="M${x1.toFixed(1)} ${y1.toFixed(1)} L${x2.toFixed(1)} ${y2.toFixed(1)} L${x3.toFixed(1)} ${y3.toFixed(1)}" fill="rgba(143,227,255,.10)" stroke="#8fe3ff" stroke-width="1"/>`; }
-      s+=`<circle class="iris-ring" cx="150" cy="150" r="10" fill="none" stroke="#8fe3ff" stroke-width="1.4"/>`;
-      s+=`<circle class="iris-hole" cx="150" cy="150" r="3" fill="#8fe3ff"/>`;
-      g.innerHTML=s; })();
     // Ventanas movibles: clic izquierdo, arrastrar, soltar. Agarra por casi cualquier parte.
     const DRAG_IGN = "input,textarea,select,button,a,iframe,img,label,.wc-fav,.wc-close,.sclose,"+
                      ".wcg-close,.wcf-x,.sv-max,#sv-pano,.hj-exit,.dock-btn,.ritem,.wc-card,.veh-item,.pbtn,.sbtn2";
@@ -3378,7 +3379,7 @@
     // ================= Tráfico de vehículos dentro del círculo del OBJETIVO =================
     const trafficCars=new Map();   // "car:N" -> {id,num,plate,tag,cur,prev,target,lat,lon,speed,hold,lane,ent,tracked}
     let trafficTimer=null, trafficGraph=null, trafficKeys=[], trafficInner=[], trafficTargetN=0,
-        trafficSeq=0, trafficToken=null, trackedCarId=null, trafficCenter=null, trafficRefetch=null;
+        trafficSeq=0, trafficToken=null, trackedCarId=null, trafficCenter=null, trafficRefetch=null, trafficFree=false;
     let carOrbitOn=false, carOrbitRAF=0, carOrbitHeading=0, carOrbitPitch=0, carOrbitRange=0;
     let scopeHalf=null, refetchPending=false;   // el círculo OBJETIVO sigue al vehículo rastreado
     function recenterScopeOnCar(c){
@@ -3439,34 +3440,44 @@
       if(!survActive||!survGeo) return;
       stopTraffic();
       const token={}; trafficToken=token;
-      const els=await fetchFeatures("veh");
-      if(trafficToken!==token || !survActive) return;
-      if(!els.length){ vehGone(); return; }
-      const V=buildRoadGraph(els);
-      trafficKeys=[...V.keys()].filter(k=>V.get(k).out.size||V.get(k).all.size);
-      if(!trafficKeys.length){ vehGone(); return; }
-      trafficGraph=V; trafficCenter={lat:survGeo.lat, lon:survGeo.lon};
-      computeTrafficInner();
-      // cantidad según la densidad de la zona (10 a 100)
-      trafficTargetN = Math.max(10, Math.min(100, Math.round(trafficInner.length*0.6) + 10 + rnd(20)));
-      trafficTargetN = Math.min(trafficTargetN, Math.max(10, trafficInner.length));
-      for(let i=0;i<trafficTargetN;i++) spawnCar();   // aparecen de inmediato
+      $("surv-hud").classList.add("scanning");   // animación de carga/escaneo de cuadrantes
+      const [els]=await Promise.all([ fetchFeatures("veh"), new Promise(r=>setTimeout(r,1200)) ]);
+      if(trafficToken!==token || !survActive){ $("surv-hud").classList.remove("scanning"); return; }
+      const V = els.length ? buildRoadGraph(els) : null;
+      const keys = V ? [...V.keys()].filter(k=>V.get(k).out.size||V.get(k).all.size) : [];
+      if(V && keys.length){   // tráfico por calles (direcciones correctas)
+        trafficFree=false; trafficGraph=V; trafficKeys=keys; trafficCenter={lat:survGeo.lat, lon:survGeo.lon}; computeTrafficInner();
+        trafficTargetN = Math.max(10, Math.min(100, Math.round(trafficInner.length*0.6) + 10 + rnd(20)));
+        trafficTargetN = Math.min(trafficTargetN, Math.max(10, trafficInner.length));
+      } else {   // SIEMPRE hay vehículos: si no hay calles, tráfico libre dentro del círculo
+        trafficFree=true; trafficGraph=null; trafficTargetN=12+rnd(18);
+      }
+      for(let i=0;i<trafficTargetN;i++) spawnCar();   // aparecen cuando terminan de "cargar"
+      $("surv-hud").classList.remove("scanning");
       trafficTimer=setInterval(tickTraffic, 120);
     }
     function stopTraffic(){
       trafficToken={}; if(trafficTimer){ clearInterval(trafficTimer); trafficTimer=null; }
       for(const [,c] of trafficCars){ if(c.ent) viewer.entities.remove(c.ent); }
-      trafficCars.clear(); trafficGraph=null; cancelCarTracking(false);
+      trafficCars.clear(); trafficGraph=null; trafficFree=false; $("surv-hud").classList.remove("scanning"); cancelCarTracking(false);
     }
     function spawnCar(){
-      if(!trafficGraph || !trafficInner.length) return;
-      const cur=trafficInner[rnd(trafficInner.length)], v=trafficGraph.get(cur);
-      if(!v) return;
-      const r=Math.random();   // mezcla de velocidades: lentos / normales / rápidos
-      const speed = r<0.18 ? (0.8+Math.random()*1.4) : r<0.82 ? (2.5+Math.random()*3.5) : (6.5+Math.random()*6);
+      const rad=scopeRadiusM();
+      let lat,lon,cur=null,target=null,hd=Math.random()*360;
+      if(trafficFree){
+        const a=Math.random()*Math.PI*2, d=rad*0.85*Math.sqrt(Math.random());
+        lat=survGeo.lat+(d*Math.cos(a))/111320; lon=survGeo.lon+(d*Math.sin(a))/(111320*Math.cos(survGeo.lat*Math.PI/180)||1e-6);
+      } else {
+        if(!trafficGraph || !trafficInner.length) return;
+        cur=trafficInner[rnd(trafficInner.length)]; const v=trafficGraph.get(cur); if(!v) return;
+        lat=v.lat; lon=v.lon; target=pickNb(trafficGraph,cur,null);
+      }
+      const r=Math.random();   // velocidad de crucero: lentos / normales / rápidos
+      const cruise = r<0.18 ? (1+Math.random()*1.5) : r<0.82 ? (3+Math.random()*4) : (8+Math.random()*7);
       const num=(++trafficSeq), id="car:"+num;
-      const car={ id, num, plate:randPlate(), tag:"", cur, prev:null, target:pickNb(trafficGraph,cur,null),
-        lat:v.lat, lon:v.lon, speed, hold:(Math.random()<0.12?10+rnd(40):0), lane:3.0, tracked:false, info:genCarInfo() };
+      const car={ id, num, plate:randPlate(), tag:"", cur, prev:null, target, lat, lon, hd,
+        cruise, speed:cruise*0.5, accel:0.6+Math.random()*0.9,
+        hold:(Math.random()<0.1?20+rnd(80):0), lane:3.0, tracked:false, info:genCarInfo() };
       car.ent=viewer.entities.add({ id, position:Cesium.Cartesian3.fromDegrees(car.lon,car.lat,0),
         billboard:{ image:CAR_IMG, width:32, height:32, rotation:0, alignedAxis:Cesium.Cartesian3.ZERO,
           disableDepthTestDistance:Number.POSITIVE_INFINITY },
@@ -3478,24 +3489,46 @@
     }
     function removeCar(id){ const c=trafficCars.get(id); if(c&&c.ent) viewer.entities.remove(c.ent); trafficCars.delete(id); }
     function tickTraffic(){
-      const V=trafficGraph; if(!V) return;
-      const rad=scopeRadiusM(), cC=Cesium.Cartesian3.fromDegrees(survGeo.lon,survGeo.lat,0);
+      if(!trafficCars.size && !trafficGraph && !trafficFree) return;
+      const V=trafficGraph, rad=scopeRadiusM(), cC=Cesium.Cartesian3.fromDegrees(survGeo.lon,survGeo.lat,0);
       for(const [id,c] of trafficCars){
-        if(c.hold>0){ c.hold--; }   // detenido: esperando en intersección o parqueado
+        // ---- IA: velocidad deseada (crucero, eventos, evitar colisión) ----
+        let desired=c.cruise;
+        if(c.hold>0){ c.hold--; desired=0; }
         else {
-          if(!c.target){ c.target=pickNb(V,c.cur,c.prev); if(!c.target){ c.hold=10+rnd(20); } }
-          const tv=c.target && V.get(c.target);
-          if(tv){
-            const d=hav(c.lat,c.lon,tv.lat,tv.lon), step=c.speed*0.12; c.hd=bearing(c.lat,c.lon,tv.lat,tv.lon);
-            if(d<=step){ c.lat=tv.lat; c.lon=tv.lon; c.prev=c.cur; c.cur=c.target; c.target=pickNb(V,c.cur,c.prev);
-              const deg=V.get(c.cur).all.size;
-              if(deg>=3 && Math.random()<0.30) c.hold=6+rnd(22);        // espera en intersección
-              else if(Math.random()<0.03) c.hold=50+rnd(120);          // parquea un rato
-              if(id===trackedCarId && c.info && deg>=3 && Math.random()<0.22){ if(Math.random()<0.5) c.info.reds++; else c.info.stops++; }
-            } else { c.lat+=(step*Math.cos(c.hd*Math.PI/180))/111320; c.lon+=(step*Math.sin(c.hd*Math.PI/180))/(111320*Math.cos(c.lat*Math.PI/180)||1e-6); }
-          }
+          if(Math.random()<0.004) c.hold=80+rnd(1600);            // se parquea (segundos a minutos)
+          else if(Math.random()<0.008) c.cruise=1+Math.random()*2;   // reduce marcha
+          else if(Math.random()<0.008) c.cruise=9+Math.random()*7;   // acelera fuerte
+          // coche adelante → frenar (casi colisión)
+          let gap=Infinity;
+          for(const [oid,o] of trafficCars){ if(oid===id) continue;
+            if(Math.abs(o.lat-c.lat)>0.0004 || Math.abs(o.lon-c.lon)>0.0005) continue;
+            const dm=hav(c.lat,c.lon,o.lat,o.lon); if(dm>=gap||dm>18) continue;
+            const brg=bearing(c.lat,c.lon,o.lat,o.lon), diff=Math.abs(((brg-(c.hd||0)+540)%360)-180);
+            if(diff<35) gap=dm; }
+          if(gap<Infinity){ desired=Math.min(desired, Math.max(0,(gap-4)*0.7)); if(gap<6) desired=0; }
         }
-        const hd=c.hd||0, p=offsetRight(c.lat,c.lon,hd,c.lane);   // carril derecho (separa sentidos)
+        // acelera suave, frena fuerte (frenazo)
+        const dv=c.accel*0.12;
+        if(c.speed<desired) c.speed=Math.min(desired, c.speed+dv);
+        else c.speed=Math.max(desired, c.speed-dv*3);
+        const step=c.speed*0.12;
+        // ---- movimiento ----
+        if(trafficFree){   // tráfico libre dentro del círculo (rebota en el borde)
+          if(step>0){ const b=(c.hd||0)*Math.PI/180;
+            let nlat=c.lat+(step*Math.cos(b))/111320, nlon=c.lon+(step*Math.sin(b))/(111320*Math.cos(c.lat*Math.PI/180)||1e-6);
+            if(Cesium.Cartesian3.distance(cC, Cesium.Cartesian3.fromDegrees(nlon,nlat,0))>rad*0.95) c.hd=(c.hd+150+Math.random()*60)%360;
+            else { c.lat=nlat; c.lon=nlon; if(Math.random()<0.02) c.hd=(c.hd+(Math.random()*40-20))%360; } }
+        } else {           // tráfico por calles (grafo dirigido)
+          if(!c.target){ c.target=pickNb(V,c.cur,c.prev); }
+          const tv=c.target && V.get(c.target);
+          if(tv){ const d=hav(c.lat,c.lon,tv.lat,tv.lon); c.hd=bearing(c.lat,c.lon,tv.lat,tv.lon);
+            if(step>0 && d<=step){ c.lat=tv.lat; c.lon=tv.lon; c.prev=c.cur; c.cur=c.target; c.target=pickNb(V,c.cur,c.prev);
+              const deg=V.get(c.cur).all.size;
+              if(id===trackedCarId && c.info && deg>=3 && Math.random()<0.22){ if(Math.random()<0.5) c.info.reds++; else c.info.stops++; }
+            } else if(step>0){ c.lat+=(step*Math.cos(c.hd*Math.PI/180))/111320; c.lon+=(step*Math.sin(c.hd*Math.PI/180))/(111320*Math.cos(c.lat*Math.PI/180)||1e-6); } }
+        }
+        const hd=c.hd||0, p=offsetRight(c.lat,c.lon,hd,c.lane);   // carril derecho (apunta al sentido de marcha)
         c.ent.position=Cesium.Cartesian3.fromDegrees(p.lon,p.lat,0); c.ent.billboard.rotation=Cesium.Math.toRadians(-hd);
         if(Cesium.Cartesian3.distance(cC, Cesium.Cartesian3.fromDegrees(c.lon,c.lat,0))>rad){   // sale del círculo
           if(id!==trackedCarId) removeCar(id);
@@ -3505,8 +3538,8 @@
       // El círculo OBJETIVO sigue al vehículo rastreado (se desplaza con él)
       const tc=trackedCarId && trafficCars.get(trackedCarId);
       if(tc && scopeHalf){
-        recenterScopeOnCar(tc); computeTrafficInner();
-        if(trafficCenter && !refetchPending){
+        recenterScopeOnCar(tc); if(!trafficFree) computeTrafficInner();
+        if(!trafficFree && trafficCenter && !refetchPending){
           const dd=hav(survGeo.lat, survGeo.lon, trafficCenter.lat, trafficCenter.lon);
           if(dd > scopeRadiusM()*0.4){ refetchPending=true; refetchRoadsFollow().finally(()=>{ refetchPending=false; }); }
         }
