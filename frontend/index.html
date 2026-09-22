@@ -261,11 +261,11 @@
     .pan-pad button:hover { background:#18465f; }
     .pan-pad .pan-c { background:transparent; border:none; cursor:default; }
     /* Galería de capturas (derecha) */
-    #shots-modal { position:absolute; z-index:33; top:52px; right:12px; width:270px; max-height:calc(100vh - 110px);
+    #shots-modal { position:absolute; z-index:33; top:52px; right:12px; width:268px; max-height:56vh;
       display:none; flex-direction:column; background:rgba(6,16,26,.96); border:1px solid #2a6a8f; border-radius:12px;
       overflow:hidden; backdrop-filter:blur(8px); box-shadow:0 8px 34px rgba(0,0,0,.6); }
     #shots-modal.on { display:flex; }
-    #shots-modal.below-sat { top:272px; max-height:calc(100vh - 330px); }   /* deja sitio al mini feed orbital */
+    #shots-modal.below-sat { top:272px; max-height:48vh; }   /* deja sitio al mini feed orbital */
     .sm-head { display:flex; align-items:center; gap:7px; padding:9px 12px; font-size:12px; letter-spacing:1px;
       color:#7fd3ff; font-weight:600; background:rgba(127,211,255,.08); }
     .sm-x { margin-left:auto; cursor:pointer; color:#ffdada; }
@@ -285,6 +285,10 @@
     /* Zoom en el visor a pantalla completa */
     .shv-stage { overflow:hidden; }
     .shv-img { cursor:zoom-in; }
+    .shv-zoom { position:absolute; bottom:22px; left:50%; transform:translateX(-50%); display:flex; gap:8px; }
+    .shv-zoom button { width:40px; height:40px; margin:0; font-size:20px; border-radius:9px; background:rgba(18,52,73,.9);
+      border:1px solid #2a6a8f; color:#cfefff; cursor:pointer; }
+    .shv-zoom button:hover { background:#18465f; }
 
     /* Mini feed orbital (mientras HOVER activo) */
     #sat-mini { position:absolute; z-index:33; top:52px; right:12px; width:216px; display:none;
@@ -915,6 +919,7 @@
   <div id="shot-view">
     <span class="shv-close" title="Cerrar (Esc)">✕</span>
     <div class="shv-stage"><img class="shv-img" alt=""></div>
+    <div class="shv-zoom"><button class="shv-zin" title="Acercar">＋</button><button class="shv-zout" title="Alejar">－</button><button class="shv-zreset" title="Restablecer">⟲</button></div>
     <div class="shv-info"></div>
   </div>
 
@@ -2779,12 +2784,14 @@
       const list=$("sm-list");
       if(!spyShots.length){ list.innerHTML='<div class="sm-empty">Sin capturas todavía.</div>'; pendingDel=-1; return; }
       list.innerHTML = spyShots.map((s,i)=>{
-        const d=new Date(s.time), hm=`${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+        const dt=new Date(s.time).toLocaleString(), la=(+s.lat).toFixed(6), lo=(+s.lon).toFixed(6);
         const del = (pendingDel===i)
-          ? `<div class="sdelrow"><button class="sd-yes" data-i="${i}">Sí</button><button class="sd-no" data-i="${i}">No</button></div>`
-          : `<button class="sdel" data-i="${i}" title="Eliminar">${icon("trash")}</button>`;
-        return `<div class="shot"><img src="${s.img}" alt="" title="Ver a pantalla completa">
-          <div class="si"><b>${s.id}</b><br><span class="o">${s.optic}</span><br>${s.dist} · ${hm}</div>${del}</div>`;
+          ? `<div class="sdelrow"><button class="sd-yes" data-i="${i}">${icon("trash")} Sí, borrar</button><button class="sd-no" data-i="${i}">No</button></div>`
+          : `<button class="sdel" data-i="${i}">${icon("trash")} Eliminar</button>`;
+        return `<div class="shot"><img src="${s.img}" alt="" title="${la}, ${lo} · clic para ampliar">
+          <div class="si"><b>SPYEYE ${s.id}</b> · <span class="o">${s.optic}</span><br>
+            LAT <b>${la}</b><br>LON <b>${lo}</b><br>
+            DIST <b>${s.dist}</b> · ELEV <b>${s.elev}</b><br>AZ <b>${s.az}°</b> · AREA <b>${s.area}</b><br>${dt}</div>${del}</div>`;
       }).join("");
       list.querySelectorAll(".shot img").forEach((im,idx)=>im.onclick=()=>openShotView(idx));   // ampliar a pantalla completa
       list.querySelectorAll(".sdel").forEach(b=>b.onclick=()=>{ pendingDel=+b.dataset.i; renderShots(); });
@@ -3089,7 +3096,11 @@
       im.addEventListener("dblclick",()=>{ shvScale=shvScale>1?1:2.5; shvX=0; shvY=0; applyShv(); });
       im.addEventListener("mousedown",(e)=>{ if(shvScale<=1) return; e.preventDefault(); shvDown={x:e.clientX,y:e.clientY,ox:shvX,oy:shvY}; im.style.cursor="grabbing"; });
       window.addEventListener("mousemove",(e)=>{ if(!shvDown) return; shvX=shvDown.ox+(e.clientX-shvDown.x); shvY=shvDown.oy+(e.clientY-shvDown.y); applyShv(); });
-      window.addEventListener("mouseup",()=>{ if(shvDown){ shvDown=null; applyShv(); } }); }
+      window.addEventListener("mouseup",()=>{ if(shvDown){ shvDown=null; applyShv(); } });
+      const zoomBy=(f)=>{ shvScale=Math.min(6,Math.max(1,shvScale*f)); if(shvScale===1){shvX=0;shvY=0;} applyShv(); };
+      document.querySelector(".shv-zin").onclick=()=>zoomBy(1.3);
+      document.querySelector(".shv-zout").onclick=()=>zoomBy(1/1.3);
+      document.querySelector(".shv-zreset").onclick=()=>{ shvScale=1; shvX=0; shvY=0; applyShv(); }; }
     document.querySelector(".shv-close").onclick=closeShotView;
     $("shot-view").onclick=(e)=>{ if(e.target.id==="shot-view") closeShotView(); };   // clic fuera cierra (no en el stage/imagen)
     function screenToGeo(x,y){
