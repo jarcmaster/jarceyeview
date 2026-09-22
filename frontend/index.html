@@ -324,6 +324,57 @@
       background:linear-gradient(0deg, rgba(0,0,0,.4), transparent); }
     .satm-foot .satm-dl { margin-left:auto; color:#5fe08a; }
     .satm-foot b { color:#dff; }
+
+    /* Seguimiento de personas (ventana izquierda) */
+    #people-feed { position:absolute; z-index:33; left:12px; bottom:52px; width:252px; display:none;
+      background:rgba(4,10,20,.96); border:1px solid #2a6a8f; border-radius:12px; overflow:hidden;
+      box-shadow:0 8px 30px rgba(0,0,0,.6); backdrop-filter:blur(8px); font-family:"Consolas",monospace; }
+    #people-feed.on { display:block; }
+    .pf-head { display:flex; align-items:center; gap:6px; padding:7px 10px; font-size:11px; letter-spacing:1px;
+      color:#7fd3ff; font-weight:600; background:rgba(127,211,255,.08); }
+    .pf-head .pf-live { color:#ff5252; animation:camblink 1s steps(1) infinite; }
+    .pf-head .pf-count { margin-left:auto; color:#5fe08a; font-weight:400; }
+    .pf-body { position:relative; height:176px; overflow:hidden; background:#04101c; }
+    #pf-video { width:100%; height:100%; object-fit:cover; display:none; background:#000; }
+    #people-feed.has-video #pf-video { display:block; }
+    #people-feed.has-video .pf-synth { display:none; }
+    .pf-synth { position:absolute; inset:0; background:radial-gradient(120% 90% at 50% 18%, #0c1c30, #050b16 75%); }
+    .pf-grid { position:absolute; left:-20%; right:-20%; bottom:0; height:70%; opacity:.5;
+      background:linear-gradient(rgba(127,211,255,.09) 1px, transparent 1px) 0 0/100% 18px,
+                 linear-gradient(90deg, rgba(127,211,255,.09) 1px, transparent 1px) 0 0/18px 100%;
+      transform:perspective(120px) rotateX(38deg); transform-origin:bottom; }
+    .pf-scan { position:absolute; left:0; right:0; height:26px; top:-26px;
+      background:linear-gradient(rgba(95,224,138,.16), transparent); animation:pfscan 3s linear infinite; }
+    @keyframes pfscan { 0%{top:-26px} 100%{top:176px} }
+    .pf-person { position:absolute; width:26px; height:48px; }
+    .pf-box { position:absolute; inset:0; border:1.4px solid #5fe08a; box-shadow:0 0 8px rgba(95,224,138,.45); }
+    .pf-box::before, .pf-box::after { content:""; position:absolute; width:6px; height:6px; border:1.4px solid #baffd0; }
+    .pf-box::before { top:-1px; left:-1px; border-right:none; border-bottom:none; }
+    .pf-box::after { bottom:-1px; right:-1px; border-left:none; border-top:none; }
+    .pf-fig { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:15px; height:36px;
+      filter:drop-shadow(0 0 4px rgba(95,224,138,.5)); }
+    .pf-tag { position:absolute; top:-13px; left:-1px; font-size:8px; color:#baffd0; white-space:nowrap; text-shadow:0 0 4px rgba(0,0,0,.9); }
+    @keyframes pfmove1 { 0%{left:18px;top:96px} 50%{left:186px;top:66px} 100%{left:18px;top:96px} }
+    @keyframes pfmove2 { 0%{left:200px;top:58px} 50%{left:56px;top:112px} 100%{left:200px;top:58px} }
+    @keyframes pfmove3 { 0%{left:108px;top:120px} 50%{left:150px;top:48px} 100%{left:108px;top:120px} }
+    .pf-p1{ animation:pfmove1 9s ease-in-out infinite; } .pf-p2{ animation:pfmove2 11s ease-in-out infinite; } .pf-p3{ animation:pfmove3 8s ease-in-out infinite; }
+    .pf-hud { position:absolute; left:0; right:0; bottom:0; display:flex; gap:8px; padding:5px 9px; font-size:10px; color:#bfe9ff;
+      background:linear-gradient(0deg, rgba(0,0,0,.5), transparent); }
+    .pf-hud .pf-fps { margin-left:auto; color:#5fe08a; }
+
+    /* Visor de captura a pantalla completa */
+    #shot-view { position:absolute; inset:0; z-index:45; display:none; background:rgba(2,6,12,.92); backdrop-filter:blur(4px);
+      align-items:center; justify-content:center; gap:26px; padding:40px; }
+    #shot-view.on { display:flex; }
+    .shv-close { position:absolute; top:16px; right:22px; font-size:24px; color:#8fe3ff; cursor:pointer; }
+    .shv-close:hover { color:#bfe9ff; }
+    .shv-stage { max-width:62%; max-height:90%; display:flex; align-items:center; justify-content:center; }
+    .shv-img { max-width:100%; max-height:86vh; border-radius:10px; border:1px solid #2a6a8f; box-shadow:0 12px 44px rgba(0,0,0,.7); }
+    .shv-info { width:290px; font-family:"Consolas",monospace; font-size:13px; line-height:1.8; color:#bfe9ff; }
+    .shv-info h3 { color:#7fd3ff; letter-spacing:1px; margin:0 0 12px; font-size:15px; }
+    .shv-info b { color:#dff; }
+    .shot img { cursor:zoom-in; }
+    #sm-list { flex:1; min-height:0; }   /* asegura el scroll dentro del modal */
     @keyframes survjit { 0%,90%,100%{filter:drop-shadow(0 0 5px rgba(120,220,255,.4))}
       93%{filter:drop-shadow(1.6px 0 0 rgba(255,45,45,.55)) drop-shadow(-1.6px 0 0 rgba(45,255,255,.55))} }
     .scope-ring { position:absolute; inset:0; border-radius:50%; border:2px solid rgba(143,227,255,.75);
@@ -745,6 +796,7 @@
     <div class="stool" id="tl-pan"><span data-ic="move"></span> PAN</div>
     <div class="stool" id="tl-north"><span data-ic="compass"></span> NORTE</div>
     <div class="stool" id="tl-hover"><span data-ic="orbit"></span> HOVER</div>
+    <div class="stool" id="tl-people"><span data-ic="people"></span> PERSONAS</div>
     <div class="stool" id="tl-optic"><span data-ic="thermal"></span> ÓPTICA</div>
     <div class="stool" id="tl-shot"><span data-ic="camera"></span> FOTO</div>
     <div class="stool" id="tl-shots"><span data-ic="images"></span> GALERÍA</div>
@@ -788,6 +840,26 @@
       <div class="satm-scan"></div>
     </div>
     <div class="satm-foot"><span>ALT <b>512 km</b></span><span class="satm-dl">▼ DOWNLINK</span><span class="satm-gbps">28.4 Gbps</span></div>
+  </div>
+
+  <!-- Seguimiento de personas (ventana izquierda, mientras PERSONAS está activo) -->
+  <div id="people-feed">
+    <div class="pf-head"><span class="pf-live">●</span> SEGUIMIENTO DE PERSONAS <span class="pf-count">TRK 0</span></div>
+    <div class="pf-body">
+      <video id="pf-video" muted loop playsinline preload="auto"><source src="assets/follow-people.mp4" type="video/mp4"></video>
+      <div class="pf-synth">
+        <div class="pf-grid"></div>
+        <div class="pf-scan"></div>
+      </div>
+      <div class="pf-hud"><span>◉ AI TRACK</span><span class="pf-fps">24 FPS</span></div>
+    </div>
+  </div>
+
+  <!-- Visor de captura a pantalla completa -->
+  <div id="shot-view">
+    <span class="shv-close" title="Cerrar (Esc)">✕</span>
+    <div class="shv-stage"><img class="shv-img" alt=""></div>
+    <div class="shv-info"></div>
   </div>
 
   <div id="wc-player"></div>
@@ -927,6 +999,7 @@
       orbit:'<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><ellipse cx="12" cy="12" rx="10" ry="4.4" transform="rotate(35 12 12)"/></svg>',
       thermal:'<svg class="ic" viewBox="0 0 24 24"><path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/><path d="M12 8v6"/></svg>',
       images:'<svg class="ic" viewBox="0 0 24 24"><rect x="8" y="2" width="14" height="14" rx="2"/><path d="M2 8v12a2 2 0 0 0 2 2h12"/><circle cx="12.5" cy="6.5" r="1.5"/><path d="m8 13 3-3 4 4"/></svg>',
+      people:'<svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="7" r="3.2"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17.5" cy="8" r="2.6"/><path d="M16 14.4A5.5 5.5 0 0 1 22 20"/></svg>',
     };
     const icon = (n) => IC[n] || "";
     document.querySelectorAll("[data-ic]").forEach(e => { e.innerHTML = icon(e.dataset.ic); });
@@ -2538,12 +2611,13 @@
     function panView(dir){
       if(hoverOn) setHover(false);
       const h=viewer.camera.positionCartographic.height, amt=Math.max(20, h*0.12), dg=amt*0.7071;
-      ({ n:()=>viewer.camera.moveUp(amt), s:()=>viewer.camera.moveDown(amt),
-         e:()=>viewer.camera.moveRight(amt), w:()=>viewer.camera.moveLeft(amt),
-         ne:()=>{viewer.camera.moveUp(dg);viewer.camera.moveRight(dg);},
-         nw:()=>{viewer.camera.moveUp(dg);viewer.camera.moveLeft(dg);},
-         se:()=>{viewer.camera.moveDown(dg);viewer.camera.moveRight(dg);},
-         sw:()=>{viewer.camera.moveDown(dg);viewer.camera.moveLeft(dg);} }[dir]||(()=>{}))();
+      // El MAPA se mueve en la dirección pulsada → la cámara se mueve al lado contrario
+      ({ n:()=>viewer.camera.moveDown(amt), s:()=>viewer.camera.moveUp(amt),
+         e:()=>viewer.camera.moveLeft(amt), w:()=>viewer.camera.moveRight(amt),
+         ne:()=>{viewer.camera.moveDown(dg);viewer.camera.moveLeft(dg);},
+         nw:()=>{viewer.camera.moveDown(dg);viewer.camera.moveRight(dg);},
+         se:()=>{viewer.camera.moveUp(dg);viewer.camera.moveLeft(dg);},
+         sw:()=>{viewer.camera.moveUp(dg);viewer.camera.moveRight(dg);} }[dir]||(()=>{}))();
     }
     // --- Puntos cardinales ---
     const CARD=[["N",0],["NE",45],["E",90],["SE",135],["S",180],["SW",225],["W",270],["NW",315]];
@@ -2632,6 +2706,7 @@
             DIST <b>${s.dist}</b> · ELEV <b>${s.elev}</b> · AZ <b>${s.az}°</b><br>
             AREA <b>${s.area}</b><br>${dt}</div>${del}</div>`;
       }).join("");
+      list.querySelectorAll(".shot img").forEach((im,idx)=>im.onclick=()=>openShotView(idx));   // ampliar a pantalla completa
       list.querySelectorAll(".sdel").forEach(b=>b.onclick=()=>{ pendingDel=+b.dataset.i; renderShots(); });
       list.querySelectorAll(".sd-yes").forEach(b=>b.onclick=()=>{ spyShots.splice(+b.dataset.i,1); pendingDel=-1; persistShots(); renderShots(); });
       list.querySelectorAll(".sd-no").forEach(b=>b.onclick=()=>{ pendingDel=-1; renderShots(); });
@@ -2643,6 +2718,7 @@
       ["sub-pan","sub-card","sub-optic"].forEach(id=>$(id).classList.remove("on"));
       document.querySelectorAll("#spy-tools .stool").forEach(b=>b.classList.remove("active"));
       if(hoverOn) setHover(false);
+      if(typeof peopleOn!=="undefined" && peopleOn) showPeople(false);
       if(opticMode){ opticMode=""; const o=$("scope-optic"); o.style.backdropFilter=""; o.style.webkitBackdropFilter=""; o.style.display="none";
         document.querySelectorAll("#sub-optic .cbtn").forEach(b=>b.classList.remove("active")); }
       $("shots-modal").classList.remove("on");
@@ -2663,6 +2739,49 @@
       m.classList.toggle("on",on); $("tl-shots").classList.toggle("active",on); if(on) renderShots(); };
     $("sub-pan").querySelectorAll("button[data-d]").forEach(b=>b.onclick=()=>panView(b.dataset.d));
     document.querySelector(".sm-x").onclick=()=>{ $("shots-modal").classList.remove("on"); $("tl-shots").classList.remove("active"); };
+
+    // --- Seguir personas: ventana de feed a la izquierda (video assets/follow-people.mp4 o animación sintética) ---
+    let peopleOn=false, pfBuilt=false, pfFpsTimer=null;
+    const PF_FIG='<svg class="pf-fig" viewBox="0 0 15 36"><circle cx="7.5" cy="5" r="4.2" fill="#5fe08a"/><path d="M7.5 9.5c-4.2 0-5.2 4.2-5.2 9.5v10.5h3.2v-8.5h4v8.5h3.2V19c0-5.3-1-9.5-5.2-9.5z" fill="#5fe08a"/></svg>';
+    function buildPeople(){
+      if(pfBuilt) return;
+      const synth=document.querySelector(".pf-synth");
+      [["pf-p1","07","92%"],["pf-p2","12","87%"],["pf-p3","23","95%"]].forEach(([cls,id,cf])=>{
+        const d=document.createElement("div"); d.className="pf-person "+cls;
+        d.innerHTML=`<div class="pf-box"></div>${PF_FIG}<div class="pf-tag">ID ${id} · ${cf}</div>`; synth.appendChild(d); });
+      pfBuilt=true;
+    }
+    function showPeople(on){
+      peopleOn=on; $("tl-people").classList.toggle("active",on);
+      const pf=$("people-feed"); pf.classList.toggle("on",on);
+      if(on){ buildPeople();
+        const v=$("pf-video");
+        v.onloadeddata=()=>{ pf.classList.add("has-video"); v.play().catch(()=>{}); };
+        v.onerror=()=>{ pf.classList.remove("has-video"); };
+        try{ v.load(); }catch{}
+        clearInterval(pfFpsTimer);
+        pfFpsTimer=setInterval(()=>{ const f=document.querySelector(".pf-fps"); if(f) f.textContent=(22+rnd(8))+" FPS";
+          const c=document.querySelector(".pf-count"); if(c) c.textContent="TRK "+(3+rnd(3)); }, 900);
+      } else { clearInterval(pfFpsTimer); pfFpsTimer=null; try{ $("pf-video").pause(); }catch{} }
+    }
+    $("tl-people").onclick=()=>showPeople(!peopleOn);
+
+    // --- Visor de captura a pantalla completa (con detalles) ---
+    function openShotView(i){
+      const s=spyShots[i]; if(!s) return; const dt=new Date(s.time).toLocaleString();
+      document.querySelector(".shv-img").src=s.img;
+      document.querySelector(".shv-info").innerHTML=
+        `<h3>${icon("images")} SPYEYE ${s.id}</h3>`+
+        `<div>ÓPTICA · <b>${s.optic}</b></div>`+
+        `<div>LAT · <b>${(+s.lat).toFixed(6)}</b></div><div>LON · <b>${(+s.lon).toFixed(6)}</b></div>`+
+        `<div>DIST · <b>${s.dist}</b></div><div>ELEV · <b>${s.elev}</b></div>`+
+        `<div>AZIMUT · <b>${s.az}°</b></div><div>ÁREA · <b>${s.area}</b></div>`+
+        `<div>FECHA · <b>${dt}</b></div>`;
+      $("shot-view").classList.add("on");
+    }
+    function closeShotView(){ $("shot-view").classList.remove("on"); }
+    document.querySelector(".shv-close").onclick=closeShotView;
+    $("shot-view").onclick=(e)=>{ if(e.target.id==="shot-view"||e.target.classList.contains("shv-stage")) closeShotView(); };
     function screenToGeo(x,y){
       const rect=viewer.scene.canvas.getBoundingClientRect();
       const c=viewer.camera.pickEllipsoid(new Cesium.Cartesian2(x-rect.left,y-rect.top), viewer.scene.globe.ellipsoid);
@@ -2735,7 +2854,9 @@
       spyDown=true; spyA={x:e.clientX,y:e.clientY}; autofocus(); $("spy-box").style.display="block"; drawBox(spyA,spyA); });
     window.addEventListener("mousemove",(e)=>{ if(spyMode&&spyDown) drawBox(spyA,{x:e.clientX,y:e.clientY}); });
     window.addEventListener("mouseup",(e)=>{ if(spyMode&&spyDown){ spyDown=false; finalizeSpy(spyA,{x:e.clientX,y:e.clientY}); } });
-    window.addEventListener("keydown",(e)=>{ if(e.key==="Escape"){ if(spyMode||objetivoOn){ objetivoOn=false; $("spy-btn").classList.remove("active"); endSpy(); } if(svHandler) exitStreetViewPick(); } });
+    window.addEventListener("keydown",(e)=>{ if(e.key==="Escape"){
+      if($("shot-view").classList.contains("on")){ $("shot-view").classList.remove("on"); return; }   // ESC cierra primero el visor
+      if(spyMode||objetivoOn){ objetivoOn=false; $("spy-btn").classList.remove("active"); endSpy(); } if(svHandler) exitStreetViewPick(); } });
 
     function finalizeSpy(a,b){
       const w=Math.abs(a.x-b.x),h=Math.abs(a.y-b.y);
