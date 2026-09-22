@@ -250,6 +250,8 @@
     body.ui-hidden #hud, body.ui-hidden #filters, body.ui-hidden #layers, body.ui-hidden #webcams, body.ui-hidden #radio,
     body.ui-hidden #sel, body.ui-hidden #trk { display:none !important; }
     body.tools-hidden #spy-tools, body.tools-hidden #sub-pan, body.tools-hidden #sub-card, body.tools-hidden #sub-optic { display:none !important; }
+    /* En OBJETIVO se ocultan TODAS las cámaras (webcams, siguiendo, vista en vivo, Street View) */
+    body.objetivo-on #wc-follow, body.objetivo-on #wc-gallery, body.objetivo-on #wc-player, body.objetivo-on #sv-player { display:none !important; }
 
     /* Barra de herramientas del OBJETIVO (arriba-centro) */
     #spy-tools { position:absolute; z-index:28; top:52px; left:50%; transform:translateX(-50%); display:none; gap:8px;
@@ -1309,6 +1311,9 @@
 
     // Coloca una ventana en un area en blanco de la pantalla, sin caer encima de otra ventana visible
     function placeFree(el){
+      // si el usuario ya movió esta ventana, respeta su posición guardada (localStorage)
+      if(el.id){ let p; try{ p=JSON.parse(localStorage.getItem("jarceye_pos_"+el.id)||"null"); }catch{}
+        if(p&&p.l){ restorePos(el); return; } }
       el.style.position="absolute"; el.style.margin="0"; el.style.transform="none";
       el.style.right="auto"; el.style.bottom="auto";
       const w=el.offsetWidth, h=el.offsetHeight, vw=innerWidth, vh=innerHeight, pad=12;
@@ -3883,9 +3888,9 @@
         (spyAddr ? `ADDR <b>${spyAddr}</b><br>` : "")+
         `FRAME <b>${d.wpx}×${d.hpx}px</b>&nbsp; ${d.state}`;
     }
-    function enterObjetivoUI(){ document.body.classList.add("ui-hidden","tools-hidden");
+    function enterObjetivoUI(){ document.body.classList.add("ui-hidden","tools-hidden","objetivo-on");
       $("ui-toggle").classList.add("on"); $("tools-toggle").classList.add("on"); }
-    function exitObjetivoUI(){ document.body.classList.remove("ui-hidden","tools-hidden");
+    function exitObjetivoUI(){ document.body.classList.remove("ui-hidden","tools-hidden","objetivo-on");
       $("ui-toggle").classList.remove("on","active"); $("tools-toggle").classList.remove("on","active"); }
     $("ui-toggle").onclick=()=>{ const hidden=document.body.classList.toggle("ui-hidden"); $("ui-toggle").classList.toggle("active",!hidden); };
     $("tools-toggle").onclick=()=>{ const hidden=document.body.classList.toggle("tools-hidden"); $("tools-toggle").classList.toggle("active",!hidden); };
