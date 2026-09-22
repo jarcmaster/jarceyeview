@@ -3304,7 +3304,7 @@
     async function fetchFeatures(kind){
       const r=scopeBbox(1.4), bb=`(${r.s},${r.w},${r.n},${r.e})`;
       const q = kind==="veh"
-        ? `[out:json][timeout:25];(way["highway"]${bb};way["amenity"="parking"]${bb};);out geom 3000;`
+        ? `[out:json][timeout:25];(way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|road|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"]["access"!~"^(no|private)$"]${bb};);out geom 3000;`
         : `[out:json][timeout:20];(way["building"]${bb};way["leisure"~"park|garden|pitch|playground|recreation_ground|golf_course"]${bb};way["landuse"~"grass|recreation_ground|forest|meadow|cemetery"]${bb};);out geom 400;`;
       try{ const j=await (await fetch("https://overpass-api.de/api/interpreter",{method:"POST",body:q})).json();
         return (j.elements||[]).filter(el=>el.geometry&&el.geometry.length>1); }catch{ return []; }
@@ -3520,7 +3520,7 @@
     function densityByTime(){ return ({MORNING:1.15,MIDDAY:0.85,AFTERNOON:1.15,EVENING:0.9,NIGHT:0.5})[timeBand()]||1; }
     // Semáforos por intersección (eje alterno NS/EW)
     let simLights=new Set();
-    function buildLights(){ simLights.clear(); if(!trafficGraph) return; for(const [k,v] of trafficGraph){ if(v.all.size>=3) simLights.add(k); } }
+    function buildLights(){ simLights.clear(); if(!trafficGraph) return; for(const [k,v] of trafficGraph){ if(v.all.size>=4) simLights.add(k); } }
     function headingAxis(hd){ hd=((hd%360)+360)%360; return (hd>=45&&hd<135)||(hd>=225&&hd<315)?"EW":"NS"; }
     function lightState(nodeKey, hd){ if(!simLights.has(nodeKey)) return "GREEN";
       const cyc=SIMCFG.LIGHT_GREEN+SIMCFG.LIGHT_YELLOW, off=(nodeKey.length*7)%(cyc*2);
@@ -3708,6 +3708,7 @@
               if(c.dest && c.cur===c.dest.key){ c.dest=getRandomDest(); }
               c.target=pickNbToward(V,c.cur,c.prev,c.dest);
               const deg=V.get(c.cur).all.size;
+              if(deg===3 && !simLights.has(c.cur) && srand()<0.6){ c.hold=4+srnd(9); }   // señal de STOP (parada breve)
               if(id===trackedCarId && c.info && deg>=3 && srand()<0.22){ if(srand()<0.5) c.info.reds++; else c.info.stops++; }
             } else if(step>0){ c.lat+=(step*Math.cos(c.hd*Math.PI/180))/111320; c.lon+=(step*Math.sin(c.hd*Math.PI/180))/(111320*Math.cos(c.lat*Math.PI/180)||1e-6); } }
         }
