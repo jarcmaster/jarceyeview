@@ -347,6 +347,14 @@
     #veh-feed { right:12px; top:130px; }
     #people-feed.on, #struct-feed.on, #veh-feed.on { display:block; }
     #veh-feed .pf-body { height:176px; }
+    #veh-feed { width:250px; }
+    #veh-data { display:none; padding:8px 10px; max-height:230px; overflow-y:auto; font-family:"Consolas",monospace;
+      font-size:10px; line-height:1.55; color:#bfe9ff; border-top:1px solid #21445c; }
+    #veh-data .vd-t { color:#5fe08a; font-weight:600; letter-spacing:.5px; margin:6px 0 2px; }
+    #veh-data .vd-t:first-child { margin-top:0; }
+    #veh-data .vd-r { display:flex; justify-content:space-between; gap:8px; }
+    #veh-data .vd-r span:last-child { color:#dff; text-align:right; }
+    #veh-data .vd-warn { color:#ffb4b4; }
     /* Selección de área para ESTRUCTURAS */
     #struct-cap { position:absolute; inset:0; z-index:29; cursor:crosshair; }
     #struct-selbox { position:absolute; display:none; border:1.5px dashed #7fd3ff; background:rgba(127,211,255,.14);
@@ -947,6 +955,7 @@
       <video id="veh-video" muted playsinline preload="auto"></video>
       <div class="pf-hud"><span>◉ VEHICLE TRACK</span></div>
     </div>
+    <div id="veh-data"></div>
   </div>
 
   <!-- Análisis de estructuras (ventana, mientras ESTRUCTURAS está activo) -->
@@ -3167,17 +3176,28 @@
       const w=wanderers[kind]; if(!w) return; clearInterval(w.timer); if(w.ent) viewer.entities.remove(w.ent); wanderers[kind]=null; }
     // --- Vehículo: siempre sobre calles / parking, respetando el sentido (grafo dirigido) ---
     const rndi=(n)=>Math.floor(Math.random()*n);
-    function buildRoadGraph(els){ const V=new Map(); const key=(p)=>p.lat.toFixed(6)+","+p.lon.toFixed(6);
+    const trafficEdgeNames=new Map();   // "keyA|keyB" -> nombre de la calle
+    function buildRoadGraph(els){ const V=new Map(); trafficEdgeNames.clear();
+      const key=(p)=>p.lat.toFixed(6)+","+p.lon.toFixed(6);
       const ensure=(p)=>{ const k=key(p); if(!V.has(k)) V.set(k,{lat:p.lat,lon:p.lon,out:new Set(),all:new Set()}); return k; };
       els.forEach(el=>{ const g=el.geometry; if(!g||g.length<2) return;
         let ow=String((el.tags&&el.tags.oneway)||"").toLowerCase();
         const oneway=(ow==="yes"||ow==="true"||ow==="1"||ow==="-1"||ow==="reverse");
         const forward=!(ow==="-1"||ow==="reverse");
+        const nm=(el.tags&&(el.tags.name||el.tags.ref))||"";
         for(let i=1;i<g.length;i++){ const a=ensure(g[i-1]), b=ensure(g[i]);
           V.get(a).all.add(b); V.get(b).all.add(a);
+          if(nm){ trafficEdgeNames.set(a+"|"+b, nm); trafficEdgeNames.set(b+"|"+a, nm); }
           if(oneway){ if(forward) V.get(a).out.add(b); else V.get(b).out.add(a); }
           else { V.get(a).out.add(b); V.get(b).out.add(a); } } });
       return V; }
+    function carStreets(c){
+      const cur = trafficEdgeNames.get(c.cur+"|"+c.target) || "";
+      let next=""; const tv=trafficGraph&&trafficGraph.get(c.target);
+      if(tv){ for(const n of tv.all){ if(n===c.cur) continue; const nm=trafficEdgeNames.get(c.target+"|"+n)||"";
+        if(nm && nm!==cur){ next=nm; break; } if(nm && !next) next=nm; } }
+      return { cur: cur||"vía local", next: next||"—" };
+    }
     const pickNb=(V,cur,prev)=>{ const v=V.get(cur); if(!v) return null;
       const o=[...v.out], oo=o.filter(k=>k!==prev); if(oo.length) return oo[rndi(oo.length)]; if(o.length) return o[rndi(o.length)];
       const a=[...v.all], aa=a.filter(k=>k!==prev); if(aa.length) return aa[rndi(aa.length)]; return a.length?a[rndi(a.length)]:null; };
@@ -3264,6 +3284,44 @@
     function vehGone(){ stopWander("veh"); showLostMsg("NO HAY VEHÍCULOS EN LA ZONA SELECCIONADA");
       vehOn=false; $("tl-veh").classList.remove("active"); $("veh-feed").classList.remove("on"); try{$("veh-video").pause();}catch{} }
     function showVehVideo(){ $("veh-feed").classList.add("on"); playRandomVeh(); }
+    // Panel de datos del vehículo rastreado (en la ventana RASTREO DE VEHÍCULOS)
+    let vehDataTimer=null;
+    function renderVehData(c){
+      const d=$("veh-data"), i=c.info; if(!i){ return; }
+      d.innerHTML =
+        `<div class="vd-t">IDENTIFICACIÓN</div>`+
+        `<div class="vd-r"><span>Placa</span><span>${c.plate}</span></div>`+
+        `<div class="vd-r"><span>Etiqueta</span><span>${c.tag||("V"+c.num)}</span></div>`+
+        `<div class="vd-r"><span>VIN</span><span>${i.vin}</span></div>`+
+        `<div class="vd-t">VEHÍCULO</div>`+
+        `<div class="vd-r"><span>Marca / Modelo</span><span>${i.make} ${i.model}</span></div>`+
+        `<div class="vd-r"><span>Año</span><span>${i.year}</span></div>`+
+        `<div class="vd-r"><span>Color</span><span>${i.color}</span></div>`+
+        `<div class="vd-r"><span>Ocupantes</span><span>${i.occ}</span></div>`+
+        `<div class="vd-r"><span>Registro</span><span>${i.reg}</span></div>`+
+        `<div class="vd-t">POSICIÓN EN VIVO</div>`+
+        `<div class="vd-r"><span>Velocidad</span><span id="vd-spd">—</span></div>`+
+        `<div class="vd-r"><span>Latitud</span><span id="vd-lat">—</span></div>`+
+        `<div class="vd-r"><span>Longitud</span><span id="vd-lon">—</span></div>`+
+        `<div class="vd-r"><span>En la calle</span><span id="vd-cur">—</span></div>`+
+        `<div class="vd-r"><span>Se aproxima a</span><span id="vd-next">—</span></div>`+
+        `<div class="vd-t">HISTORIAL (estimado)</div>`+
+        `<div class="vd-r"><span>Stops violados</span><span class="vd-warn">${i.stops}</span></div>`+
+        `<div class="vd-r"><span>Semáforos en rojo</span><span class="vd-warn">${i.reds}</span></div>`+
+        `<div class="vd-r"><span>Excesos de velocidad</span><span>${i.speeding}</span></div>`+
+        `<div class="vd-r"><span>Multas</span><span>${i.tickets}</span></div>`+
+        `<div class="vd-r"><span>Nivel de riesgo</span><span class="vd-warn">${i.risk}</span></div>`;
+      d.style.display="block";
+      clearInterval(vehDataTimer); vehDataTimer=setInterval(updateVehData, 400); updateVehData();
+    }
+    function updateVehData(){
+      const c = trackedCarId && trafficCars.get(trackedCarId); if(!c) return;
+      const st=carStreets(c), set=(id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+      set("vd-spd", (c.hold>0?0:Math.round(c.speed*3.6))+" km/h");
+      set("vd-lat", c.lat.toFixed(6)); set("vd-lon", c.lon.toFixed(6));
+      set("vd-cur", st.cur); set("vd-next", st.next);
+    }
+    function clearVehData(){ clearInterval(vehDataTimer); vehDataTimer=null; const d=$("veh-data"); if(d){ d.style.display="none"; d.innerHTML=""; } }
 
     // ================= Tráfico de vehículos dentro del círculo del OBJETIVO =================
     const trafficCars=new Map();   // "car:N" -> {id,num,plate,tag,cur,prev,target,lat,lon,speed,hold,lane,ent,tracked}
@@ -3298,6 +3356,28 @@
       if(!trafficInner.length) trafficInner=trafficKeys; }
     const PLATE_L="ABCDEFGHJKLMNPRSTUVWXYZ";
     const randPlate=()=>{ let s=""; for(let i=0;i<3;i++) s+=PLATE_L[rnd(PLATE_L.length)]; return s+"-"+String(rnd(900)+100); };
+    // Catálogo (marca → [modelo, máx. ocupantes]) para datos ficticios coherentes
+    const VEH_CATALOG=[
+      {mk:"Toyota", md:[["Corolla",4],["Camry",4],["RAV4",5],["Hilux",5],["Sienna",7]]},
+      {mk:"Honda", md:[["Civic",4],["Accord",4],["CR-V",5],["Odyssey",7]]},
+      {mk:"Ford", md:[["Focus",4],["Mustang",2],["Explorer",6],["F-150",5]]},
+      {mk:"Chevrolet", md:[["Malibu",4],["Equinox",5],["Silverado",5],["Suburban",7]]},
+      {mk:"Nissan", md:[["Sentra",4],["Altima",4],["Rogue",5],["Pathfinder",6]]},
+      {mk:"BMW", md:[["320i",4],["X5",5],["M3",4]]},
+      {mk:"Mercedes", md:[["C300",4],["GLC",5],["Sprinter",9]]},
+      {mk:"Jeep", md:[["Wrangler",4],["Cherokee",5],["Grand Cherokee",5]]},
+      {mk:"Hyundai", md:[["Elantra",4],["Tucson",5],["Santa Fe",6]]},
+      {mk:"Volkswagen", md:[["Jetta",4],["Golf",4],["Tiguan",5]]},
+    ];
+    const CAR_COLORS=["Negro","Blanco","Gris","Plata","Rojo","Azul","Verde","Beige","Gris oscuro"];
+    const randVIN=()=>{ const A="ABCDEFGHJKLMNPRSTUVWXYZ0123456789"; let s=""; for(let i=0;i<11;i++) s+=A[rnd(A.length)]; return s; };
+    function genCarInfo(){
+      const c=VEH_CATALOG[rnd(VEH_CATALOG.length)], m=c.md[rnd(c.md.length)];
+      return { color:CAR_COLORS[rnd(CAR_COLORS.length)], make:c.mk, model:m[0], year:2005+rnd(20),
+        occ:1+rnd(m[1]), vin:randVIN(),
+        stops:rnd(6), reds:rnd(4), speeding:rnd(12), tickets:rnd(9),
+        risk:["BAJO","MEDIO","ALTO","ALTO"][rnd(4)], reg:["AL DÍA","VENCIDA","EN REVISIÓN"][rnd(3)] };
+    }
     const carLabel=(c)=> (c.tag?("["+c.tag+"] "):"") + "V"+c.num+" · "+c.plate + (c.tracked?"  ◉":"");
     async function startTraffic(){
       if(!survActive||!survGeo) return;
@@ -3330,7 +3410,7 @@
       const speed = r<0.18 ? (0.8+Math.random()*1.4) : r<0.82 ? (2.5+Math.random()*3.5) : (6.5+Math.random()*6);
       const num=(++trafficSeq), id="car:"+num;
       const car={ id, num, plate:randPlate(), tag:"", cur, prev:null, target:pickNb(trafficGraph,cur,null),
-        lat:v.lat, lon:v.lon, speed, hold:(Math.random()<0.12?10+rnd(40):0), lane:3.0, tracked:false };
+        lat:v.lat, lon:v.lon, speed, hold:(Math.random()<0.12?10+rnd(40):0), lane:3.0, tracked:false, info:genCarInfo() };
       car.ent=viewer.entities.add({ id, position:Cesium.Cartesian3.fromDegrees(car.lon,car.lat,0),
         billboard:{ image:CAR_IMG, width:32, height:32, rotation:0, alignedAxis:Cesium.Cartesian3.ZERO,
           disableDepthTestDistance:Number.POSITIVE_INFINITY },
@@ -3391,11 +3471,13 @@
       if(survBox){ scopeHalf={ dLat:Math.abs(survBox.bLat-survBox.aLat)/2, dLon:Math.abs(survBox.bLon-survBox.aLon)/2 }; }
       trafficCenter={lat:survGeo.lat, lon:survGeo.lon};
       showVehVideo();                     // ventana de vídeo (tracking)
+      renderVehData(c);                   // datos del vehículo
     }
     function cancelCarTracking(keepVideo){
       if(carOrbitOn) setCarOrbit(false);
       if(trackedCarId){ const c=trafficCars.get(trackedCarId); if(c){ c.tracked=false; styleCar(c,false); } }
       trackedCarId=null; scopeHalf=null; $("car-tag").classList.remove("on");
+      clearVehData();
       if(!keepVideo){ $("veh-feed").classList.remove("on"); try{$("veh-video").pause();}catch{} }
     }
     // Seguir con la cámara + órbita suave alrededor del vehículo rastreado
@@ -3423,7 +3505,7 @@
       const wasHidden=getComputedStyle(w).display==="none"; w.classList.add("on"); if(wasHidden) placeFree(w);
     }
     $("ct-apply").onclick=()=>{ const c=trafficCars.get($("car-tag").dataset.car); if(!c) return;
-      c.tag=$("ct-input").value.trim().toUpperCase(); styleCar(c, c.tracked); };
+      c.tag=$("ct-input").value.trim().toUpperCase(); styleCar(c, c.tracked); if(trackedCarId===c.id) renderVehData(c); };
     $("ct-cancel").onclick=()=>{ cancelCarTracking(false); };
     $("car-tag").querySelector(".ct-x").onclick=()=>$("car-tag").classList.remove("on");
 
