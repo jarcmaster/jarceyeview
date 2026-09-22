@@ -397,6 +397,29 @@
     .shot img { cursor:zoom-in; }
     #sm-list { flex:1; min-height:0; }   /* asegura el scroll dentro del modal */
 
+    /* Gestor de claves (.env) */
+    #keys-modal { position:absolute; inset:0; z-index:46; display:none; align-items:center; justify-content:center;
+      background:rgba(2,7,14,.6); backdrop-filter:blur(3px); }
+    #keys-modal.on { display:flex; }
+    .km-box { width:560px; max-width:94vw; max-height:86vh; display:flex; flex-direction:column;
+      background:rgba(6,16,26,.98); border:1px solid #2a6a8f; border-radius:14px; overflow:hidden;
+      box-shadow:0 12px 44px rgba(0,0,0,.6); font-family:"Consolas",monospace; }
+    .km-head { display:flex; align-items:center; gap:8px; padding:12px 16px; font-size:14px; letter-spacing:1px;
+      color:#7fd3ff; font-weight:600; background:rgba(127,211,255,.08); }
+    .km-head .km-x { margin-left:auto; cursor:pointer; color:#ffdada; }
+    #km-list { overflow-y:auto; padding:12px 16px; display:flex; flex-direction:column; gap:10px; }
+    .km-row { display:flex; flex-direction:column; gap:3px; }
+    .km-row label { font-size:11px; color:#9cc; letter-spacing:.5px; }
+    .km-row .km-tag { color:#5fe08a; font-size:9px; margin-left:6px; }
+    .km-row .km-restart { color:#ffcc55; font-size:9px; margin-left:6px; }
+    .km-row input { width:100%; box-sizing:border-box; background:#0b1622; color:#dff; border:1px solid #2a4a63;
+      border-radius:7px; padding:8px 10px; font-size:12px; font-family:"Consolas",monospace; }
+    .km-row input:focus { outline:none; border-color:#3aa0ff; }
+    .km-bar { display:flex; align-items:center; gap:14px; padding:12px 16px; border-top:1px solid #21445c; }
+    .km-bar #km-save { width:auto; margin:0; margin-left:auto; padding:9px 18px; }
+    .km-bar #km-msg { font-size:11px; color:#8fb4cc; }
+    .km-bar #km-msg.ok { color:#5fe08a; } .km-bar #km-msg.err { color:#ff8080; }
+
     /* Aviso animado de objetivo perdido */
     #lost-toast { position:absolute; z-index:44; top:44%; left:50%; transform:translate(-50%,-50%) scale(.8);
       display:none; pointer-events:none; font-family:"Consolas",monospace; text-align:center; opacity:0; }
@@ -951,6 +974,20 @@
     <div class="dock-btn" id="live-btn"><span data-ic="satellite"></span> LIVE ENV</div>
     <div class="dock-btn" id="mic-btn"><span data-ic="mic"></span><span id="mic-status">Pide o comanda</span></div>
     <div class="dock-btn" id="presets-btn"><span data-ic="layers"></span> PRESETS</div>
+    <div class="dock-btn" id="keys-btn"><span data-ic="key"></span> CLAVES</div>
+  </div>
+
+  <!-- Gestor de claves (.env) -->
+  <div id="keys-modal">
+    <div class="km-box">
+      <div class="km-head"><span data-ic="key"></span> CLAVES · .env <span class="km-x" title="Cerrar">✕</span></div>
+      <div id="km-list"></div>
+      <div class="km-bar">
+        <label class="chk"><input type="checkbox" id="km-show"> Mostrar valores</label>
+        <span id="km-msg"></span>
+        <button id="km-save"><span data-ic="check"></span> Guardar</button>
+      </div>
+    </div>
   </div>
 
   <div id="live-modal">
@@ -1072,6 +1109,8 @@
       images:'<svg class="ic" viewBox="0 0 24 24"><rect x="8" y="2" width="14" height="14" rx="2"/><path d="M2 8v12a2 2 0 0 0 2 2h12"/><circle cx="12.5" cy="6.5" r="1.5"/><path d="m8 13 3-3 4 4"/></svg>',
       people:'<svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="7" r="3.2"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17.5" cy="8" r="2.6"/><path d="M16 14.4A5.5 5.5 0 0 1 22 20"/></svg>',
       building:'<svg class="ic" viewBox="0 0 24 24"><rect x="4" y="3" width="9" height="18" rx="1"/><path d="M13 8h6a1 1 0 0 1 1 1v12H13"/><path d="M7 7h3M7 11h3M7 15h3M16 12h1M16 16h1"/></svg>',
+      key:'<svg class="ic" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 20 3M16 7l3 3M14 9l2 2"/></svg>',
+      check:'<svg class="ic" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>',
     };
     const icon = (n) => IC[n] || "";
     document.querySelectorAll("[data-ic]").forEach(e => { e.innerHTML = icon(e.dataset.ic); });
@@ -2521,6 +2560,39 @@
       p.style.display = open ? "block" : "none";
       $("presets-btn").classList.toggle("active", open);
     };
+
+    // --- Gestor de claves del .env ---
+    async function openKeys(){
+      const modal=$("keys-modal"); modal.classList.add("on");
+      $("km-show").checked=false; $("km-msg").textContent=""; $("km-msg").className="";
+      const list=$("km-list"); list.innerHTML='<div style="color:#7a97ad">Cargando…</div>';
+      let keys=[]; try{ keys=(await (await fetch("/api/keys")).json()).keys||[]; }catch{}
+      list.innerHTML=keys.map(k=>{
+        const tag = k.value ? '<span class="km-tag">● configurada</span>' : "";
+        const rst = k.restart ? '<span class="km-restart">↻ requiere reiniciar</span>' : "";
+        const type = k.secret ? "password" : "text";
+        const val = (k.value||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
+        return `<div class="km-row"><label>${k.label} <code>(${k.name})</code>${tag}${rst}</label>
+          <input data-k="${k.name}" data-secret="${k.secret?1:0}" type="${type}" value="${val}" placeholder="—" autocomplete="off" spellcheck="false"></div>`;
+      }).join("");
+    }
+    function applyKeyReveal(){ const show=$("km-show").checked;
+      $("km-list").querySelectorAll("input[data-k]").forEach(inp=>{ if(inp.dataset.secret==="1") inp.type=show?"text":"password"; }); }
+    async function saveKeys(){
+      const body={}; $("km-list").querySelectorAll("input[data-k]").forEach(inp=>{ body[inp.dataset.k]=inp.value; });
+      const msg=$("km-msg"); msg.className=""; msg.textContent="Guardando…";
+      try{ const r=await (await fetch("/api/keys",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
+        if(r.ok){ msg.className="ok"; msg.textContent = (r.restart&&r.restart.length)
+          ? "Guardado ✓ — reinicia el servidor para: "+r.restart.join(", ") : "Guardado ✓ (activo ya)"; }
+        else { msg.className="err"; msg.textContent="Error: "+(r.error||"no se pudo guardar"); }
+      }catch{ msg.className="err"; msg.textContent="Error de red"; }
+    }
+    const closeKeys=()=>$("keys-modal").classList.remove("on");
+    $("keys-btn").onclick=openKeys;
+    $("keys-modal").querySelector(".km-x").onclick=closeKeys;
+    $("keys-modal").onclick=(e)=>{ if(e.target.id==="keys-modal") closeKeys(); };
+    $("km-show").onchange=applyKeyReveal;
+    $("km-save").onclick=saveKeys;
     // Cerrar PRESETS al hacer clic fuera (mapa u otro sitio)
     document.addEventListener("click", (ev) => {
       const p = $("preset-panel");
@@ -3244,6 +3316,7 @@
     window.addEventListener("mousemove",(e)=>{ if(spyMode&&spyDown) drawBox(spyA,{x:e.clientX,y:e.clientY}); });
     window.addEventListener("mouseup",(e)=>{ if(spyMode&&spyDown){ spyDown=false; finalizeSpy(spyA,{x:e.clientX,y:e.clientY}); } });
     window.addEventListener("keydown",(e)=>{ if(e.key==="Escape"){
+      if($("keys-modal").classList.contains("on")){ $("keys-modal").classList.remove("on"); return; }   // ESC cierra el gestor de claves
       if($("shot-view").classList.contains("on")){ $("shot-view").classList.remove("on"); return; }   // ESC cierra primero el visor
       if(typeof structSelecting!=="undefined" && structSelecting){ cancelStructSelect(); return; }     // o cancela la selección de estructuras
       if(spyMode||objetivoOn){ objetivoOn=false; $("spy-btn").classList.remove("active"); endSpy(); } if(svHandler) exitStreetViewPick(); } });

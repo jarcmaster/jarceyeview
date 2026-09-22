@@ -507,6 +507,65 @@ async def config() -> JSONResponse:
     })
 
 
+# ---- Gestión de claves del .env (UI de configuración) --------------------
+ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+# (nombre, etiqueta, es_secreto, requiere_reinicio)
+KEY_DEFS = [
+    ("GOOGLE_MAPS_API_KEY", "Google Maps (3D Tiles / 2D)", True, True),
+    ("CESIUM_ION_TOKEN", "Cesium Ion (capas base)", True, True),
+    ("OPENSKY_CLIENT_ID", "OpenSky · Client ID", False, True),
+    ("OPENSKY_CLIENT_SECRET", "OpenSky · Client Secret", True, True),
+    ("TELEGRAM_BOT_TOKEN", "Telegram · Bot Token", True, True),
+    ("TELEGRAM_CHAT_ID", "Telegram · Chat ID", False, True),
+    ("AVIATIONSTACK_KEY", "AviationStack (estado de vuelo)", True, False),
+    ("WINDY_WEBCAMS_KEY", "Windy Webcams", True, False),
+    ("OPENAI_API_KEY", "OpenAI (voz / IA / imágenes)", True, False),
+    ("OPENAI_MODEL", "OpenAI · Modelo", False, False),
+    ("TOMTOM_KEY", "TomTom (tráfico / geocode)", True, False),
+    ("AISSTREAM_KEY", "AISStream (barcos AIS)", True, True),
+    ("FIRMS_MAP_KEY", "NASA FIRMS (incendios)", True, False),
+]
+
+
+@app.get("/api/keys")
+async def api_keys_get() -> JSONResponse:
+    return JSONResponse({"keys": [
+        {"name": n, "label": lbl, "secret": sec, "restart": rst, "value": os.getenv(n, "")}
+        for (n, lbl, sec, rst) in KEY_DEFS]})
+
+
+@app.post("/api/keys")
+async def api_keys_set(payload: dict) -> JSONResponse:
+    known = {n: rst for (n, _l, _s, rst) in KEY_DEFS}
+    updates = {k: str(v) for k, v in (payload or {}).items() if k in known}
+    if not updates:
+        return JSONResponse({"ok": False, "error": "sin claves válidas"}, status_code=400)
+    # Reescribe el .env preservando comentarios y otras variables
+    lines = ENV_PATH.read_text(encoding="utf-8").splitlines() if ENV_PATH.exists() else []
+    seen: set[str] = set()
+    out: list[str] = []
+    for ln in lines:
+        st = ln.strip()
+        if st and not st.startswith("#") and "=" in st:
+            k = st.split("=", 1)[0].strip()
+            if k in updates:
+                out.append(f"{k}={updates[k]}")
+                seen.add(k)
+                continue
+        out.append(ln)
+    for k, v in updates.items():
+        if k not in seen:
+            out.append(f"{k}={v}")
+    try:
+        ENV_PATH.write_text("\n".join(out) + "\n", encoding="utf-8")
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, status_code=500)
+    for k, v in updates.items():
+        os.environ[k] = v  # efecto inmediato para lo que lee os.getenv al vuelo
+    restart = sorted(k for k in updates if known.get(k))
+    return JSONResponse({"ok": True, "saved": sorted(updates), "restart": restart})
+
+
 # ==========================================================================
 # Rastreo por callsign (usado por el WebSocket y por el panel de Google Earth)
 # ==========================================================================
