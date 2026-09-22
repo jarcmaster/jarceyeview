@@ -2760,7 +2760,7 @@
     $("sim-hour").oninput=(e)=>{ simTime=(+e.target.value)*3600; $("sim-hour-v").textContent=simClock(); };
     $("sim-debug").onclick=()=>{ SIMCFG.DEBUG=!SIMCFG.DEBUG; $("sim-debug").classList.toggle("active",SIMCFG.DEBUG); if(!SIMCFG.DEBUG) clearSimDebug(); };
     $("sim-reset").onclick=()=>{ setSeed(parseInt($("sim-seed").value)||0); simTime=((+$("sim-hour").value)||8)*3600; simLog.length=0; renderSimLog();
-      if(vehOn && survActive) startTraffic(); logEvent("RESET simulación"); };
+      if(vehOn && survGeo) startTraffic(); logEvent("RESET simulación"); };
     $("sim-newseed").onclick=()=>{ const s=Math.floor(Math.random()*1e6); $("sim-seed").value=s; setSeed(s); logEvent("Seed "+s); };
     $("sim-seed").onchange=()=>{ setSeed(parseInt($("sim-seed").value)||0); };
     // Debug overlay: ruta prevista + destino del vehículo rastreado
@@ -2991,12 +2991,14 @@
       if(typeof peopleOn!=="undefined" && peopleOn) startWander("person");
     }
     function stopSurv(){
-      survActive=false; survGeo=null; survBox=null;
+      survActive=false;
       clearInterval(survNumTimer); survNumTimer=null; clearInterval(survSigTimer); survSigTimer=null;
-      if(typeof stopTraffic==="function") stopTraffic();
       if(typeof stopWander==="function") stopWander("person");
       $("surv-hud").style.display="none"; $("surv-fx").style.display="none";
       $("scope-dark").style.display="none"; $("scope-optic").style.display="none"; $("cam-overlay").classList.remove("surv-on");
+      if(vehOn && trafficTimer) return;   // los autos siguen visibles/clicables: conserva el área y el tráfico
+      survGeo=null; survBox=null;
+      if(typeof stopTraffic==="function") stopTraffic();
     }
 
     // ================= Herramientas del OBJETIVO: Pan / Norte / Hover / Óptica / Foto / Galería =================
@@ -3600,7 +3602,7 @@
     }
     const carLabel=(c)=> (c.tag?("["+c.tag+"] "):"") + "V"+c.num+" · "+c.plate + (c.tracked?"  ◉":"");
     async function startTraffic(){
-      if(!survActive||!survGeo) return;
+      if(!survGeo) return;   // el área puede persistir aunque OBJETIVO esté apagado
       stopTraffic();
       const token={}; trafficToken=token;
       $("surv-hud").classList.add("scanning");   // animación de carga/escaneo de cuadrantes
