@@ -1414,14 +1414,34 @@
     // Terremotos (USGS, M2.5+ últimas 24 h)
     const quakeById = new Map();
     let quakeEnts = [], quakeTimer = null;
-    const magColor = (m) => m>=6?"#ff2d2d":m>=4.5?"#ff7a1a":m>=3.5?"#ffcc55":"#7fe08a";
+    // Color por magnitud: rojo (fuerte) → naranja → amarillo → verde (leve)
+    const magColor = (m) => m>=6?"#ff2d2d":m>=5?"#ff5a1a":m>=4?"#ff9a1a":m>=3?"#ffcc55":"#a6e04a";
+    // Anillo blanco (se tiñe con el color de la magnitud) para las ondas sísmicas
+    const RING_IMG = "data:image/svg+xml," + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'+
+      '<circle cx="50" cy="50" r="44" fill="none" stroke="#fff" stroke-width="6"/></svg>');
+    const RING_COUNT = 3, RING_T = 2200;   // 3 ondas escalonadas, ciclo de 2.2 s (siempre animando)
     function clearQuakes(){ quakeEnts.forEach(e=>viewer.entities.remove(e)); quakeEnts=[]; quakeById.clear(); }
     async function loadQuakes(fly){
       let qs=[]; try{ qs=(await (await fetch("/api/quakes")).json()).quakes||[]; }catch{}
       clearQuakes();
       qs.forEach((q,i)=>{ const m=q.mag||0, id=`quake:${i}`, col=Cesium.Color.fromCssColorString(magColor(m));
-        quakeEnts.push(viewer.entities.add({ id, position:Cesium.Cartesian3.fromDegrees(q.lon,q.lat,0),
-          point:{ pixelSize:Math.max(6,m*3+3), color:col.withAlpha(0.9),
+        const pos=Cesium.Cartesian3.fromDegrees(q.lon,q.lat,0);
+        const maxScale = 1.4 + m*0.9;   // sismos más fuertes → ondas más grandes
+        // Ondas sísmicas: anillos que crecen y se desvanecen en bucle continuo
+        for(let k=0;k<RING_COUNT;k++){ const phase=k/RING_COUNT;
+          const frac=()=>((performance.now()/RING_T)+phase)%1;
+          const rid=`quake:${i}:${k}`;
+          quakeEnts.push(viewer.entities.add({ id:rid, position:pos,
+            billboard:{ image:RING_IMG, width:36, height:36,
+              scale:new Cesium.CallbackProperty(()=>0.3+frac()*maxScale, false),
+              color:new Cesium.CallbackProperty(()=>col.withAlpha(0.85*(1-frac())), false),
+              disableDepthTestDistance:Number.POSITIVE_INFINITY } }));
+          quakeById.set(rid,q);   // clic en un anillo también abre los datos
+        }
+        // Epicentro (punto sólido, sigue siendo clicable para ver los datos)
+        quakeEnts.push(viewer.entities.add({ id, position:pos,
+          point:{ pixelSize:Math.max(6,m*2.5+4), color:col.withAlpha(0.95),
             outlineColor:Cesium.Color.fromCssColorString("#0b1622"), outlineWidth:1,
             disableDepthTestDistance:Number.POSITIVE_INFINITY } }));
         quakeById.set(id,q); });
