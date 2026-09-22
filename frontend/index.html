@@ -288,6 +288,16 @@
     #wc-player iframe, #wc-player img, #sv-player iframe { width:100%; height:230px; border:0; display:block; background:#000; }
     #wc-player a, #sv-player a { color:#7fd3ff; text-decoration:none; display:inline-flex; align-items:center; gap:5px; }
     #wc-player .wc-close, #sv-player .wc-close { cursor:pointer; color:#ffdada; display:inline-flex; }
+    /* Street View: panorama interactivo + botón ampliar + modo media pantalla */
+    #sv-pano { width:100%; height:230px; background:#000; }
+    #sv-pano iframe { width:100%; height:100%; border:0; display:block; }
+    #sv-player .sv-actions { display:flex; align-items:center; gap:12px; margin-left:auto; }
+    #sv-player .sv-max { cursor:pointer; color:#7fd3ff; display:inline-flex; }
+    #sv-player .sv-max:hover { color:#bfe9ff; }
+    #sv-player.sv-big { position:fixed !important; right:0 !important; left:auto !important; top:0 !important;
+      bottom:0 !important; transform:none !important; width:50vw !important; max-width:50vw !important;
+      height:100vh !important; border-radius:0; border-left:2px solid #2a6a8f; z-index:33; }
+    #sv-player.sv-big #sv-pano { height:calc(100vh - 84px); }
 
     /* Panel "seguir cámara" */
     #wc-follow { position:absolute; z-index:32; left:12px; top:64px; width:246px; display:none;
@@ -654,12 +664,14 @@
       crosshair:'<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>',
       chevron:'<svg class="ic" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>',
       trash:'<svg class="ic" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/></svg>',
+      expand:'<svg class="ic" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>',
+      compress:'<svg class="ic" viewBox="0 0 24 24"><path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="M14 10l7-7"/><path d="M3 21l7-7"/></svg>',
     };
     const icon = (n) => IC[n] || "";
     document.querySelectorAll("[data-ic]").forEach(e => { e.innerHTML = icon(e.dataset.ic); });
     // Ventanas movibles: clic izquierdo, arrastrar, soltar. Agarra por casi cualquier parte.
     const DRAG_IGN = "input,textarea,select,button,a,iframe,img,label,.wc-fav,.wc-close,.sclose,"+
-                     ".wcg-close,.wcf-x,.hj-exit,.dock-btn,.ritem,.wc-card,.veh-item,.pbtn,.sbtn2";
+                     ".wcg-close,.wcf-x,.sv-max,#sv-pano,.hj-exit,.dock-btn,.ritem,.wc-card,.veh-item,.pbtn,.sbtn2";
     function makeDraggable(el, handle, onClick){
       handle = handle || el; handle.style.cursor="move";
       handle.addEventListener("mousedown",(e)=>{
@@ -1455,20 +1467,121 @@
       };
     }
 
-    function openStreetView(lat, lon, name) {
+    // ---- Street View interactivo (panorama + marcador y cono de orientación) ----
+    const SV_IMG = "data:image/svg+xml," + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24">' +
+      '<circle cx="12" cy="12" r="9" fill="#7fd3ff" stroke="#0b1622" stroke-width="1"/>' +
+      '<path d="M3.5 12s3-5 8.5-5 8.5 5 8.5 5-3 5-8.5 5-8.5-5-8.5-5z" fill="#0b1622"/>' +
+      '<circle cx="12" cy="12" r="2.6" fill="#dff"/></svg>');
+    let svPos = null, svHeading = 0, svMarker = null, svCone = null;   // estado del punto/orientación
+    let svPano = null, svShellBuilt = false, svEmbedMode = false;
+    // Cargar la API de Google Maps JS (para el panorama interactivo y leer su orientación)
+    let gmapsPromise = null;
+    function loadGmaps(){
+      if (window.google && google.maps) return Promise.resolve();
+      if (gmapsPromise) return gmapsPromise;
+      gmapsPromise = new Promise((resolve, reject) => {
+        if (!cfg.googleApiKey) { reject(new Error("sin API key")); return; }
+        window.gm_authFailure = () => { svEmbedMode = true; if(svPos) svEmbed(svPos.lat, svPos.lon); reject(new Error("auth")); };
+        const s = document.createElement("script");
+        s.src = `https://maps.googleapis.com/maps/api/js?key=${cfg.googleApiKey}&v=weekly`;
+        s.async = true; s.onload = () => resolve(); s.onerror = () => reject(new Error("carga"));
+        document.head.appendChild(s);
+      });
+      return gmapsPromise;
+    }
+    // Marcador + cono de orientación (solo mientras Street View está activo)
+    function svConeHierarchy(){
+      const pts=[svPos.lon, svPos.lat], steps=14, fov=64, R=70;
+      for(let i=0;i<=steps;i++){ const a=svHeading-fov/2+(fov*i/steps); const q=destPoint(svPos.lon,svPos.lat,a,R); pts.push(q[0],q[1]); }
+      return new Cesium.PolygonHierarchy(Cesium.Cartesian3.fromDegreesArray(pts));
+    }
+    let svRaf = 0;
+    function updateSvGraphics(){
+      if(!svMarker || !svPos) return;
+      svMarker.position = Cesium.Cartesian3.fromDegrees(svPos.lon, svPos.lat, 0);
+      svCone.polygon.hierarchy = svConeHierarchy();
+    }
+    function scheduleSvUpdate(){ if(svRaf) return;   // coalesce a un update por frame
+      svRaf = requestAnimationFrame(() => { svRaf = 0; updateSvGraphics(); }); }
+    function ensureSvGraphics(){
+      if (!svMarker) svMarker = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(svPos.lon, svPos.lat, 0),
+        billboard: { image:SV_IMG, width:32, height:32, disableDepthTestDistance:Number.POSITIVE_INFINITY } });
+      if (!svCone) svCone = viewer.entities.add({ polygon:{
+        hierarchy: svConeHierarchy(),
+        material: Cesium.Color.fromCssColorString("#7fd3ff").withAlpha(0.34),
+        classificationType: Cesium.ClassificationType.BOTH } });   // drapea sobre 3D tiles/terreno
+      updateSvGraphics();
+    }
+    function clearSvGraphics(){
+      if(svMarker){ viewer.entities.remove(svMarker); svMarker=null; }
+      if(svCone){ viewer.entities.remove(svCone); svCone=null; }
+    }
+    // Construir el marco de la ventana una sola vez (para conservar el panorama entre clics)
+    function ensureSvShell(){
+      if (svShellBuilt) return;
       const p = $("sv-player");
-      p.style.display = "block";
-      const embed = cfg.googleApiKey
-        ? `<iframe src="https://www.google.com/maps/embed/v1/streetview?key=${cfg.googleApiKey}&location=${lat},${lon}&fov=90" allowfullscreen loading="lazy"></iframe>`
-        : "";
-      const ext = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lon}`;
       p.innerHTML =
-        `<div class="wc-head"><span>${icon("streetview")} Street View — ${name}</span><span class="wc-close">${icon("x")}</span></div>` +
-        embed +
-        `<div class="wc-head"><a href="${ext}" target="_blank" rel="noopener">${icon("external")} Abrir en Google Maps</a>` +
-        `<span>${lat.toFixed(4)}, ${lon.toFixed(4)}</span></div>`;
-      placeFree(p);
-      p.querySelector(".wc-close").onclick = () => { p.style.display = "none"; p.innerHTML = ""; };
+        `<div class="wc-head"><span id="sv-title">${icon("streetview")} Street View</span>`+
+        `<span class="sv-actions"><span class="sv-max" title="Ampliar a media pantalla">${icon("expand")}</span>`+
+        `<span class="wc-close" title="Cerrar">${icon("x")}</span></span></div>`+
+        `<div id="sv-pano"></div>`+
+        `<div class="wc-head"><a id="sv-ext" href="#" target="_blank" rel="noopener">${icon("external")} Abrir en Google Maps</a>`+
+        `<span id="sv-coord"></span></div>`;
+      p.querySelector(".wc-close").onclick = closeStreetView;
+      p.querySelector(".sv-max").onclick = toggleSvBig;
+      svShellBuilt = true;
+    }
+    function toggleSvBig(){
+      const p = $("sv-player"), big = p.classList.toggle("sv-big");
+      p.querySelector(".sv-max").innerHTML = icon(big ? "compress" : "expand");
+      p.querySelector(".sv-max").title = big ? "Restaurar tamaño" : "Ampliar a media pantalla";
+      if(!big) placeFree(p);            // al restaurar, recolocar en un hueco libre
+      if(svPano && window.google && google.maps.event) google.maps.event.trigger(svPano, "resize");
+    }
+    function closeStreetView(){
+      const p = $("sv-player");
+      p.style.display = "none"; p.classList.remove("sv-big");
+      clearSvGraphics();
+      exitStreetViewPick();
+    }
+    function openStreetView(lat, lon, name){
+      svPos = { lat, lon };
+      ensureSvShell();
+      const p = $("sv-player");
+      const wasHidden = getComputedStyle(p).display === "none";
+      p.style.display = "block";
+      $("sv-title").innerHTML = `${icon("streetview")} Street View — ${name}`;
+      $("sv-coord").textContent = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+      $("sv-ext").href = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lon}`;
+      ensureSvGraphics();
+      if (wasHidden && !p.classList.contains("sv-big")) placeFree(p);
+      renderSvPanorama(lat, lon, name);
+    }
+    function svEmbed(lat, lon){
+      $("sv-pano").innerHTML = cfg.googleApiKey
+        ? `<iframe src="https://www.google.com/maps/embed/v1/streetview?key=${cfg.googleApiKey}&location=${lat},${lon}&heading=${Math.round(svHeading)}&fov=90" allowfullscreen loading="lazy"></iframe>`
+        : `<div style="color:#7a97ad;padding:16px;font-size:12px">Falta la API key de Google.</div>`;
+    }
+    async function renderSvPanorama(lat, lon, name){
+      if (svEmbedMode) { svEmbed(lat, lon); return; }   // fallback tras fallo de auth/carga
+      try {
+        await loadGmaps();
+        const el = $("sv-pano");
+        if (!svPano || svEmbedMode) {
+          el.innerHTML = "";
+          svPano = new google.maps.StreetViewPanorama(el, {
+            position:{lat, lng:lon}, pov:{heading:svHeading, pitch:0}, zoom:0,
+            addressControl:false, fullscreenControl:false, motionTrackingControl:false, enableCloseButton:false });
+          svPano.addListener("pov_changed", () => { const h=svPano.getPov().heading;
+            if(typeof h==="number"){ svHeading=h; scheduleSvUpdate(); } });
+          svPano.addListener("position_changed", () => { const pos=svPano.getPosition();
+            if(pos){ svPos={lat:pos.lat(), lon:pos.lng()}; $("sv-coord").textContent=`${svPos.lat.toFixed(4)}, ${svPos.lon.toFixed(4)}`; scheduleSvUpdate(); } });
+        } else {
+          svPano.setPosition({lat, lng:lon});
+        }
+      } catch (e) { svEmbedMode = true; svEmbed(lat, lon); }
     }
 
     // Al completar una búsqueda del geocoder, la cámara ya voló al lugar: ponemos el pin.
@@ -1859,29 +1972,34 @@
         }
       } catch (e) { console.error("mapsource", src, e); }
     }
-    // Modo Street View: pulsa STREET VIEW y luego clic en el mapa
-    let svHandler = null;
+    // Modo Street View persistente: pulsa STREET VIEW y haz clic en el mapa las veces que quieras
+    let svHandler = null, svActive = false;
+    function svBtn(){ return [...document.querySelectorAll("#source-row .sbtn2")].find(b=>b.dataset.k==="streetview"); }
     function enterStreetViewPick() {
+      svActive = true;
+      const b = svBtn(); if(b) b.classList.add("active");
       viewer.scene.canvas.style.cursor = "crosshair";
-      $("spy-hint").textContent = "◎ HAZ CLIC EN EL MAPA PARA STREET VIEW · ESC PARA SALIR";
+      $("spy-hint").textContent = "◎ CLIC EN EL MAPA PARA VER STREET VIEW · ESC PARA SALIR";
       $("spy-hint").style.display = "block";
       if (svHandler) svHandler.destroy();
       svHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
       svHandler.setInputAction((click) => {
         const c = viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
         if (c) { const g = Cesium.Cartographic.fromCartesian(c);
+          svHeading = Cesium.Math.toDegrees(viewer.camera.heading);   // orientación inicial = rumbo de la cámara
           openStreetView(Cesium.Math.toDegrees(g.latitude), Cesium.Math.toDegrees(g.longitude), "Street View"); }
-        exitStreetViewPick();
-      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);   // NO sale: modo persistente
     }
     function exitStreetViewPick() {
+      svActive = false;
+      const b = svBtn(); if(b) b.classList.remove("active");
       viewer.scene.canvas.style.cursor = "";
       $("spy-hint").style.display = "none"; $("spy-hint").textContent = "◎ ARRASTRA PARA MARCAR LA ZONA · ESC PARA SALIR";
       if (svHandler) { svHandler.destroy(); svHandler = null; }
     }
     $("source-row").querySelectorAll(".sbtn2").forEach(b => b.onclick = () => {
-      if (b.dataset.k === "streetview") enterStreetViewPick();
-      else setMapSource(b.dataset.k);
+      if (b.dataset.k === "streetview") { svActive ? exitStreetViewPick() : enterStreetViewPick(); }
+      else { if(svActive) exitStreetViewPick(); setMapSource(b.dataset.k); }
     });
 
     // --- Botones del dock ---
