@@ -208,8 +208,39 @@
     .cam-glitch { position:absolute; inset:0; opacity:0; mix-blend-mode:screen;
       background:linear-gradient(90deg, rgba(255,0,0,.18), transparent 18%, transparent 82%, rgba(0,255,255,.18)); }
     #cam-overlay.glitching .cam-glitch { opacity:1; }
+    #cam-overlay.surv-on .cam-reticle { display:none; }   /* la retícula la pone la HUD de vigilancia anclada */
     #cam-overlay.glitching { animation:camshake .09s steps(2); }
     @keyframes camshake { 0%{transform:translate(2px,0)} 50%{transform:translate(-2px,1px)} 100%{transform:translate(0,0)} }
+
+    /* ===== HUD de vigilancia persistente (mientras OBJETIVO activo) ===== */
+    #surv-fx { position:absolute; inset:0; z-index:23; display:none; pointer-events:none;
+      background:repeating-linear-gradient(0deg, rgba(0,0,0,.13) 0, rgba(0,0,0,.13) 1px, transparent 1px, transparent 3px);
+      animation:survflick 2.6s steps(2) infinite; }
+    #surv-fx::before { content:""; position:absolute; inset:0; box-shadow:inset 0 0 170px 34px rgba(0,0,0,.5); }
+    @keyframes survflick { 0%,100%{opacity:.9} 47%{opacity:.66} 50%{opacity:1} 53%{opacity:.7} }
+    #surv-hud { position:absolute; z-index:24; width:460px; height:460px; display:none; pointer-events:none;
+      transform:translate(-50%,-50%); font-family:"Consolas",monospace; color:#8fe3ff; will-change:left,top;
+      animation:survjit 2.2s steps(3) infinite; }
+    @keyframes survjit { 0%,90%,100%{filter:drop-shadow(0 0 5px rgba(120,220,255,.4))}
+      93%{filter:drop-shadow(1.6px 0 0 rgba(255,45,45,.55)) drop-shadow(-1.6px 0 0 rgba(45,255,255,.55))} }
+    .surv-reticle { position:absolute; top:50%; left:50%; width:300px; height:300px; transform:translate(-50%,-50%); }
+    .surv-rot { transform-origin:150px 150px; animation:survspin 9s linear infinite; }
+    @keyframes survspin { to{ transform:rotate(360deg); } }
+    .surv-nums { position:absolute; inset:0; }
+    .surv-num { position:absolute; font-size:10px; color:#7fd3ff; letter-spacing:1px; white-space:nowrap;
+      text-shadow:0 0 5px rgba(127,211,255,.6); transform:translate(-50%,-50%); }
+    .surv-coord { position:absolute; left:8px; top:8px; font-size:10.5px; line-height:1.55;
+      text-shadow:0 0 6px rgba(127,211,255,.6); }
+    .surv-coord b { color:#dff; }
+    .surv-sat { position:absolute; right:8px; top:6px; width:118px; height:74px;
+      filter:drop-shadow(0 0 5px rgba(127,211,255,.4)); }
+    .surv-sig { position:absolute; left:8px; bottom:10px; display:flex; align-items:flex-end; gap:6px; font-size:10px;
+      color:#bfe9ff; text-shadow:0 0 6px rgba(127,211,255,.6); }
+    .surv-sig-bars { display:inline-flex; align-items:flex-end; gap:2px; height:20px; }
+    .surv-sig-bars i { width:4px; background:#5fe08a; box-shadow:0 0 4px rgba(95,224,138,.6); transition:height .25s; }
+    .surv-tag { position:absolute; right:10px; bottom:10px; font-size:10px; letter-spacing:1px; text-align:right;
+      color:#8fe3ff; text-shadow:0 0 6px rgba(127,211,255,.6); }
+    .surv-tag b { color:#5fe08a; }
 
     /* ===== Live Environment (análisis IA) ===== */
     #live-modal { position:absolute; inset:0; z-index:40; display:none; background:rgba(2,7,14,.5);
@@ -532,6 +563,39 @@
       <div class="spy-lbl" id="spy-lbl-bot"></div>
       <div id="spy-data"></div>
     </div>
+  </div>
+
+  <!-- Flicker persistente + HUD de vigilancia anclada a la zona (mientras OBJETIVO está activo) -->
+  <div id="surv-fx"></div>
+  <div id="surv-hud">
+    <svg class="surv-reticle" viewBox="0 0 300 300">
+      <circle cx="150" cy="150" r="95" fill="none" stroke="#8fe3ff" stroke-opacity=".45" stroke-width="1"/>
+      <circle cx="150" cy="150" r="60" fill="none" stroke="#8fe3ff" stroke-opacity=".35" stroke-width="1"/>
+      <g class="surv-rot">
+        <circle cx="150" cy="150" r="120" fill="none" stroke="#8fe3ff" stroke-opacity=".6" stroke-width="1.6" stroke-dasharray="3 12"/>
+        <path d="M150 24v12M150 276v-12M24 150h12M276 150h-12" stroke="#8fe3ff" stroke-width="2"/>
+      </g>
+      <path d="M150 22 A128 128 0 0 1 263 96" fill="none" stroke="#ff3b3b" stroke-width="3" stroke-linecap="round"/>
+      <path d="M150 278 A128 128 0 0 1 37 204" fill="none" stroke="#ff3b3b" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="150" cy="150" r="12" fill="none" stroke="#8fe3ff" stroke-width="1.6"/>
+      <circle cx="150" cy="150" r="3" fill="#8fe3ff"/>
+      <path d="M150 128v10M150 162v10M128 150h10M162 150h10" stroke="#8fe3ff" stroke-width="1.6"/>
+    </svg>
+    <div class="surv-nums"></div>
+    <div class="surv-coord"></div>
+    <svg class="surv-sat" viewBox="0 0 118 74">
+      <path d="M8 66 Q59 8 110 66" fill="none" stroke="#7fd3ff" stroke-opacity=".5" stroke-width="1"/>
+      <path d="M8 72 Q59 20 110 72" fill="none" stroke="#7fd3ff" stroke-opacity=".3" stroke-width="1"/>
+      <path d="M8 60 Q59 -2 110 60" fill="none" stroke="#7fd3ff" stroke-opacity=".2" stroke-width="1"/>
+      <g stroke="#8fe3ff" fill="#0b1622" stroke-width="1.1">
+        <rect x="52" y="10" width="12" height="9" rx="1"/>
+        <rect x="36" y="11" width="13" height="7" rx="1"/><rect x="67" y="11" width="13" height="7" rx="1"/>
+        <line x1="58" y1="19" x2="58" y2="30"/>
+      </g>
+      <circle cx="58" cy="6" r="2.2" fill="#5fe08a"/>
+    </svg>
+    <div class="surv-sig"><span class="surv-sig-bars"></span><span class="surv-sig-txt"></span></div>
+    <div class="surv-tag"></div>
   </div>
 
   <div id="wc-player"></div>
@@ -2127,6 +2191,52 @@
         billboard:{ image:RETICLE_IMG, width:44, height:44, disableDepthTestDistance:Number.POSITIVE_INFINITY } }); }
       else targetReticleEnt.position=pos;
     }
+
+    // ---- Vigilancia persistente: HUD anclada a la zona + flicker (mientras OBJETIVO activo) ----
+    let survActive=false, survGeo=null, survNumTimer=null, survSigTimer=null, survHooked=false;
+    const SURV_NUM_POS = (()=>{ const a=[]; for(let i=0;i<12;i++){ const ang=(i*30-90)*Math.PI/180, R=182;
+      a.push({x:230+Math.cos(ang)*R, y:230+Math.sin(ang)*R}); } return a; })();   // caja 460 → centro 230
+    function survRandNum(){ const t=rnd(4);
+      return t===0 ? `0x${rnd(65535).toString(16).toUpperCase().padStart(4,"0")}`
+           : t===1 ? `${rnd(9000)+1000}.${rnd(90)+10}`
+           : t===2 ? `SEQ ${rnd(900)+100}`
+           : `${["ΔT","AZ","EL","PWR","LNK"][rnd(5)]} ${rnd(99)}`; }
+    function paintSurvNums(){ $("surv-hud").querySelector(".surv-nums").innerHTML =
+      SURV_NUM_POS.map(p=>`<span class="surv-num" style="left:${p.x}px;top:${p.y}px">${survRandNum()}</span>`).join(""); }
+    function paintSurvSig(){ const n=8; let sum=0, html="";
+      for(let i=0;i<n;i++){ const h=6+rnd(15); sum+=h; const c=i<2?"#5fe08a":i<6?"#ffd24a":"#ff7a1a";
+        html+=`<i style="height:${h}px;background:${c}"></i>`; }
+      $("surv-hud").querySelector(".surv-sig-bars").innerHTML=html;
+      const pct=Math.min(99, 55+Math.round(sum/(n*21)*44));
+      $("surv-hud").querySelector(".surv-sig-txt").textContent=`SIGNAL ${pct}%`; }
+    function survTick(){
+      if(!survActive || !survGeo) return;
+      const hud=$("surv-hud"), world=Cesium.Cartesian3.fromDegrees(survGeo.lon, survGeo.lat, 0);
+      _occ.cameraPosition = viewer.camera.positionWC;
+      const win = Cesium.SceneTransforms.worldToWindowCoordinates
+        ? Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, world)
+        : Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, world);
+      if(!win || !_occ.isPointVisible(world)){ hud.style.visibility="hidden"; return; }
+      hud.style.visibility="visible"; hud.style.left=win.x+"px"; hud.style.top=win.y+"px";
+    }
+    function startSurv(lon, lat){
+      survGeo={lon,lat}; survActive=true;
+      if(targetReticleEnt){ viewer.entities.remove(targetReticleEnt); targetReticleEnt=null; }   // evita doble reticle
+      const hud=$("surv-hud");
+      hud.querySelector(".surv-coord").innerHTML=`LAT <b>${lat.toFixed(6)}</b><br>LON <b>${lon.toFixed(6)}</b>`;
+      hud.querySelector(".surv-tag").innerHTML=`SPYEYE ${spyId}<br><b>● TRACKING</b>`;
+      paintSurvNums(); paintSurvSig();
+      hud.style.display="block"; $("surv-fx").style.display="block"; $("cam-overlay").classList.add("surv-on");
+      clearInterval(survNumTimer); survNumTimer=setInterval(paintSurvNums, 420);
+      clearInterval(survSigTimer); survSigTimer=setInterval(paintSurvSig, 600);
+      if(!survHooked){ viewer.scene.preRender.addEventListener(survTick); survHooked=true; }
+      survTick();
+    }
+    function stopSurv(){
+      survActive=false; survGeo=null;
+      clearInterval(survNumTimer); survNumTimer=null; clearInterval(survSigTimer); survSigTimer=null;
+      $("surv-hud").style.display="none"; $("surv-fx").style.display="none"; $("cam-overlay").classList.remove("surv-on");
+    }
     function screenToGeo(x,y){
       const rect=viewer.scene.canvas.getBoundingClientRect();
       const c=viewer.camera.pickEllipsoid(new Cesium.Cartesian2(x-rect.left,y-rect.top), viewer.scene.globe.ellipsoid);
@@ -2155,7 +2265,7 @@
         `FRAME <b>${d.wpx}×${d.hpx}px</b>&nbsp; ${d.state}`;
     }
     function endSpy(){
-      spyMode=false; spyDown=false; cancelAnimationFrame(spyAnimRAF); stopCam();
+      spyMode=false; spyDown=false; cancelAnimationFrame(spyAnimRAF); stopCam(); stopSurv();
       $("spy-capture").style.display="none"; $("spy-hint").style.display="none";
       $("spy-hud").style.display="none"; $("spy-hud").classList.remove("fade");
       const s=$("spy-box"); s.style.display="none"; s.style.transition="";
@@ -2203,7 +2313,8 @@
     function finalizeSpy(a,b){
       const w=Math.abs(a.x-b.x),h=Math.abs(a.y-b.y);
       const gA=screenToGeo(a.x,a.y), gB=screenToGeo(b.x,b.y);
-      if(w<12||h<12||!gA||!gB){ endSpy(); if(objetivoOn) armMark("zoom"); return; }
+      if(w<12||h<12||!gA||!gB){   // clic accidental: no destruir la vigilancia en curso
+        if(objetivoOn){ $("spy-box").style.display="none"; armMark("zoom"); } else endSpy(); return; }
       if(spyPurpose==="live"){   // LIVE ENV: recortar el recuadro y analizarlo con IA
         const l=Math.min(a.x,b.x), t=Math.min(a.y,b.y);
         const crop=captureRegion(l,t,w,h);
@@ -2242,7 +2353,17 @@
         fillSpyData({ id:spyId, lat:m.centerLat, lon:m.centerLon, dist:viewer.camera.positionCartographic.height,
           elev:elevStr, az:Cesium.Math.toDegrees(viewer.camera.heading)||0, wpx:Math.round(tw), hpx:Math.round(th),
           area:fmtArea(m.area), state:'<b style="color:#5fe08a">● LOCK ACQUIRED</b>' });
-        setTimeout(()=>{ $("spy-hud").classList.add("fade"); setTimeout(()=>{ endSpy(); if(objetivoOn) armMark("zoom"); }, 700); }, 2600);
+        if(objetivoOn){
+          // Vigilancia persistente sobre la zona (+ flicker) hasta que se apague OBJETIVO
+          startSurv(m.centerLon, m.centerLat);
+          setTimeout(()=>{ $("spy-hud").classList.add("fade"); setTimeout(()=>{
+            $("spy-hud").style.display="none"; $("spy-hud").classList.remove("fade");
+            const sb=$("spy-box"); sb.style.display="none"; sb.style.transition="";
+            armMark("zoom");   // se puede marcar otra zona sin perder el flicker ni la vigilancia
+          }, 700); }, 2000);
+        } else {
+          setTimeout(()=>{ $("spy-hud").classList.add("fade"); setTimeout(()=>{ endSpy(); }, 700); }, 2600);
+        }
       };
       // Encuadre centrado y oblicuo (mantiene el objetivo en el centro)
       viewer.camera.flyToBoundingSphere(
@@ -2264,6 +2385,7 @@
     // Glitch / TV flicker: ráfagas de aberración RGB + jitter durante el efecto
     let glitchTimer=null, camTimer=null, camFrames=0;
     function startCam(){
+      if(glitchTimer){clearInterval(glitchTimer);glitchTimer=null;} if(camTimer){clearInterval(camTimer);camTimer=null;}  // no duplicar
       $("cam-overlay").style.display="block"; camFrames=0;
       const pad=(n)=>String(n).padStart(2,"0");
       camTimer=setInterval(()=>{ camFrames++; const ff=camFrames%25, s=Math.floor(camFrames/25);
