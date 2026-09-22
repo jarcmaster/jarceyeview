@@ -261,18 +261,20 @@
     .pan-pad button:hover { background:#18465f; }
     .pan-pad .pan-c { background:transparent; border:none; cursor:default; }
     /* Galería de capturas (derecha) */
-    #shots-modal { position:absolute; z-index:33; top:52px; right:12px; width:268px; max-height:56vh;
+    #shots-modal { position:absolute; z-index:33; top:52px; right:12px; width:280px;
       display:none; flex-direction:column; background:rgba(6,16,26,.96); border:1px solid #2a6a8f; border-radius:12px;
       overflow:hidden; backdrop-filter:blur(8px); box-shadow:0 8px 34px rgba(0,0,0,.6); }
     #shots-modal.on { display:flex; }
-    #shots-modal.below-sat { top:272px; max-height:48vh; }   /* deja sitio al mini feed orbital */
+    #shots-modal.below-sat { top:272px; }
+    #shots-modal.below-sat #sm-list { max-height:min(560px, calc(100vh - 330px)); }   /* deja sitio al mini feed orbital */
     .sm-head { display:flex; align-items:center; gap:7px; padding:9px 12px; font-size:12px; letter-spacing:1px;
       color:#7fd3ff; font-weight:600; background:rgba(127,211,255,.08); }
     .sm-x { margin-left:auto; cursor:pointer; color:#ffdada; }
-    #sm-list { overflow-y:auto; padding:8px; display:grid; grid-template-columns:repeat(2,1fr); gap:8px; align-content:start; }
+    #sm-list { overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:8px;
+      max-height:min(710px, 74vh); }   /* ~5 capturas visibles, el resto con scroll */
     .shot { border:1px solid #21445c; border-radius:9px; overflow:hidden; background:#0b1622; }
-    .shot img { width:100%; height:72px; object-fit:cover; display:block; cursor:zoom-in; }
-    .shot .si { padding:5px 7px; font-size:9px; line-height:1.45; color:#bfe9ff; font-family:"Consolas",monospace; }
+    .shot img { width:100%; height:74px; object-fit:cover; display:block; cursor:zoom-in; }
+    .shot .si { padding:5px 9px; font-size:9.5px; line-height:1.45; color:#bfe9ff; font-family:"Consolas",monospace; }
     .shot .si b { color:#dff; } .shot .si .o { color:#7fd3ff; }
     .shot .sdel { display:flex; align-items:center; justify-content:center; gap:4px; width:100%; margin:0; border:none; border-top:1px solid #21445c;
       border-radius:0; background:#3a1420; color:#ffb4b4; padding:4px; font-size:10px; cursor:pointer; }
@@ -435,6 +437,7 @@
     #ct-input:focus { outline:none; border-color:#3aa0ff; }
     .ct-row { display:flex; gap:8px; margin-top:10px; }
     .ct-row button { margin:0; padding:8px; font-size:11px; }
+    #ct-orbit.active { background:#155; border-color:#3aa0ff; color:#bfe9ff; box-shadow:0 0 10px rgba(58,160,255,.4); }
 
     /* Aviso animado de objetivo perdido */
     #lost-toast { position:absolute; z-index:44; top:44%; left:50%; transform:translate(-50%,-50%) scale(.8);
@@ -969,6 +972,7 @@
     <div class="ct-body">
       <label>Etiqueta del vehículo</label>
       <input id="ct-input" type="text" placeholder="p.ej. SOSPECHOSO 1" maxlength="24" spellcheck="false" autocomplete="off">
+      <div class="ct-row"><button id="ct-orbit"><span data-ic="orbit"></span> Seguir cámara (órbita)</button></div>
       <div class="ct-row"><button id="ct-apply"><span data-ic="check"></span> Aplicar tag</button>
         <button id="ct-cancel" class="stop"><span data-ic="x"></span> Cancelar rastreo</button></div>
     </div>
@@ -2976,8 +2980,9 @@
           : `<button class="sdel" data-i="${i}">${icon("trash")} Eliminar</button>`;
         return `<div class="shot"><img src="${s.img}" alt="" title="${la}, ${lo} · clic para ampliar">
           <div class="si"><b>SPYEYE ${s.id}</b> · <span class="o">${s.optic}</span><br>
-            LAT <b>${la}</b><br>LON <b>${lo}</b><br>
-            DIST <b>${s.dist}</b> · ELEV <b>${s.elev}</b><br>AZ <b>${s.az}°</b> · AREA <b>${s.area}</b><br>${dt}</div>${del}</div>`;
+            LAT <b>${la}</b> · LON <b>${lo}</b><br>
+            DIST <b>${s.dist}</b> · ELEV <b>${s.elev}</b> · AZ <b>${s.az}°</b><br>
+            AREA <b>${s.area}</b> · ${dt}</div>${del}</div>`;
       }).join("");
       list.querySelectorAll(".shot img").forEach((im,idx)=>im.onclick=()=>openShotView(idx));   // ampliar a pantalla completa
       list.querySelectorAll(".sdel").forEach(b=>b.onclick=()=>{ pendingDel=+b.dataset.i; renderShots(); });
@@ -3259,6 +3264,7 @@
     const trafficCars=new Map();   // "car:N" -> {id,num,plate,tag,cur,prev,target,lat,lon,speed,hold,lane,ent,tracked}
     let trafficTimer=null, trafficGraph=null, trafficKeys=[], trafficInner=[], trafficTargetN=0,
         trafficSeq=0, trafficToken=null, trackedCarId=null, trafficCenter=null, trafficRefetch=null;
+    let carOrbitOn=false, carOrbitRAF=0, carOrbitHeading=0, carOrbitPitch=0, carOrbitRange=0;
     // Desplaza un punto a la derecha del rumbo (para separar carriles/sentidos)
     const offsetRight=(lat,lon,hd,m)=>{ const b=(hd+90)*Math.PI/180;
       return { lat:lat+(m*Math.cos(b))/111320, lon:lon+(m*Math.sin(b))/(111320*Math.cos(lat*Math.PI/180)||1e-6) }; };
@@ -3353,10 +3359,29 @@
       showVehVideo();                     // ventana de vídeo (tracking)
     }
     function cancelCarTracking(keepVideo){
+      if(carOrbitOn) setCarOrbit(false);
       if(trackedCarId){ const c=trafficCars.get(trackedCarId); if(c){ c.tracked=false; styleCar(c,false); } }
       trackedCarId=null; $("car-tag").classList.remove("on");
       if(!keepVideo){ $("veh-feed").classList.remove("on"); try{$("veh-video").pause();}catch{} }
     }
+    // Seguir con la cámara + órbita suave alrededor del vehículo rastreado
+    function setCarOrbit(on){
+      carOrbitOn=on; const b=$("ct-orbit"); if(b) b.classList.toggle("active",on);
+      if(on){
+        const c=trafficCars.get(trackedCarId), pos=c&&c.ent&&c.ent.position.getValue(viewer.clock.currentTime);
+        if(!pos){ carOrbitOn=false; if(b) b.classList.remove("active"); return; }
+        carOrbitHeading=viewer.camera.heading; carOrbitPitch=Math.min(viewer.camera.pitch, Cesium.Math.toRadians(-30));
+        carOrbitRange=Math.max(80, Math.min(700, Cesium.Cartesian3.distance(viewer.camera.positionWC, pos)));
+        const tick=()=>{ if(!carOrbitOn) return; const car=trafficCars.get(trackedCarId);
+          if(!car||!car.ent){ setCarOrbit(false); return; }
+          const p=car.ent.position.getValue(viewer.clock.currentTime);
+          if(p){ carOrbitHeading+=Cesium.Math.toRadians(0.18);
+            viewer.camera.lookAt(p, new Cesium.HeadingPitchRange(carOrbitHeading, carOrbitPitch, carOrbitRange)); }
+          carOrbitRAF=requestAnimationFrame(tick); };
+        tick();
+      } else { cancelAnimationFrame(carOrbitRAF); try{ viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY); }catch{} }
+    }
+    $("ct-orbit").onclick=()=>setCarOrbit(!carOrbitOn);
     function openCarTag(c){
       const w=$("car-tag"); w.dataset.car=c.id;
       w.querySelector(".ct-title").textContent=`V${c.num} · ${c.plate}`;
