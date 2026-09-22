@@ -269,15 +269,22 @@
     .sm-head { display:flex; align-items:center; gap:7px; padding:9px 12px; font-size:12px; letter-spacing:1px;
       color:#7fd3ff; font-weight:600; background:rgba(127,211,255,.08); }
     .sm-x { margin-left:auto; cursor:pointer; color:#ffdada; }
-    #sm-list { overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:8px; }
+    #sm-list { overflow-y:auto; padding:8px; display:grid; grid-template-columns:repeat(2,1fr); gap:8px; align-content:start; }
     .shot { border:1px solid #21445c; border-radius:9px; overflow:hidden; background:#0b1622; }
-    .shot img { width:100%; height:120px; object-fit:cover; display:block; }
-    .shot .si { padding:6px 8px; font-size:10px; line-height:1.5; color:#bfe9ff; font-family:"Consolas",monospace; }
-    .shot .si b { color:#dff; }
-    .shot .sdel { display:block; width:100%; margin:0; border:none; border-top:1px solid #21445c; border-radius:0;
-      background:#3a1420; color:#ffb4b4; padding:6px; font-size:11px; cursor:pointer; }
+    .shot img { width:100%; height:72px; object-fit:cover; display:block; cursor:zoom-in; }
+    .shot .si { padding:5px 7px; font-size:9px; line-height:1.45; color:#bfe9ff; font-family:"Consolas",monospace; }
+    .shot .si b { color:#dff; } .shot .si .o { color:#7fd3ff; }
+    .shot .sdel { display:flex; align-items:center; justify-content:center; gap:4px; width:100%; margin:0; border:none; border-top:1px solid #21445c;
+      border-radius:0; background:#3a1420; color:#ffb4b4; padding:4px; font-size:10px; cursor:pointer; }
     .shot .sdel:hover { background:#5a1420; }
-    .sm-empty { color:#7a97ad; font-size:11px; text-align:center; padding:16px 8px; }
+    .shot .sdel .ic { width:12px; height:12px; }
+    .shot .sdelrow { display:flex; border-top:1px solid #21445c; }
+    .shot .sdelrow button { flex:1; margin:0; border:none; border-radius:0; padding:4px; font-size:10px; cursor:pointer; }
+    .shot .sd-yes { background:#5a1420; color:#ffdada; } .shot .sd-no { background:#123449; color:#cfefff; }
+    .sm-empty { grid-column:1/-1; color:#7a97ad; font-size:11px; text-align:center; padding:16px 8px; }
+    /* Zoom en el visor a pantalla completa */
+    .shv-stage { overflow:hidden; }
+    .shv-img { cursor:zoom-in; }
 
     /* Mini feed orbital (mientras HOVER activo) */
     #sat-mini { position:absolute; z-index:33; top:52px; right:12px; width:216px; display:none;
@@ -396,7 +403,7 @@
     @keyframes lostshake { 0%,100%{margin-left:0} 50%{margin-left:2px} }
     .lost-box { background:rgba(30,4,8,.82); border:2px solid #ff3b3b; border-radius:12px; padding:20px 34px;
       box-shadow:0 0 40px rgba(255,59,59,.45), inset 0 0 30px rgba(255,59,59,.2); backdrop-filter:blur(3px); }
-    .lost-title { font-size:30px; font-weight:800; letter-spacing:4px; color:#ff5252; position:relative;
+    .lost-title { font-size:26px; font-weight:800; letter-spacing:3px; color:#ff5252; position:relative; max-width:560px;
       text-shadow:0 0 14px rgba(255,59,59,.7); animation:lostglitch 1.1s steps(2) infinite; }
     .lost-title::before, .lost-title::after { content:attr(data-txt); position:absolute; left:0; top:0; width:100%; }
     .lost-title::before { color:#00e5ff; animation:lostg1 .9s steps(2) infinite; opacity:.7; }
@@ -2772,15 +2779,12 @@
       const list=$("sm-list");
       if(!spyShots.length){ list.innerHTML='<div class="sm-empty">Sin capturas todavía.</div>'; pendingDel=-1; return; }
       list.innerHTML = spyShots.map((s,i)=>{
-        const dt=new Date(s.time).toLocaleString();
+        const d=new Date(s.time), hm=`${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
         const del = (pendingDel===i)
-          ? `<div class="sdelrow"><button class="sd-yes" data-i="${i}">Confirmar</button><button class="sd-no" data-i="${i}">Cancelar</button></div>`
-          : `<button class="sdel" data-i="${i}">${icon("trash")} Eliminar</button>`;
-        return `<div class="shot"><img src="${s.img}" alt="">
-          <div class="si"><b>SPYEYE ${s.id}</b> · ${s.optic}<br>
-            LAT <b>${(+s.lat).toFixed(6)}</b> LON <b>${(+s.lon).toFixed(6)}</b><br>
-            DIST <b>${s.dist}</b> · ELEV <b>${s.elev}</b> · AZ <b>${s.az}°</b><br>
-            AREA <b>${s.area}</b><br>${dt}</div>${del}</div>`;
+          ? `<div class="sdelrow"><button class="sd-yes" data-i="${i}">Sí</button><button class="sd-no" data-i="${i}">No</button></div>`
+          : `<button class="sdel" data-i="${i}" title="Eliminar">${icon("trash")}</button>`;
+        return `<div class="shot"><img src="${s.img}" alt="" title="Ver a pantalla completa">
+          <div class="si"><b>${s.id}</b><br><span class="o">${s.optic}</span><br>${s.dist} · ${hm}</div>${del}</div>`;
       }).join("");
       list.querySelectorAll(".shot img").forEach((im,idx)=>im.onclick=()=>openShotView(idx));   // ampliar a pantalla completa
       list.querySelectorAll(".sdel").forEach(b=>b.onclick=()=>{ pendingDel=+b.dataset.i; renderShots(); });
@@ -2833,11 +2837,16 @@
     $("tl-people").onclick=()=>showPeople(!peopleOn);
     // Estructuras (derecha) — pide seleccionar un área antes de mostrar el vídeo
     let structOn=false, structSelecting=false, structCap=null;
-    function openStructVideo(rect){
+    function openStructVideo(rect, info){
       structOn=true; $("tl-struct").classList.add("active");
       const sf=$("struct-feed");
       if(rect){ sf.style.left=Math.max(8, Math.min(innerWidth-250, rect.right+10))+"px";
         sf.style.top=Math.max(52, Math.min(innerHeight-260, rect.top))+"px"; sf.style.right="auto"; sf.style.bottom="auto"; }
+      // cabecera: coordenadas + tamaño del área seleccionada
+      const cnt=sf.querySelector(".pf-count"), hud=sf.querySelector(".pf-hud span");
+      if(info){ if(cnt) cnt.textContent=`${info.lat.toFixed(4)}, ${info.lon.toFixed(4)}`;
+        if(hud) hud.textContent=`◉ ÁREA ${info.wm}×${info.hm} m`; }
+      else { if(cnt) cnt.textContent="SCAN"; if(hud) hud.textContent="◉ STRUCT SCAN"; }
       sf.classList.add("on"); $("ss-embed").innerHTML=ytEmbed("QlokeZrqtJM");
     }
     function cancelStructSelect(){ structSelecting=false;
@@ -2859,7 +2868,13 @@
         window.removeEventListener("mousemove",mm); window.removeEventListener("mouseup",mu);
         const b={x:e.clientX,y:e.clientY}, rect={left:Math.min(a.x,b.x),top:Math.min(a.y,b.y),right:Math.max(a.x,b.x),bottom:Math.max(a.y,b.y)};
         const ok=(rect.right-rect.left)>10 && (rect.bottom-rect.top)>10;
-        cancelStructSelect(); openStructVideo(ok?rect:null);
+        let info=null;
+        if(ok){ const gC=screenToGeo((rect.left+rect.right)/2,(rect.top+rect.bottom)/2),
+          gTL=screenToGeo(rect.left,rect.top), gBR=screenToGeo(rect.right,rect.bottom);
+          if(gC&&gTL&&gBR){ const wm=Cesium.Cartesian3.distance(Cesium.Cartesian3.fromDegrees(gTL.lon,gC.lat),Cesium.Cartesian3.fromDegrees(gBR.lon,gC.lat));
+            const hm=Cesium.Cartesian3.distance(Cesium.Cartesian3.fromDegrees(gC.lon,gTL.lat),Cesium.Cartesian3.fromDegrees(gC.lon,gBR.lat));
+            info={lat:gC.lat,lon:gC.lon,wm:Math.round(wm),hm:Math.round(hm)}; } }
+        cancelStructSelect(); openStructVideo(ok?rect:null, info);
       };
       cap.addEventListener("mousedown",(e)=>{ if(e.button!==0)return; down=true; a={x:e.clientX,y:e.clientY};
         box.style.display="block"; draw(a,a); window.addEventListener("mousemove",mm); window.addEventListener("mouseup",mu); });
@@ -2879,9 +2894,8 @@
     $("veh-video").addEventListener("ended", ()=>{ if(vehOn) playRandomVeh(); });   // al terminar, otro clip al azar
     function showVeh(on){
       vehOn=on; $("tl-veh").classList.toggle("active",on);
-      $("veh-feed").classList.toggle("on",on);
-      if(on) playRandomVeh(); else { try{ $("veh-video").pause(); }catch{} }
-      if(on){ if(survActive) startWander("veh"); } else stopWander("veh");
+      if(on){ if(survActive) startWander("veh"); }   // el vídeo aparece SOLO cuando se coloca el vehículo (startVehOnRoads)
+      else { stopWander("veh"); $("veh-feed").classList.remove("on"); try{ $("veh-video").pause(); }catch{} }
     }
     $("tl-veh").onclick=()=>showVeh(!vehOn);
 
@@ -2965,11 +2979,11 @@
       const o=[...v.out], oo=o.filter(k=>k!==prev); if(oo.length) return oo[rndi(oo.length)]; if(o.length) return o[rndi(o.length)];
       const a=[...v.all], aa=a.filter(k=>k!==prev); if(aa.length) return aa[rndi(aa.length)]; return a.length?a[rndi(a.length)]:null; };
     function startVehOnRoads(els){
-      if(!els.length){ freeWander("veh"); return; }
+      if(!els.length){ vehGone(); return; }   // no hay calles/parking → no hay vehículos
       const V=buildRoadGraph(els), keys=[...V.keys()];
       let cur=null, bd=1e9; keys.forEach(k=>{ const v=V.get(k); if(!v.out.size&&!v.all.size) return;
         const d=hav(survGeo.lat,survGeo.lon,v.lat,v.lon); if(d<bd){bd=d;cur=k;} });
-      if(!cur){ freeWander("veh"); return; }
+      if(!cur){ vehGone(); return; }
       let prev=null, target=pickNb(V,cur,prev);
       const st={lat:V.get(cur).lat, lon:V.get(cur).lon, speed:(3+Math.random()*3)};
       const ent=makeWanderEnt("veh"), cC=Cesium.Cartesian3.fromDegrees(survGeo.lon,survGeo.lat,0), rad=scopeRadiusM();
@@ -2979,9 +2993,10 @@
         if(d<=step){ st.lat=tv.lat; st.lon=tv.lon; prev=cur; cur=target; target=pickNb(V,cur,prev); }
         else { st.lat+=(step*Math.cos(hd*Math.PI/180))/111320; st.lon+=(step*Math.sin(hd*Math.PI/180))/(111320*Math.cos(st.lat*Math.PI/180)||1e-6); }
         ent.position=Cesium.Cartesian3.fromDegrees(st.lon,st.lat,0); ent.billboard.rotation=Cesium.Math.toRadians(-hd);
-        if(Cesium.Cartesian3.distance(cC, Cesium.Cartesian3.fromDegrees(st.lon,st.lat,0))>rad) onLost("veh");
+        if(Cesium.Cartesian3.distance(cC, Cesium.Cartesian3.fromDegrees(st.lon,st.lat,0))>rad) vehGone();   // sale → "perdido" una vez y botón off
       }, 120);
       wanderers.veh={ent,timer};
+      showVehVideo();   // ahora sí: vehículo colocado → mostrar el vídeo
     }
     // --- Persona: siempre dentro de un edificio / parque; cambia a otro cercano de vez en cuando ---
     function startPersonInAreas(els){
@@ -3032,9 +3047,8 @@
       }, 120);
       wanderers[kind]={ent,timer};
     }
-    function showLost(kind){
-      const t=$("lost-toast"), title=kind==="veh"?"VEHÍCULO PERDIDO":"PERSONA PERDIDA";
-      const el=t.querySelector(".lost-title"); el.textContent=title; el.dataset.txt=title;
+    function showLostMsg(title){
+      const t=$("lost-toast"); const el=t.querySelector(".lost-title"); el.textContent=title; el.dataset.txt=title;
       t.classList.remove("out"); t.classList.remove("on"); void t.offsetWidth; t.classList.add("on");
       clearTimeout(t._h); t._h=setTimeout(()=>{ t.classList.add("out"); setTimeout(()=>t.classList.remove("on","out"), 400); }, 3400);
       try{ const ac=ensureAudio(); if(ac){ const o=ac.createOscillator(),g=ac.createGain(); o.type="sawtooth";
@@ -3042,6 +3056,11 @@
         g.gain.setValueAtTime(0.0001,ac.currentTime); g.gain.exponentialRampToValueAtTime(0.13,ac.currentTime+0.03); g.gain.exponentialRampToValueAtTime(0.0001,ac.currentTime+0.55);
         o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime+0.6); } }catch{}
     }
+    function showLost(kind){ showLostMsg(kind==="veh"?"VEHÍCULO PERDIDO":"PERSONA PERDIDA"); }
+    // Vehículo desaparecido / sin vehículos: mensaje una sola vez y apaga el botón VEHÍCULOS
+    function vehGone(){ stopWander("veh"); showLostMsg("NO HAY VEHÍCULOS EN LA ZONA SELECCIONADA");
+      vehOn=false; $("tl-veh").classList.remove("active"); $("veh-feed").classList.remove("on"); try{$("veh-video").pause();}catch{} }
+    function showVehVideo(){ $("veh-feed").classList.add("on"); playRandomVeh(); }
 
     // --- Visor de captura a pantalla completa (con detalles) ---
     function openShotView(i){
@@ -3053,12 +3072,26 @@
         `<div>LAT · <b>${(+s.lat).toFixed(6)}</b></div><div>LON · <b>${(+s.lon).toFixed(6)}</b></div>`+
         `<div>DIST · <b>${s.dist}</b></div><div>ELEV · <b>${s.elev}</b></div>`+
         `<div>AZIMUT · <b>${s.az}°</b></div><div>ÁREA · <b>${s.area}</b></div>`+
-        `<div>FECHA · <b>${dt}</b></div>`;
+        `<div>FECHA · <b>${dt}</b></div>`+
+        `<div style="margin-top:10px;color:#7a97ad;font-size:11px">Rueda para zoom · doble clic · arrastrar para mover</div>`;
+      shvScale=1; shvX=0; shvY=0; applyShv();
       $("shot-view").classList.add("on");
     }
     function closeShotView(){ $("shot-view").classList.remove("on"); }
+    // Zoom/paneo del visor
+    let shvScale=1, shvX=0, shvY=0, shvDown=null;
+    function applyShv(){ const im=document.querySelector(".shv-img"); if(!im) return;
+      im.style.transform=`translate(${shvX}px,${shvY}px) scale(${shvScale})`;
+      im.style.cursor = shvScale>1 ? "grab" : "zoom-in"; }
+    { const stage=document.querySelector(".shv-stage"), im=document.querySelector(".shv-img");
+      stage.addEventListener("wheel",(e)=>{ e.preventDefault(); const f=e.deltaY<0?1.15:1/1.15;
+        shvScale=Math.min(6,Math.max(1,shvScale*f)); if(shvScale===1){shvX=0;shvY=0;} applyShv(); }, {passive:false});
+      im.addEventListener("dblclick",()=>{ shvScale=shvScale>1?1:2.5; shvX=0; shvY=0; applyShv(); });
+      im.addEventListener("mousedown",(e)=>{ if(shvScale<=1) return; e.preventDefault(); shvDown={x:e.clientX,y:e.clientY,ox:shvX,oy:shvY}; im.style.cursor="grabbing"; });
+      window.addEventListener("mousemove",(e)=>{ if(!shvDown) return; shvX=shvDown.ox+(e.clientX-shvDown.x); shvY=shvDown.oy+(e.clientY-shvDown.y); applyShv(); });
+      window.addEventListener("mouseup",()=>{ if(shvDown){ shvDown=null; applyShv(); } }); }
     document.querySelector(".shv-close").onclick=closeShotView;
-    $("shot-view").onclick=(e)=>{ if(e.target.id==="shot-view"||e.target.classList.contains("shv-stage")) closeShotView(); };
+    $("shot-view").onclick=(e)=>{ if(e.target.id==="shot-view") closeShotView(); };   // clic fuera cierra (no en el stage/imagen)
     function screenToGeo(x,y){
       const rect=viewer.scene.canvas.getBoundingClientRect();
       const c=viewer.camera.pickEllipsoid(new Cesium.Cartesian2(x-rect.left,y-rect.top), viewer.scene.globe.ellipsoid);
