@@ -3424,13 +3424,25 @@
     const onLost=(kind)=>{ stopWander(kind); showLost(kind);
       setTimeout(()=>{ const on=kind==="veh"?vehOn:peopleOn; if(on&&survActive) startWander(kind); }, 4200); };
     // --- Consulta OSM (Overpass) de features donde puede estar el objetivo ---
+    const OVERPASS_EP=["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
+    const _ovCache=new Map();   // caché por bbox+kind (evita re-consultas y rate-limit)
+    async function overpass(q, key){
+      if(key && _ovCache.has(key)){ const c=_ovCache.get(key); if(Date.now()-c.t<120000) return c.els; }
+      for(const ep of OVERPASS_EP){
+        try{ const r=await fetch(ep,{method:"POST",body:q}); if(!r.ok) continue;
+          const j=await r.json(); const els=(j.elements||[]).filter(el=>el.geometry&&el.geometry.length>1);
+          if(els.length){ if(key) _ovCache.set(key,{els,t:Date.now()}); return els; }
+        }catch{}
+      }
+      return [];
+    }
     async function fetchFeatures(kind){
       const r=scopeBbox(1.4), bb=`(${r.s},${r.w},${r.n},${r.e})`;
       const q = kind==="veh"
         ? `[out:json][timeout:40];(way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|road|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"]["access"!~"^(no|private)$"]${bb};);out geom 5000;`
         : `[out:json][timeout:20];(way["building"]${bb};way["leisure"~"park|garden|pitch|playground|recreation_ground|golf_course"]${bb};way["landuse"~"grass|recreation_ground|forest|meadow|cemetery"]${bb};);out geom 400;`;
-      try{ const j=await (await fetch("https://overpass-api.de/api/interpreter",{method:"POST",body:q})).json();
-        return (j.elements||[]).filter(el=>el.geometry&&el.geometry.length>1); }catch{ return []; }
+      const key = kind+":"+r.s.toFixed(4)+","+r.w.toFixed(4)+","+r.n.toFixed(4)+","+r.e.toFixed(4);
+      return await overpass(q, key);
     }
     async function startWander(kind){
       if(!survActive||!survGeo) return;
