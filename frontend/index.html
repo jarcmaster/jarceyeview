@@ -29,7 +29,7 @@
       stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:0 0 auto; }
 
     /* Columnas: nada se encima */
-    #left-col { position:absolute; top:12px; left:12px; bottom:44px; width:254px; z-index:10;
+    #left-col { position:absolute; top:60px; left:12px; bottom:44px; width:254px; z-index:10;
       display:flex; flex-direction:column; gap:10px; overflow-y:auto; padding-right:4px; }
     #right-col { position:absolute; top:52px; right:12px; width:238px; z-index:10;
       display:flex; flex-direction:column; gap:10px; max-height:calc(100vh - 64px); overflow-y:auto; }
@@ -238,7 +238,7 @@
     #shot-flash.on { animation:shotflash .45s ease-out; }
     @keyframes shotflash { 0%{opacity:0} 12%{opacity:.9} 100%{opacity:0} }
     /* Barra Día/Noche */
-    #daynight { position:absolute; z-index:27; bottom:56px; left:50%; transform:translateX(-50%); display:none; align-items:center; gap:12px;
+    #daynight { position:absolute; z-index:27; bottom:118px; left:50%; transform:translateX(-50%); display:none; align-items:center; gap:12px;
       padding:8px 14px; background:rgba(6,16,26,.94); border:1px solid #2a6a8f; border-radius:12px; backdrop-filter:blur(8px);
       box-shadow:0 8px 26px rgba(0,0,0,.55); font-family:"Consolas",monospace; font-size:12px; color:#bfe9ff; }
     #daynight.on { display:flex; }
@@ -248,6 +248,15 @@
     #daynight #dn-auto.active { background:#155; border-color:#3aa0ff; color:#bfe9ff; }
     #daynight .dn-x { cursor:pointer; color:#ffdada; }
     #daynight .chk { margin:0; }
+
+    /* Botón siempre visible arriba-izquierda para mostrar/ocultar paneles */
+    #panels-btn { position:absolute; z-index:28; top:12px; left:12px; width:40px; height:40px; display:flex; align-items:center; justify-content:center;
+      border-radius:10px; background:rgba(6,16,26,.92); border:1px solid #2a6a8f; color:#7fd3ff; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,.5); backdrop-filter:blur(6px); }
+    #panels-btn:hover { background:#123449; }
+    #panels-btn.active { border-color:#5fe08a; color:#baffd0; box-shadow:0 0 12px rgba(95,224,138,.4); }
+    body.objetivo-on #panels-btn { display:none; }   /* en OBJETIVO manda el toggle ▦ del modo */
+    body.panels-off #left-col, body.panels-off #hud, body.panels-off #filters, body.panels-off #layers,
+    body.panels-off #webcams, body.panels-off #radio, body.panels-off #daynight { display:none !important; }
 
     /* Toggles de UI en OBJETIVO */
     #ui-toggle, #tools-toggle { position:absolute; z-index:29; display:none; align-items:center; justify-content:center;
@@ -1136,6 +1145,9 @@
       <div id="sim-log"></div>
     </div>
   </div>
+
+  <!-- Botón siempre visible: mostrar/ocultar paneles (vuelos, capas, webcams, radio, barra día/noche) -->
+  <div id="panels-btn" title="Mostrar/ocultar paneles"><span data-ic="layers"></span></div>
 
   <!-- Toggles para mostrar/ocultar la UI durante OBJETIVO -->
   <div id="ui-toggle" title="Mostrar/ocultar paneles y dock"><span data-ic="layers"></span></div>
@@ -2834,6 +2846,10 @@
     $("dn-on").onchange=(e)=>{ dnEnabled=e.target.checked; computeDayNight(); };
     $("dn-slider").oninput=(e)=>{ dnAuto=false; $("dn-auto").classList.remove("active"); dnHours=(+e.target.value)/60; computeDayNight(); };
     $("dn-auto").onclick=()=>{ dnAuto=true; $("dn-auto").classList.add("active"); computeDayNight(); };
+    // cerrar la barra al hacer clic en el mapa u otro sitio (fuera de la barra y su botón)
+    const dnAutoClose=(ev)=>{ const p=$("daynight"); if(p.classList.contains("on") && !p.contains(ev.target) && !$("dn-btn").contains(ev.target)) closeDN(); };
+    document.addEventListener("click", dnAutoClose);
+    viewer.scene.canvas.addEventListener("pointerdown", ()=>{ if($("daynight").classList.contains("on")) closeDN(); });
     viewer.camera.moveEnd.addEventListener(()=>{ if(dnEnabled){ try{ computeDayNight(); }catch{} } });
     setInterval(()=>{ if(dnEnabled && dnAuto){ try{ computeDayNight(); }catch{} } }, 5000);
     try{ computeDayNight(); }catch{}   // aplica el día/noche según la hora UTC actual al cargar
@@ -3954,6 +3970,7 @@
     function exitObjetivoUI(){ document.body.classList.remove("ui-hidden","tools-hidden","objetivo-on");
       $("ui-toggle").classList.remove("on","active"); $("tools-toggle").classList.remove("on","active"); }
     $("ui-toggle").onclick=()=>{ const hidden=document.body.classList.toggle("ui-hidden"); $("ui-toggle").classList.toggle("active",!hidden); };
+    $("panels-btn").onclick=()=>{ const off=document.body.classList.toggle("panels-off"); $("panels-btn").classList.toggle("active",off); };
     $("tools-toggle").onclick=()=>{ const hidden=document.body.classList.toggle("tools-hidden"); $("tools-toggle").classList.toggle("active",!hidden); };
     function endSpy(){
       spyMode=false; spyDown=false; cancelAnimationFrame(spyAnimRAF); stopCam(); stopSurv(); hideTools(); exitObjetivoUI();
