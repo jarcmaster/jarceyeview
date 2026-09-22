@@ -326,17 +326,19 @@
     .satm-foot b { color:#dff; }
 
     /* Seguimiento de personas (ventana izquierda) */
-    #people-feed { position:absolute; z-index:33; left:12px; bottom:52px; width:236px; display:none;
+    #people-feed, #struct-feed { position:absolute; z-index:33; width:236px; display:none;
       background:rgba(4,10,20,.96); border:1px solid #2a6a8f; border-radius:12px; overflow:hidden;
       box-shadow:0 8px 30px rgba(0,0,0,.6); backdrop-filter:blur(8px); font-family:"Consolas",monospace; }
-    #people-feed.on { display:block; }
+    #people-feed { left:12px; bottom:52px; }
+    #struct-feed { right:12px; bottom:52px; }
+    #people-feed.on, #struct-feed.on { display:block; }
     .pf-head { display:flex; align-items:center; gap:6px; padding:7px 10px; font-size:11px; letter-spacing:1px;
       color:#7fd3ff; font-weight:600; background:rgba(127,211,255,.08); }
     .pf-head .pf-live { color:#ff5252; animation:camblink 1s steps(1) infinite; }
     .pf-head .pf-count { margin-left:auto; color:#5fe08a; font-weight:400; }
     .pf-body { position:relative; height:380px; overflow:hidden; background:#000; }
-    #pf-embed { position:absolute; inset:0; }
-    #pf-embed iframe { width:100%; height:100%; border:0; display:block; background:#000; pointer-events:none; }
+    #pf-embed, #ss-embed { position:absolute; inset:0; }
+    #pf-embed iframe, #ss-embed iframe { width:100%; height:100%; border:0; display:block; background:#000; pointer-events:none; }
     .pf-head { cursor:move; }
     .pf-yt { margin-left:auto; color:#7fd3ff; text-decoration:none; }
     .pf-synth { position:absolute; inset:0; background:radial-gradient(120% 90% at 50% 18%, #0c1c30, #050b16 75%); }
@@ -798,6 +800,7 @@
     <div class="stool" id="tl-north"><span data-ic="compass"></span> NORTE</div>
     <div class="stool" id="tl-hover"><span data-ic="orbit"></span> HOVER</div>
     <div class="stool" id="tl-people"><span data-ic="people"></span> PERSONAS</div>
+    <div class="stool" id="tl-struct"><span data-ic="building"></span> ESTRUCTURAS</div>
     <div class="stool" id="tl-optic"><span data-ic="thermal"></span> ÓPTICA</div>
     <div class="stool" id="tl-shot"><span data-ic="camera"></span> FOTO</div>
     <div class="stool" id="tl-shots"><span data-ic="images"></span> GALERÍA</div>
@@ -849,6 +852,15 @@
     <div class="pf-body">
       <div id="pf-embed"></div>
       <div class="pf-hud"><span>◉ AI TRACK</span></div>
+    </div>
+  </div>
+
+  <!-- Análisis de estructuras (ventana, mientras ESTRUCTURAS está activo) -->
+  <div id="struct-feed">
+    <div class="pf-head"><span class="pf-live">●</span> ANÁLISIS DE ESTRUCTURAS <span class="pf-count">SCAN</span></div>
+    <div class="pf-body">
+      <div id="ss-embed"></div>
+      <div class="pf-hud"><span>◉ STRUCT SCAN</span></div>
     </div>
   </div>
 
@@ -997,6 +1009,7 @@
       thermal:'<svg class="ic" viewBox="0 0 24 24"><path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/><path d="M12 8v6"/></svg>',
       images:'<svg class="ic" viewBox="0 0 24 24"><rect x="8" y="2" width="14" height="14" rx="2"/><path d="M2 8v12a2 2 0 0 0 2 2h12"/><circle cx="12.5" cy="6.5" r="1.5"/><path d="m8 13 3-3 4 4"/></svg>',
       people:'<svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="7" r="3.2"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17.5" cy="8" r="2.6"/><path d="M16 14.4A5.5 5.5 0 0 1 22 20"/></svg>',
+      building:'<svg class="ic" viewBox="0 0 24 24"><rect x="4" y="3" width="9" height="18" rx="1"/><path d="M13 8h6a1 1 0 0 1 1 1v12H13"/><path d="M7 7h3M7 11h3M7 15h3M16 12h1M16 16h1"/></svg>',
     };
     const icon = (n) => IC[n] || "";
     document.querySelectorAll("[data-ic]").forEach(e => { e.innerHTML = icon(e.dataset.ic); });
@@ -1036,6 +1049,7 @@
     document.querySelectorAll("#right-col .panel").forEach(p => makeDraggable(p, p));
     ["wc-player","sv-player","wc-follow","popup","searchbox"].forEach(id => { const el=$(id); if(el) makeDraggable(el, el); });
     { const pf=$("people-feed"); if(pf) makeDraggable(pf, pf.querySelector(".pf-head")); }   // seguimiento de personas: arrastrar por su encabezado
+    { const sf=$("struct-feed"); if(sf) makeDraggable(sf, sf.querySelector(".pf-head")); }   // estructuras: arrastrar por su encabezado
     { const g=$("wc-gallery"); if(g) makeDraggable(g, g.querySelector(".wcg-head")); }
 
     // Coloca una ventana en un area en blanco de la pantalla, sin caer encima de otra ventana visible
@@ -2717,6 +2731,7 @@
       document.querySelectorAll("#spy-tools .stool").forEach(b=>b.classList.remove("active"));
       if(hoverOn) setHover(false);
       if(typeof peopleOn!=="undefined" && peopleOn) showPeople(false);
+      if(typeof structOn!=="undefined" && structOn) showStruct(false);
       if(opticMode){ opticMode=""; const o=$("scope-optic"); o.style.backdropFilter=""; o.style.webkitBackdropFilter=""; o.style.display="none";
         document.querySelectorAll("#sub-optic .cbtn").forEach(b=>b.classList.remove("active")); }
       $("shots-modal").classList.remove("on");
@@ -2738,21 +2753,26 @@
     $("sub-pan").querySelectorAll("button[data-d]").forEach(b=>b.onclick=()=>panView(b.dataset.d));
     document.querySelector(".sm-x").onclick=()=>{ $("shots-modal").classList.remove("on"); $("tl-shots").classList.remove("active"); };
 
-    // --- Seguir personas: ventana izquierda con el vídeo de YouTube (embed, con sonido, en loop) ---
-    let peopleOn=false, pfFpsTimer=null;
-    const PF_YT_ID="wXDXFysTJIk";
+    // --- Feeds de vídeo (YouTube embed: mudo, sin CC, sin controles, no interactivo, en loop) ---
+    function ytEmbed(id){ return `<iframe src="https://www.youtube.com/embed/${id}?autoplay=1&mute=1&loop=1&playlist=${id}`+
+      `&controls=0&disablekb=1&modestbranding=1&fs=0&rel=0&playsinline=1&cc_load_policy=0&iv_load_policy=3" `+
+      `allow="autoplay; encrypted-media; picture-in-picture" tabindex="-1"></iframe>`; }
+    // Seguir personas (izquierda)
+    let peopleOn=false;
     function showPeople(on){
       peopleOn=on; $("tl-people").classList.toggle("active",on);
-      const pf=$("people-feed"); pf.classList.toggle("on",on);
-      const emb=$("pf-embed");
-      if(on){
-        emb.innerHTML=`<iframe src="https://www.youtube.com/embed/${PF_YT_ID}?autoplay=1&mute=1&loop=1&playlist=${PF_YT_ID}&controls=0&disablekb=1&modestbranding=1&fs=0&rel=0&playsinline=1&cc_load_policy=0&iv_load_policy=3" `+
-          `allow="autoplay; encrypted-media; picture-in-picture" tabindex="-1"></iframe>`;
-        clearInterval(pfFpsTimer);
-        pfFpsTimer=setInterval(()=>{ const c=document.querySelector(".pf-count"); if(c) c.textContent="TRK "+(3+rnd(3)); }, 900);
-      } else { emb.innerHTML=""; clearInterval(pfFpsTimer); pfFpsTimer=null; }   // vaciar el iframe detiene el audio
+      $("people-feed").classList.toggle("on",on);
+      $("pf-embed").innerHTML = on ? ytEmbed("wXDXFysTJIk") : "";   // vaciar detiene el vídeo
     }
     $("tl-people").onclick=()=>showPeople(!peopleOn);
+    // Estructuras (derecha)
+    let structOn=false;
+    function showStruct(on){
+      structOn=on; $("tl-struct").classList.toggle("active",on);
+      $("struct-feed").classList.toggle("on",on);
+      $("ss-embed").innerHTML = on ? ytEmbed("QlokeZrqtJM") : "";
+    }
+    $("tl-struct").onclick=()=>showStruct(!structOn);
 
     // --- Visor de captura a pantalla completa (con detalles) ---
     function openShotView(i){
