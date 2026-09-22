@@ -237,6 +237,13 @@
     #shot-flash { position:absolute; inset:0; z-index:34; pointer-events:none; opacity:0; background:#eaffff; }
     #shot-flash.on { animation:shotflash .45s ease-out; }
     @keyframes shotflash { 0%{opacity:0} 12%{opacity:.9} 100%{opacity:0} }
+    /* Botón flotante de simulación de tráfico (siempre visible) */
+    #veh-toggle { position:absolute; z-index:35; right:12px; bottom:12px; width:44px; height:44px; display:flex;
+      align-items:center; justify-content:center; border-radius:11px; background:rgba(6,16,26,.92); border:1px solid #2a6a8f;
+      color:#7fd3ff; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,.5); backdrop-filter:blur(6px); }
+    #veh-toggle:hover { background:#123449; }
+    #veh-toggle.active { border-color:#5fe08a; color:#baffd0; box-shadow:0 0 14px rgba(95,224,138,.45); }
+
     /* Toggles de UI en OBJETIVO */
     #ui-toggle, #tools-toggle { position:absolute; z-index:29; display:none; align-items:center; justify-content:center;
       width:40px; height:40px; border-radius:10px; background:rgba(6,16,26,.92); border:1px solid #2a6a8f; color:#7fd3ff;
@@ -496,7 +503,7 @@
     #ct-input:focus { outline:none; border-color:#3aa0ff; }
     .ct-row { display:flex; gap:8px; margin-top:10px; }
     .ct-row button { margin:0; padding:8px; font-size:11px; }
-    #ct-orbit.active { background:#155; border-color:#3aa0ff; color:#bfe9ff; box-shadow:0 0 10px rgba(58,160,255,.4); }
+    #ct-orbit.active, #ct-follow.active { background:#155; border-color:#3aa0ff; color:#bfe9ff; box-shadow:0 0 10px rgba(58,160,255,.4); }
 
     /* Aviso animado de objetivo perdido */
     #lost-toast { position:absolute; z-index:44; top:44%; left:50%; transform:translate(-50%,-50%) scale(.8);
@@ -1047,7 +1054,8 @@
     <div class="ct-body">
       <label>Etiqueta del vehículo</label>
       <input id="ct-input" type="text" placeholder="p.ej. SOSPECHOSO 1" maxlength="24" spellcheck="false" autocomplete="off">
-      <div class="ct-row"><button id="ct-orbit"><span data-ic="orbit"></span> Seguir cámara (órbita)</button></div>
+      <div class="ct-row"><button id="ct-orbit"><span data-ic="orbit"></span> Seguir (órbita)</button>
+        <button id="ct-follow"><span data-ic="crosshair"></span> Seguir (sin órbita)</button></div>
       <div class="ct-row"><button id="ct-apply"><span data-ic="check"></span> Aplicar tag</button>
         <button id="ct-cancel" class="stop"><span data-ic="x"></span> Cancelar rastreo</button></div>
     </div>
@@ -1112,6 +1120,8 @@
   <!-- Toggles para mostrar/ocultar la UI durante OBJETIVO -->
   <div id="ui-toggle" title="Mostrar/ocultar paneles y dock"><span data-ic="layers"></span></div>
   <div id="tools-toggle" title="Mostrar/ocultar herramientas"><span data-ic="crosshair"></span></div>
+  <!-- Botón flotante siempre visible: simulación de tráfico -->
+  <div id="veh-toggle" title="Simulación de vehículos (on/off)"><span data-ic="car"></span></div>
 
   <!-- Gestor de claves (.env) -->
   <div id="keys-modal">
@@ -3251,10 +3261,18 @@
     $("veh-video").addEventListener("ended", ()=>{ if(vehOn) playRandomVeh(); });   // al terminar, otro clip al azar
     function showVeh(on){
       vehOn=on; $("tl-veh").classList.toggle("active",on);
-      if(on){ if(survActive) startTraffic(); }   // genera tráfico dentro del círculo; el vídeo abre al hacer clic en un coche
+      const vt=$("veh-toggle"); if(vt) vt.classList.toggle("active",on);
+      if(on){ if(survGeo) startTraffic(); }   // usa el área (persiste aunque OBJETIVO esté apagado)
       else { stopTraffic(); }
     }
     $("tl-veh").onclick=()=>showVeh(!vehOn);
+    // Botón flotante: activar/parar la simulación de tráfico sin entrar a OBJETIVO
+    $("veh-toggle").onclick=()=>{
+      if(vehOn){ showVeh(false); return; }
+      if(!survGeo){ const r=(typeof viewRect==="function")&&viewRect(); if(!r) return;
+        survGeo={lat:(r.s+r.n)/2, lon:(r.w+r.e)/2}; survBox={aLon:r.w,aLat:r.s,bLon:r.e,bLat:r.n}; survMeta={area:"—",elev:"—"}; }
+      showVeh(true);
+    };
     document.querySelector(".veh-expand").onclick=()=>{ const f=$("veh-feed"), big=f.classList.toggle("big");
       f.querySelector(".veh-expand span").innerHTML=icon(big?"compress":"expand"); };
 
@@ -3759,35 +3777,39 @@
       renderVehData(c);                   // datos del vehículo
     }
     function cancelCarTracking(keepVideo){
-      if(carOrbitOn) setCarOrbit(false);
+      if(carOrbitOn) setCarFollowOff();
       if(trackedCarId){ const c=trafficCars.get(trackedCarId); if(c){ c.tracked=false; styleCar(c,false); } }
       trackedCarId=null; scopeHalf=null; $("car-tag").classList.remove("on");
       clearVehData();
       if(!keepVideo){ $("veh-feed").classList.remove("on"); try{$("veh-video").pause();}catch{} }
     }
-    // Seguir con la cámara + órbita suave alrededor del vehículo rastreado
-    function setCarOrbit(on){
-      carOrbitOn=on; const b=$("ct-orbit"); if(b) b.classList.toggle("active",on);
-      if(on){
-        const c=trafficCars.get(trackedCarId), pos=c&&c.ent&&c.ent.position.getValue(viewer.clock.currentTime);
-        if(!pos){ carOrbitOn=false; if(b) b.classList.remove("active"); return; }
-        // "seguir con satélite que se mueve": el círculo OBJETIVO sigue al vehículo + feed orbital
-        if(survBox){ scopeHalf={ dLat:Math.abs(survBox.bLat-survBox.aLat)/2, dLon:Math.abs(survBox.bLon-survBox.aLon)/2 }; }
-        trafficCenter={lat:survGeo.lat, lon:survGeo.lon};
-        if(typeof showSatMini==="function") showSatMini(true);
-        carOrbitHeading=viewer.camera.heading; carOrbitPitch=Math.min(viewer.camera.pitch, Cesium.Math.toRadians(-30));
-        carOrbitRange=Math.max(80, Math.min(700, Cesium.Cartesian3.distance(viewer.camera.positionWC, pos)));
-        const tick=()=>{ if(!carOrbitOn) return; const car=trafficCars.get(trackedCarId);
-          if(!car||!car.ent){ setCarOrbit(false); return; }
-          const p=car.ent.position.getValue(viewer.clock.currentTime);
-          if(p){ carOrbitHeading+=Cesium.Math.toRadians(0.18);
-            viewer.camera.lookAt(p, new Cesium.HeadingPitchRange(carOrbitHeading, carOrbitPitch, carOrbitRange)); }
-          carOrbitRAF=requestAnimationFrame(tick); };
-        tick();
-      } else { cancelAnimationFrame(carOrbitRAF); try{ viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY); }catch{}
-        scopeHalf=null; if(typeof showSatMini==="function") showSatMini(false); }
+    // Seguir con la cámara — modo "órbita" (gira) o "sin órbita" (mantiene el ángulo)
+    let carSpin=true;
+    function setCarFollowOff(){ carOrbitOn=false;
+      $("ct-orbit").classList.remove("active"); $("ct-follow").classList.remove("active");
+      cancelAnimationFrame(carOrbitRAF); try{ viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY); }catch{}
+      scopeHalf=null; if(typeof showSatMini==="function") showSatMini(false); }
+    function setCarFollow(spin){
+      if(carOrbitOn && carSpin===spin){ setCarFollowOff(); return; }   // toggle off si ya está en ese modo
+      const c=trafficCars.get(trackedCarId), pos=c&&c.ent&&c.ent.position.getValue(viewer.clock.currentTime);
+      if(!pos) return;
+      carOrbitOn=true; carSpin=spin;
+      $("ct-orbit").classList.toggle("active", spin); $("ct-follow").classList.toggle("active", !spin);
+      if(survBox){ scopeHalf={ dLat:Math.abs(survBox.bLat-survBox.aLat)/2, dLon:Math.abs(survBox.bLon-survBox.aLon)/2 }; }
+      trafficCenter=survGeo?{lat:survGeo.lat, lon:survGeo.lon}:null;
+      if(typeof showSatMini==="function") showSatMini(true);
+      carOrbitHeading=viewer.camera.heading; carOrbitPitch=Math.min(viewer.camera.pitch, Cesium.Math.toRadians(-30));
+      carOrbitRange=Math.max(80, Math.min(700, Cesium.Cartesian3.distance(viewer.camera.positionWC, pos)));
+      const tick=()=>{ if(!carOrbitOn) return; const car=trafficCars.get(trackedCarId);
+        if(!car||!car.ent){ setCarFollowOff(); return; }
+        const p=car.ent.position.getValue(viewer.clock.currentTime);
+        if(p){ if(carSpin) carOrbitHeading+=Cesium.Math.toRadians(0.18);
+          viewer.camera.lookAt(p, new Cesium.HeadingPitchRange(carOrbitHeading, carOrbitPitch, carOrbitRange)); }
+        carOrbitRAF=requestAnimationFrame(tick); };
+      tick();
     }
-    $("ct-orbit").onclick=()=>setCarOrbit(!carOrbitOn);
+    $("ct-orbit").onclick=()=>setCarFollow(true);
+    $("ct-follow").onclick=()=>setCarFollow(false);
     function openCarTag(c){
       const w=$("car-tag"); w.dataset.car=c.id;
       w.querySelector(".ct-title").textContent=`V${c.num} · ${c.plate}`;
