@@ -1423,8 +1423,33 @@
       if(wasHidden) placeFree(p);
       p.querySelector(".wcf-x").onclick=stopFollow;
       p.querySelector(".wcf-live").onclick=()=>showWebcam(cam);
-      p.querySelector(".wcf-recenter").onclick=()=>{ if(wcFollow){ p.querySelector(".wcf-lock").checked=true; viewer.trackedEntity=wcFollow.entity; } };
+      p.querySelector(".wcf-recenter").onclick=()=>recenterFollow(p);
       p.querySelector(".wcf-lock").onclick=(e)=>setWcFollowActive(e.target.checked);
+    }
+    // Encuadrar un punto en la MITAD IZQUIERDA de la pantalla (cuando Street View tapa la derecha)
+    function frameOnLeft(lon, lat){
+      const canvas=viewer.scene.canvas, target=Cesium.Cartesian3.fromDegrees(lon, lat, 0);
+      viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(target, 60), {
+        offset:new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-40), 900), duration:1.0,
+        complete:()=>{ for(let k=0;k<4;k++){
+          const sc=viewer.scene.cartesianToCanvasCoordinates(target); if(!sc) break;
+          const dx=sc.x - canvas.clientWidth*0.25; if(Math.abs(dx)<6) break;
+          const dist=Cesium.Cartesian3.distance(viewer.camera.positionWC, target);
+          const worldPerPx=(2*dist*Math.tan(viewer.camera.frustum.fov/2))/canvas.clientWidth;
+          viewer.camera.moveRight(dx*worldPerPx);   // empuja el objetivo hacia la izquierda
+        } } });
+    }
+    function recenterFollow(panel){
+      if(!wcFollow) return;
+      const svOpen = getComputedStyle($("sv-player")).display !== "none";
+      if(svOpen){   // Street View ocupa la derecha → encuadrar en la mitad izquierda
+        panel.querySelector(".wcf-lock").checked=false;
+        viewer.trackedEntity=undefined;
+        frameOnLeft(wcFollow.cam.lon, wcFollow.cam.lat);
+      } else {      // sin Street View → volver a seguir centrado
+        panel.querySelector(".wcf-lock").checked=true;
+        viewer.trackedEntity=wcFollow.entity;
+      }
     }
     // Clic en una cámara (marcador o tarjeta): seguir en el mapa + abrir el vivo
     function openWebcam(cam){ followWebcam(cam); showWebcam(cam); }
