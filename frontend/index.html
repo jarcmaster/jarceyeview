@@ -2335,15 +2335,13 @@
     }
     function cullFires(){ try{ _occ.cameraPosition=viewer.camera.positionWC;
       for(const [,en] of fireEntities){ const p=en.position.getValue(viewer.clock.currentTime); if(p) en.show=_occ.isPointVisible(p); } }catch{} }
-    if(!cfg.firms) $("lyr-fires-row").style.display="none";
-    else {
-      $("lyr-fires").addEventListener("change", e=>{
-        if(e.target.checked){ firesOn=true; hackFX("NASA FIRMS · INCENDIOS", loadFires());
-          fireTimer=setInterval(loadFires, 180000); }
-        else { firesOn=false; clearInterval(fireTimer); clearFires(); }
-      });
-      viewer.camera.moveEnd.addEventListener(()=>{ if(firesOn){ clearTimeout(fireMoveTimer); fireMoveTimer=setTimeout(loadFires,1500); } });
-    }
+    $("lyr-fires").addEventListener("change", e=>{
+      if(!cfg.firms){ e.target.checked=false; alert("Incendios (NASA FIRMS) necesita FIRMS_MAP_KEY en .env y reiniciar el servidor."); return; }
+      if(e.target.checked){ firesOn=true; hackFX("NASA FIRMS · INCENDIOS", loadFires());
+        fireTimer=setInterval(loadFires, 180000); }
+      else { firesOn=false; clearInterval(fireTimer); clearFires(); }
+    });
+    viewer.camera.moveEnd.addEventListener(()=>{ if(firesOn){ clearTimeout(fireMoveTimer); fireMoveTimer=setTimeout(loadFires,1500); } });
 
     // ---- Panel de rastreo ---------------------------------------------
     const world = { track:null };
