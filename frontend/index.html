@@ -50,6 +50,25 @@
     #filters input[type=text], #filters input[type=number] { width:100%; box-sizing:border-box;
       background:#0b1622; color:#dff; border:1px solid #2a4a63; border-radius:7px; padding:6px 8px; font-size:12px; }
     #filters input:focus { outline:none; border-color:#3aa0ff; }
+    /* Campo con botón de limpiar (✕) */
+    .f-field { position:relative; display:flex; align-items:center; }
+    .f-field input { padding-right:28px !important; }
+    .f-clear { position:absolute; right:5px; top:50%; transform:translateY(-50%);
+      width:19px; height:19px; min-width:0; margin:0; padding:0; border-radius:50%;
+      background:#123449; border:1px solid #2a4a63; color:#9cc; font-size:14px; line-height:1;
+      display:flex; align-items:center; justify-content:center; }
+    .f-clear:hover { background:#5a1420; border-color:#8a2a3a; color:#ffdada; }
+    /* Stepper de altitud: [−] [input] [+] [✕] con los colores del panel */
+    .f-stepper { display:flex; align-items:center; gap:6px; }
+    .f-stepper input { flex:1 1 auto; min-width:0; text-align:center; }
+    .stp { flex:0 0 auto; width:32px !important; min-width:32px; margin:0 !important; padding:6px 0;
+      font-size:16px; font-weight:700; line-height:1; background:#123449; border:1px solid #2a6a8f;
+      color:#7fd3ff; border-radius:7px; }
+    .stp:hover { background:#18465f; }
+    .f-stepper .f-clear { position:static; transform:none; width:24px; height:30px; border-radius:7px; }
+    #f-alt::-webkit-inner-spin-button, #f-alt::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+    #f-alt { -moz-appearance:textfield; }
+    #f-clear-all { margin-top:12px; }
     .chk { display:flex; align-items:center; gap:8px; margin:9px 0 0; color:#dff; font-size:12px; cursor:pointer; }
     .chk input { width:15px; height:15px; flex:0 0 auto; accent-color:#3aa0ff; margin:0; cursor:pointer; }
 
@@ -373,13 +392,24 @@
       <div class="row"><span class="emerg">Emergencia</span><span id="n-emerg">0</span></div>
     </div>
 
-    <div id="filters" class="panel">
+    <div id="filters" class="panel" style="display:none">
       <h2><span data-ic="filter"></span> FILTROS</h2>
-      <label>País contiene</label><input type="text" id="f-country" placeholder="p.ej. Mexico" />
-      <label>Aerolínea / callsign empieza con</label><input type="text" id="f-airline" placeholder="p.ej. AAL, IBE" />
-      <label>Altitud mínima (m)</label><input id="f-alt" type="number" placeholder="0" />
+      <label>País contiene</label>
+      <div class="f-field"><input type="text" id="f-country" placeholder="p.ej. Mexico" />
+        <button type="button" class="f-clear" data-clr="f-country" title="Limpiar este campo">×</button></div>
+      <label>Aerolínea / callsign empieza con</label>
+      <div class="f-field"><input type="text" id="f-airline" placeholder="p.ej. AAL, IBE" />
+        <button type="button" class="f-clear" data-clr="f-airline" title="Limpiar este campo">×</button></div>
+      <label>Altitud mínima (m)</label>
+      <div class="f-stepper">
+        <button type="button" class="stp" id="alt-dn" title="Bajar 500 m">−</button>
+        <input id="f-alt" type="number" placeholder="0" min="0" step="500" />
+        <button type="button" class="stp" id="alt-up" title="Subir 500 m">+</button>
+        <button type="button" class="f-clear" data-clr="f-alt" title="Limpiar este campo">×</button>
+      </div>
       <label class="chk"><input type="checkbox" id="f-emerg" /> Solo emergencias</label>
       <label class="chk"><input type="checkbox" id="f-trails" checked /> Mostrar estelas</label>
+      <button type="button" id="f-clear-all" class="stop"><span data-ic="trash"></span> Limpiar todos los filtros</button>
     </div>
 
     <div id="layers" class="panel">
@@ -604,6 +634,7 @@
       p_snow:'<svg class="ic" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"/></svg>',
       crosshair:'<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>',
       chevron:'<svg class="ic" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>',
+      trash:'<svg class="ic" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/></svg>',
     };
     const icon = (n) => IC[n] || "";
     document.querySelectorAll("[data-ic]").forEach(e => { e.innerHTML = icon(e.dataset.ic); });
@@ -643,6 +674,39 @@
     document.querySelectorAll("#right-col .panel").forEach(p => makeDraggable(p, p));
     ["wc-player","sv-player","popup","searchbox"].forEach(id => { const el=$(id); if(el) makeDraggable(el, el); });
     { const g=$("wc-gallery"); if(g) makeDraggable(g, g.querySelector(".wcg-head")); }
+
+    // Coloca una ventana en un area en blanco de la pantalla, sin caer encima de otra ventana visible
+    function placeFree(el){
+      el.style.position="absolute"; el.style.margin="0"; el.style.transform="none";
+      el.style.right="auto"; el.style.bottom="auto";
+      const w=el.offsetWidth, h=el.offsetHeight, vw=innerWidth, vh=innerHeight, pad=12;
+      const SEL="#left-col .panel, #right-col .panel, #dock, #preset-panel,"+
+        "#wc-gallery, #wc-player, #sv-player, #popup, #searchbox";
+      const rects=[];
+      document.querySelectorAll(SEL).forEach(win=>{
+        if(win===el) return;
+        const cs=getComputedStyle(win);
+        if(cs.display==="none"||cs.visibility==="hidden") return;
+        const r=win.getBoundingClientRect();
+        if(r.width>0 && r.height>0) rects.push(r);
+      });
+      const overlap=(x,y)=>{ let a=0; for(const r of rects){
+        const ox=Math.max(0, Math.min(x+w,r.right)-Math.max(x,r.left));
+        const oy=Math.max(0, Math.min(y+h,r.bottom)-Math.max(y,r.top)); a+=ox*oy; } return a; };
+      let best=null, bestScore=Infinity; const step=24;
+      for(let y=pad; y+h<=vh-pad; y+=step){
+        for(let x=pad; x+w<=vw-pad; x+=step){
+          const s=overlap(x,y);
+          if(s<bestScore){ bestScore=s; best={x,y}; }
+          if(bestScore===0) break;
+        }
+        if(bestScore===0) break;
+      }
+      if(!best) best={x:Math.max(pad,(vw-w)/2), y:Math.max(pad,(vh-h)/2)};
+      if(el.parentElement!==document.body) document.body.appendChild(el);
+      el.style.left=best.x+"px"; el.style.top=best.y+"px";
+      if(!el.style.zIndex || +el.style.zIndex<31) el.style.zIndex=60;
+    }
 
     // ---- Efecto "hackeo con progreso" al activar capas ----
     let hxProgTimer=null, hxLogTimer=null, hxProg=0;
@@ -790,7 +854,24 @@
     }
     ["f-country","f-airline","f-alt","f-emerg","f-trails"].forEach(id =>
       $(id).addEventListener("input", readFilters));
-    $("lyr-planes").addEventListener("change", e => { filters.planes = e.target.checked; applyFilters(); if(e.target.checked) hackFX("VUELOS", waitPlanes()); });
+    $("lyr-planes").addEventListener("change", e => {
+      filters.planes = e.target.checked; applyFilters();
+      $("filters").style.display = e.target.checked ? "" : "none";   // filtros solo con capa de aviones
+      if(e.target.checked) hackFX("VUELOS", waitPlanes());
+    });
+    // Limpiar campo individual (✕ de cada campo)
+    document.querySelectorAll(".f-clear").forEach(b =>
+      b.addEventListener("click", () => { $(b.dataset.clr).value = ""; readFilters(); }));
+    // Stepper de altitud (±500 m, mínimo 0)
+    const stepAlt = (d) => { const v = Math.max(0, (parseFloat($("f-alt").value)||0) + d*500);
+      $("f-alt").value = v || ""; readFilters(); };
+    $("alt-up").addEventListener("click", () => stepAlt(1));
+    $("alt-dn").addEventListener("click", () => stepAlt(-1));
+    // Limpiar todos los filtros
+    $("f-clear-all").addEventListener("click", () => {
+      $("f-country").value = ""; $("f-airline").value = ""; $("f-alt").value = "";
+      $("f-emerg").checked = false; $("f-trails").checked = true; readFilters();
+    });
 
     function passes(d) {
       if (!filters.planes) return false;
@@ -1209,7 +1290,9 @@
     }
     function renderWebcamGallery(cams, lat0, lon0){
       lastScanCams=cams; lastCenter={lat:lat0,lon:lon0};
-      $("wc-gallery").style.display="flex";
+      const wg=$("wc-gallery"); const wgHidden=getComputedStyle(wg).display==="none";
+      wg.style.display="flex";
+      if(wgHidden) placeFree(wg);
       const g=$("wcg-grid");
       g.innerHTML = cams.length ? cams.map(wcCard).join("")
         : '<div style="grid-column:1/-1;color:#7a97ad;font-size:12px">Sin webcams en esta zona.</div>';
@@ -1254,6 +1337,7 @@
         media +
         `<div class="wc-head"><a href="${cam.detail}" target="_blank" rel="noopener">${icon("external")} Ver en Windy</a>` +
         `<span>${cam.city||""} ${cam.country||""}</span></div>`;
+      placeFree(p);
       p.querySelector(".wc-close").onclick = () => { p.style.display = "none"; p.innerHTML = ""; };
     }
     $("btn-scanwc").addEventListener("click", scanWebcams);
@@ -1286,6 +1370,7 @@
         `<span>${icon("pin")} <b>${name}</b></span>` +
         `<button class="sv">${icon("streetview")} Street View</button>` +
         `<span class="sclose">${icon("x")}</span>`;
+      placeFree(sb);
       sb.querySelector(".sv").onclick = () => openStreetView(lat, lon, name);
       sb.querySelector(".sclose").onclick = () => {
         sb.style.display = "none";
@@ -1305,6 +1390,7 @@
         embed +
         `<div class="wc-head"><a href="${ext}" target="_blank" rel="noopener">${icon("external")} Abrir en Google Maps</a>` +
         `<span>${lat.toFixed(4)}, ${lon.toFixed(4)}</span></div>`;
+      placeFree(p);
       p.querySelector(".wc-close").onclick = () => { p.style.display = "none"; p.innerHTML = ""; };
     }
 
@@ -1321,6 +1407,7 @@
     function showPopup(title, html) {
       const p = $("popup"); p.style.display = "block";
       p.innerHTML = `<h2 style="justify-content:space-between">${title}<span class="sclose">${icon("x")}</span></h2>${html}`;
+      placeFree(p);
       p.querySelector(".sclose").onclick = () => { p.style.display = "none"; };
     }
 
