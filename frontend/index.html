@@ -237,6 +237,18 @@
     #shot-flash { position:absolute; inset:0; z-index:34; pointer-events:none; opacity:0; background:#eaffff; }
     #shot-flash.on { animation:shotflash .45s ease-out; }
     @keyframes shotflash { 0%{opacity:0} 12%{opacity:.9} 100%{opacity:0} }
+    /* Toggles de UI en OBJETIVO */
+    #ui-toggle, #tools-toggle { position:absolute; z-index:29; display:none; align-items:center; justify-content:center;
+      width:40px; height:40px; border-radius:10px; background:rgba(6,16,26,.92); border:1px solid #2a6a8f; color:#7fd3ff;
+      cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,.5); backdrop-filter:blur(6px); }
+    #ui-toggle.on, #tools-toggle.on { display:flex; }
+    #ui-toggle { top:12px; left:12px; }
+    #tools-toggle { top:12px; left:50%; transform:translateX(-50%); }
+    #ui-toggle:hover, #tools-toggle:hover { background:#123449; }
+    #ui-toggle.active, #tools-toggle.active { border-color:#3aa0ff; color:#bfe9ff; box-shadow:0 0 12px rgba(58,160,255,.4); }
+    body.ui-hidden #left-col, body.ui-hidden #right-col, body.ui-hidden #dock { display:none !important; }
+    body.tools-hidden #spy-tools, body.tools-hidden #sub-pan, body.tools-hidden #sub-card, body.tools-hidden #sub-optic { display:none !important; }
+
     /* Barra de herramientas del OBJETIVO (arriba-centro) */
     #spy-tools { position:absolute; z-index:28; top:52px; left:50%; transform:translateX(-50%); display:none; gap:8px;
       background:rgba(6,16,26,.92); border:1px solid #2a6a8f; border-radius:12px; padding:6px; backdrop-filter:blur(8px);
@@ -355,6 +367,14 @@
     #veh-data .vd-r { display:flex; justify-content:space-between; gap:8px; }
     #veh-data .vd-r span:last-child { color:#dff; text-align:right; }
     #veh-data .vd-warn { color:#ffb4b4; }
+    #veh-feed .veh-expand { margin-left:auto; cursor:pointer; color:#7fd3ff; display:inline-flex; }
+    #veh-feed .veh-expand:hover { color:#bfe9ff; }
+    #veh-feed .pf-count { margin-left:8px; }
+    #veh-feed.big { width:344px; }
+    #veh-feed.big #veh-data { max-height:62vh; }
+    .vd-owner { display:flex; align-items:center; gap:9px; margin:2px 0 5px; }
+    .vd-avatar { width:34px; height:34px; border-radius:50%; background:linear-gradient(135deg,#1c5aa8,#3a8fe0); color:#fff;
+      display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; flex:0 0 auto; box-shadow:0 0 8px rgba(90,170,255,.4); }
     /* Selección de área para ESTRUCTURAS */
     #struct-cap { position:absolute; inset:0; z-index:29; cursor:crosshair; }
     #struct-selbox { position:absolute; display:none; border:1.5px dashed #7fd3ff; background:rgba(127,211,255,.14);
@@ -480,6 +500,13 @@
     .sc-brk.br{bottom:-3px;right:-3px;border-left:none;border-top:none}
     .surv-reticle { position:absolute; inset:0; width:100%; height:100%; }
     .surv-rot { transform-box:fill-box; transform-origin:center; animation:survspin 9s linear infinite; }
+    /* Iris de cámara (siempre enfocando) en el centro del scope */
+    .surv-iris { transform-box:fill-box; transform-origin:center; animation:irisspin 16s linear infinite; }
+    @keyframes irisspin { to { transform:rotate(360deg); } }
+    .surv-iris .iris-hole { transform-box:fill-box; transform-origin:center; animation:irisfocus 1.7s ease-in-out infinite; }
+    @keyframes irisfocus { 0%,100%{ transform:scale(1); opacity:1 } 50%{ transform:scale(2.1); opacity:.45 } }
+    .surv-iris .iris-ring { transform-box:fill-box; transform-origin:center; animation:irisbreath 2.6s ease-in-out infinite; }
+    @keyframes irisbreath { 0%,100%{ transform:scale(1) } 50%{ transform:scale(1.12) } }
     @keyframes survspin { to{ transform:rotate(360deg); } }
     .surv-nums { position:absolute; inset:0; }
     .surv-num { position:absolute; font-size:10px; color:#7fd3ff; letter-spacing:1px; white-space:nowrap;
@@ -854,9 +881,7 @@
       </g>
       <path d="M150 22 A128 128 0 0 1 263 96" fill="none" stroke="#ff3b3b" stroke-width="3" stroke-linecap="round"/>
       <path d="M150 278 A128 128 0 0 1 37 204" fill="none" stroke="#ff3b3b" stroke-width="3" stroke-linecap="round"/>
-      <circle cx="150" cy="150" r="12" fill="none" stroke="#8fe3ff" stroke-width="1.6"/>
-      <circle cx="150" cy="150" r="3" fill="#8fe3ff"/>
-      <path d="M150 128v10M150 162v10M128 150h10M162 150h10" stroke="#8fe3ff" stroke-width="1.6"/>
+      <g class="surv-iris"></g>
     </svg>
     <div class="surv-nums"></div>
     <div class="surv-sig"><span class="surv-sig-bars"></span><span class="surv-sig-txt"></span></div>
@@ -950,7 +975,8 @@
 
   <!-- Rastreo de vehículos (ventana movible, vídeo local) -->
   <div id="veh-feed">
-    <div class="pf-head"><span class="pf-live">●</span> RASTREO DE VEHÍCULOS <span class="pf-count">TRK</span></div>
+    <div class="pf-head"><span class="pf-live">●</span> RASTREO DE VEHÍCULOS
+      <span class="veh-expand" title="Ampliar detalle"><span data-ic="expand"></span></span><span class="pf-count">TRK</span></div>
     <div class="pf-body">
       <video id="veh-video" muted playsinline preload="auto"></video>
       <div class="pf-hud"><span>◉ VEHICLE TRACK</span></div>
@@ -1016,6 +1042,10 @@
     <div class="dock-btn" id="presets-btn"><span data-ic="layers"></span> PRESETS</div>
     <div class="dock-btn" id="keys-btn"><span data-ic="key"></span> CLAVES</div>
   </div>
+
+  <!-- Toggles para mostrar/ocultar la UI durante OBJETIVO -->
+  <div id="ui-toggle" title="Mostrar/ocultar paneles y dock"><span data-ic="layers"></span></div>
+  <div id="tools-toggle" title="Mostrar/ocultar herramientas"><span data-ic="crosshair"></span></div>
 
   <!-- Gestor de claves (.env) -->
   <div id="keys-modal">
@@ -1154,6 +1184,16 @@
     };
     const icon = (n) => IC[n] || "";
     document.querySelectorAll("[data-ic]").forEach(e => { e.innerHTML = icon(e.dataset.ic); });
+    // Iris de cámara del scope (palas de apertura)
+    (function buildIris(){ const g=document.querySelector(".surv-iris"); if(!g) return;
+      const cx=150, cy=150, R=27, r=10, N=7, tw=(2*Math.PI/N)*0.9; let s="";
+      for(let i=0;i<N;i++){ const a=i*2*Math.PI/N;
+        const x1=cx+R*Math.cos(a), y1=cy+R*Math.sin(a), x2=cx+r*Math.cos(a+tw), y2=cy+r*Math.sin(a+tw),
+              x3=cx+R*Math.cos(a+2*Math.PI/N), y3=cy+R*Math.sin(a+2*Math.PI/N);
+        s+=`<path d="M${x1.toFixed(1)} ${y1.toFixed(1)} L${x2.toFixed(1)} ${y2.toFixed(1)} L${x3.toFixed(1)} ${y3.toFixed(1)}" fill="rgba(143,227,255,.10)" stroke="#8fe3ff" stroke-width="1"/>`; }
+      s+=`<circle class="iris-ring" cx="150" cy="150" r="10" fill="none" stroke="#8fe3ff" stroke-width="1.4"/>`;
+      s+=`<circle class="iris-hole" cx="150" cy="150" r="3" fill="#8fe3ff"/>`;
+      g.innerHTML=s; })();
     // Ventanas movibles: clic izquierdo, arrastrar, soltar. Agarra por casi cualquier parte.
     const DRAG_IGN = "input,textarea,select,button,a,iframe,img,label,.wc-fav,.wc-close,.sclose,"+
                      ".wcg-close,.wcf-x,.sv-max,#sv-pano,.hj-exit,.dock-btn,.ritem,.wc-card,.veh-item,.pbtn,.sbtn2";
@@ -3110,6 +3150,8 @@
       else { stopTraffic(); }
     }
     $("tl-veh").onclick=()=>showVeh(!vehOn);
+    document.querySelector(".veh-expand").onclick=()=>{ const f=$("veh-feed"), big=f.classList.toggle("big");
+      f.querySelector(".veh-expand span").innerHTML=icon(big?"compress":"expand"); };
 
     // --- Objetos animados (vehículo/persona) que deambulan dentro del área del OBJETIVO ---
     const CAR_IMG = "data:image/svg+xml,"+encodeURIComponent(
@@ -3283,12 +3325,17 @@
     // Vehículo desaparecido / sin vehículos: mensaje una sola vez y apaga el botón VEHÍCULOS
     function vehGone(){ stopWander("veh"); showLostMsg("NO HAY VEHÍCULOS EN LA ZONA SELECCIONADA");
       vehOn=false; $("tl-veh").classList.remove("active"); $("veh-feed").classList.remove("on"); try{$("veh-video").pause();}catch{} }
-    function showVehVideo(){ $("veh-feed").classList.add("on"); playRandomVeh(); }
+    function showVehVideo(){ $("veh-feed").classList.add("on"); const v=$("veh-video"); v.loop=true; playRandomVeh(); }
     // Panel de datos del vehículo rastreado (en la ventana RASTREO DE VEHÍCULOS)
     let vehDataTimer=null;
     function renderVehData(c){
       const d=$("veh-data"), i=c.info; if(!i){ return; }
+      const ini=i.owner.split(" ").map(w=>w[0]).slice(0,2).join("");
       d.innerHTML =
+        `<div class="vd-t">PROPIETARIO (est.)</div>`+
+        `<div class="vd-owner"><div class="vd-avatar">${ini}</div>`+
+          `<div><div style="color:#dff">${i.owner}</div>`+
+          `<div style="color:#8fb4cc">Lic ${i.lic} · ${i.sex==="M"?"♂":"♀"} · n.${i.dob}</div></div></div>`+
         `<div class="vd-t">IDENTIFICACIÓN</div>`+
         `<div class="vd-r"><span>Placa</span><span>${c.plate}</span></div>`+
         `<div class="vd-r"><span>Etiqueta</span><span>${c.tag||("V"+c.num)}</span></div>`+
@@ -3306,8 +3353,8 @@
         `<div class="vd-r"><span>En la calle</span><span id="vd-cur">—</span></div>`+
         `<div class="vd-r"><span>Se aproxima a</span><span id="vd-next">—</span></div>`+
         `<div class="vd-t">HISTORIAL (estimado)</div>`+
-        `<div class="vd-r"><span>Stops violados</span><span class="vd-warn">${i.stops}</span></div>`+
-        `<div class="vd-r"><span>Semáforos en rojo</span><span class="vd-warn">${i.reds}</span></div>`+
+        `<div class="vd-r"><span>Stops violados</span><span class="vd-warn" id="vd-stops">${i.stops}</span></div>`+
+        `<div class="vd-r"><span>Semáforos en rojo</span><span class="vd-warn" id="vd-reds">${i.reds}</span></div>`+
         `<div class="vd-r"><span>Excesos de velocidad</span><span>${i.speeding}</span></div>`+
         `<div class="vd-r"><span>Multas</span><span>${i.tickets}</span></div>`+
         `<div class="vd-r"><span>Nivel de riesgo</span><span class="vd-warn">${i.risk}</span></div>`;
@@ -3317,9 +3364,14 @@
     function updateVehData(){
       const c = trackedCarId && trafficCars.get(trackedCarId); if(!c) return;
       const st=carStreets(c), set=(id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
-      set("vd-spd", (c.hold>0?0:Math.round(c.speed*3.6))+" km/h");
+      const stopped=(c.hold>0);
+      set("vd-spd", (stopped?0:Math.round(c.speed*3.6))+" km/h");
       set("vd-lat", c.lat.toFixed(6)); set("vd-lon", c.lon.toFixed(6));
       set("vd-cur", st.cur); set("vd-next", st.next);
+      if(carOrbitOn){ const v=$("veh-video");   // pausa el vídeo cuando el vehículo está detenido (mantiene el mismo clip)
+        if(stopped){ if(!v.paused) v.pause(); } else { if(v.paused) v.play().catch(()=>{}); } }
+      if(c.info){ const s=document.getElementById("vd-stops"), rr=document.getElementById("vd-reds");
+        if(s) s.textContent=c.info.stops; if(rr) rr.textContent=c.info.reds; }
     }
     function clearVehData(){ clearInterval(vehDataTimer); vehDataTimer=null; const d=$("veh-data"); if(d){ d.style.display="none"; d.innerHTML=""; } }
 
@@ -3371,10 +3423,14 @@
     ];
     const CAR_COLORS=["Negro","Blanco","Gris","Plata","Rojo","Azul","Verde","Beige","Gris oscuro"];
     const randVIN=()=>{ const A="ABCDEFGHJKLMNPRSTUVWXYZ0123456789"; let s=""; for(let i=0;i<11;i++) s+=A[rnd(A.length)]; return s; };
+    const OWN_F=["Carlos","María","José","Ana","Luis","Elena","Miguel","Sofía","Jorge","Lucía","Pedro","Carmen","Andrés","Paula"];
+    const OWN_L=["García","Martínez","López","Rodríguez","Pérez","Sánchez","Ramírez","Torres","Flores","Díaz","Cruz","Reyes","Morales","Ortiz"];
     function genCarInfo(){
       const c=VEH_CATALOG[rnd(VEH_CATALOG.length)], m=c.md[rnd(c.md.length)];
+      const sex=rnd(2)?"M":"F", owner=OWN_F[rnd(OWN_F.length)]+" "+OWN_L[rnd(OWN_L.length)]+" "+OWN_L[rnd(OWN_L.length)];
       return { color:CAR_COLORS[rnd(CAR_COLORS.length)], make:c.mk, model:m[0], year:2005+rnd(20),
         occ:1+rnd(m[1]), vin:randVIN(),
+        owner, sex, lic:randVIN().slice(0,3)+"-"+(rnd(9000)+1000), dob:1965+rnd(45),
         stops:rnd(6), reds:rnd(4), speeding:rnd(12), tickets:rnd(9),
         risk:["BAJO","MEDIO","ALTO","ALTO"][rnd(4)], reg:["AL DÍA","VENCIDA","EN REVISIÓN"][rnd(3)] };
     }
@@ -3435,13 +3491,15 @@
               const deg=V.get(c.cur).all.size;
               if(deg>=3 && Math.random()<0.30) c.hold=6+rnd(22);        // espera en intersección
               else if(Math.random()<0.03) c.hold=50+rnd(120);          // parquea un rato
+              if(id===trackedCarId && c.info && deg>=3 && Math.random()<0.22){ if(Math.random()<0.5) c.info.reds++; else c.info.stops++; }
             } else { c.lat+=(step*Math.cos(c.hd*Math.PI/180))/111320; c.lon+=(step*Math.sin(c.hd*Math.PI/180))/(111320*Math.cos(c.lat*Math.PI/180)||1e-6); }
           }
         }
         const hd=c.hd||0, p=offsetRight(c.lat,c.lon,hd,c.lane);   // carril derecho (separa sentidos)
         c.ent.position=Cesium.Cartesian3.fromDegrees(p.lon,p.lat,0); c.ent.billboard.rotation=Cesium.Math.toRadians(-hd);
-        if(id!==trackedCarId && Cesium.Cartesian3.distance(cC, Cesium.Cartesian3.fromDegrees(c.lon,c.lat,0))>rad){   // otros salen → desaparecen
-          removeCar(id);
+        if(Cesium.Cartesian3.distance(cC, Cesium.Cartesian3.fromDegrees(c.lon,c.lat,0))>rad){   // sale del círculo
+          if(id!==trackedCarId) removeCar(id);
+          else if(!carOrbitOn){ removeCar(id); showLost("veh"); cancelCarTracking(false); }   // rastreado sin órbita → perdido
         }
       }
       // El círculo OBJETIVO sigue al vehículo rastreado (se desplaza con él)
@@ -3459,7 +3517,9 @@
       for(const [,c] of trafficCars){ const p=c.ent.position.getValue(t); if(p) c.ent.show=_occ.isPointVisible(p); } }catch{} }
     // Clic en un vehículo: 1º trackear (vídeo) · 2º ventana de etiqueta/cancelar
     function handleCarClick(id){ const c=trafficCars.get(id); if(!c) return;
-      if(trackedCarId!==id) startCarTracking(c); else openCarTag(c); }
+      if(trackedCarId!==id) startCarTracking(c);   // trackear (vídeo + datos) si es otro
+      openCarTag(c);                                // SIEMPRE abre la ventanita de etiqueta
+    }
     function styleCar(c, on){ if(!c||!c.ent) return;
       c.ent.billboard.width=on?46:32; c.ent.billboard.height=on?46:32;
       c.ent.billboard.color = on?Cesium.Color.fromCssColorString("#ff5252"):Cesium.Color.WHITE;
@@ -3467,9 +3527,6 @@
     function startCarTracking(c){
       cancelCarTracking(true);            // suelta el anterior (mantiene el vídeo)
       trackedCarId=c.id; c.tracked=true; styleCar(c,true);
-      // el círculo OBJETIVO seguirá a este vehículo (conserva su tamaño actual)
-      if(survBox){ scopeHalf={ dLat:Math.abs(survBox.bLat-survBox.aLat)/2, dLon:Math.abs(survBox.bLon-survBox.aLon)/2 }; }
-      trafficCenter={lat:survGeo.lat, lon:survGeo.lon};
       showVehVideo();                     // ventana de vídeo (tracking)
       renderVehData(c);                   // datos del vehículo
     }
@@ -3486,6 +3543,10 @@
       if(on){
         const c=trafficCars.get(trackedCarId), pos=c&&c.ent&&c.ent.position.getValue(viewer.clock.currentTime);
         if(!pos){ carOrbitOn=false; if(b) b.classList.remove("active"); return; }
+        // "seguir con satélite que se mueve": el círculo OBJETIVO sigue al vehículo + feed orbital
+        if(survBox){ scopeHalf={ dLat:Math.abs(survBox.bLat-survBox.aLat)/2, dLon:Math.abs(survBox.bLon-survBox.aLon)/2 }; }
+        trafficCenter={lat:survGeo.lat, lon:survGeo.lon};
+        if(typeof showSatMini==="function") showSatMini(true);
         carOrbitHeading=viewer.camera.heading; carOrbitPitch=Math.min(viewer.camera.pitch, Cesium.Math.toRadians(-30));
         carOrbitRange=Math.max(80, Math.min(700, Cesium.Cartesian3.distance(viewer.camera.positionWC, pos)));
         const tick=()=>{ if(!carOrbitOn) return; const car=trafficCars.get(trackedCarId);
@@ -3495,7 +3556,8 @@
             viewer.camera.lookAt(p, new Cesium.HeadingPitchRange(carOrbitHeading, carOrbitPitch, carOrbitRange)); }
           carOrbitRAF=requestAnimationFrame(tick); };
         tick();
-      } else { cancelAnimationFrame(carOrbitRAF); try{ viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY); }catch{} }
+      } else { cancelAnimationFrame(carOrbitRAF); try{ viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY); }catch{}
+        scopeHalf=null; if(typeof showSatMini==="function") showSatMini(false); }
     }
     $("ct-orbit").onclick=()=>setCarOrbit(!carOrbitOn);
     function openCarTag(c){
@@ -3570,8 +3632,14 @@
         (spyAddr ? `ADDR <b>${spyAddr}</b><br>` : "")+
         `FRAME <b>${d.wpx}×${d.hpx}px</b>&nbsp; ${d.state}`;
     }
+    function enterObjetivoUI(){ document.body.classList.add("ui-hidden","tools-hidden");
+      $("ui-toggle").classList.add("on"); $("tools-toggle").classList.add("on"); }
+    function exitObjetivoUI(){ document.body.classList.remove("ui-hidden","tools-hidden");
+      $("ui-toggle").classList.remove("on","active"); $("tools-toggle").classList.remove("on","active"); }
+    $("ui-toggle").onclick=()=>{ const hidden=document.body.classList.toggle("ui-hidden"); $("ui-toggle").classList.toggle("active",!hidden); };
+    $("tools-toggle").onclick=()=>{ const hidden=document.body.classList.toggle("tools-hidden"); $("tools-toggle").classList.toggle("active",!hidden); };
     function endSpy(){
-      spyMode=false; spyDown=false; cancelAnimationFrame(spyAnimRAF); stopCam(); stopSurv(); hideTools();
+      spyMode=false; spyDown=false; cancelAnimationFrame(spyAnimRAF); stopCam(); stopSurv(); hideTools(); exitObjetivoUI();
       $("spy-capture").style.display="none"; $("spy-hint").style.display="none";
       $("spy-hud").style.display="none"; $("spy-hud").classList.remove("fade");
       const s=$("spy-box"); s.style.display="none"; s.style.transition="";
@@ -3721,7 +3789,7 @@
     }
     $("spy-btn").onclick=()=>{
       objetivoOn=!objetivoOn; $("spy-btn").classList.toggle("active",objetivoOn);
-      if(objetivoOn){ ensureAudio(); showTools(); armMark("zoom"); } else { disarmMark(); endSpy(); }   // ensureAudio: desbloquea el sonido (gesto de usuario)
+      if(objetivoOn){ ensureAudio(); showTools(); enterObjetivoUI(); armMark("zoom"); } else { disarmMark(); endSpy(); }   // ensureAudio: desbloquea el sonido (gesto de usuario)
     };
 
     // ===== Live Environment: análisis IA de la vista actual =====
