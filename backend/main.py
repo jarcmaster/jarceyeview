@@ -42,10 +42,10 @@ from fastapi.staticfiles import StaticFiles
 # Permite `from services import ...` sin importar desde dónde se lance uvicorn.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from services import (OpenSky, RouteService, Telegram, aclose, alpr_cameras,
-                      analyze_scene, earthquakes, enhance_image, flight_status,
-                      geoip, gmap_tile, haversine_km, iss_position, radio_stations,
-                      rain_radar, revgeo, tomtom_tile, traffic_incidents,
-                      voice_intent, webcams)
+                      analyze_scene, earthquakes, enhance_image, firms_fires,
+                      flight_status, geoip, gmap_tile, haversine_km, iss_position,
+                      radio_stations, rain_radar, revgeo, tomtom_tile,
+                      traffic_incidents, voice_intent, webcams)
 
 load_dotenv()
 
@@ -432,6 +432,11 @@ async def api_alpr(s: float, w: float, n: float, e: float) -> JSONResponse:
     return JSONResponse({"cameras": await alpr_cameras(s, w, n, e)})
 
 
+@app.get("/api/firms")
+async def api_firms(s: float, w: float, n: float, e: float) -> JSONResponse:
+    return JSONResponse({"fires": await firms_fires(s, w, n, e)})
+
+
 @app.get("/api/incidents")
 async def api_incidents(s: float, w: float, n: float, e: float) -> JSONResponse:
     return JSONResponse({"incidents": await traffic_incidents(s, w, n, e)})
@@ -496,6 +501,7 @@ async def config() -> JSONResponse:
         "traffic": bool(os.getenv("TOMTOM_KEY", "")),
         "gmap2d": bool(os.getenv("GOOGLE_MAPS_API_KEY", "")),
         "ais": bool(os.getenv("AISSTREAM_KEY", "")),
+        "firms": bool(os.getenv("FIRMS_MAP_KEY", "")),
         "pollInterval": POLL_INTERVAL,
         "thresholds": THRESHOLDS,
     })

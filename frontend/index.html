@@ -703,6 +703,7 @@
       <label class="chk"><input type="checkbox" id="lyr-ships" /> <span data-ic="anchor"></span> Barcos (AIS)</label>
       <label class="chk"><input type="checkbox" id="lyr-alpr" /> <span data-ic="crosshair"></span> Cámaras ALPR</label>
       <label class="chk" id="lyr-inc-row"><input type="checkbox" id="lyr-inc" /> <span data-ic="car"></span> Incidentes de tráfico</label>
+      <label class="chk" id="lyr-fires-row"><input type="checkbox" id="lyr-fires" /> <span class="dot" style="color:#ff6a1a">●</span> Incendios (NASA FIRMS)</label>
     </div>
 
     <div id="webcams" class="panel">
@@ -1228,6 +1229,7 @@
             Cesium.Cartesian3.normalize(C,new Cesium.Cartesian3())); issEnt.show = d > -0.25; } }
       } catch {}
       if(typeof cullShips==="function") cullShips();   // oculta barcos del lado opuesto del globo
+      if(typeof cullFires==="function") cullFires();   // idem incendios FIRMS
     }
     viewer.camera.percentageChanged = 0.15;
     viewer.camera.changed.addEventListener(cullMarkers);
@@ -1498,6 +1500,17 @@
            <div class="kv"><span>Orientación</span><span>${c.direction||"—"}</span></div>
            <div class="kv"><span>Coords</span><span>${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}</span></div>
            <div class="rmeta" style="margin-top:6px;color:#7a97ad">Fuente: OpenStreetMap / DeFlock (ubicación pública)</div>`);
+        return;
+      }
+      if (ent && typeof ent.id === "string" && ent.id.startsWith("fire:")) {
+        const f = fireById.get(ent.id);
+        if(f) showPopup("🔥 Incendio activo (NASA FIRMS)",
+          `<div class="kv"><span>Coords</span><span>${f.lat.toFixed(4)}, ${f.lon.toFixed(4)}</span></div>
+           <div class="kv"><span>Potencia (FRP)</span><span>${f.frp!=null?f.frp.toFixed(1)+" MW":"—"}</span></div>
+           <div class="kv"><span>Confianza</span><span>${f.conf||"—"}</span></div>
+           <div class="kv"><span>Brillo</span><span>${f.bright||"—"} K</span></div>
+           <div class="kv"><span>Detección</span><span>${f.date||""} ${f.time||""} UTC ${f.daynight==="D"?"☀":f.daynight==="N"?"🌙":""}</span></div>
+           <div class="rmeta" style="margin-top:6px;color:#7a97ad">VIIRS SNPP · últimas 24 h</div>`);
         return;
       }
       const e = ent && entities.get(ent.id);
@@ -2295,6 +2308,41 @@
         if(e.target.checked){ incOn=true; hackFX("INCIDENTES DE TRAFICO", scanInc()); } else { incOn=false; clearInc(); }
       });
       viewer.camera.moveEnd.addEventListener(()=>{ if(incOn){ clearTimeout(incTimer); incTimer=setTimeout(scanInc,1500); } });
+    }
+
+    // ---- Incendios activos (NASA FIRMS) --------------------------------
+    const FIRE_IMG = "data:image/svg+xml," + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24">'+
+      '<path d="M12 2c1 3-1 4-2 6-1.5 3 .5 5 2 5s3.2-1.6 2.4-4.2C17 11 18 14 18 16a6 6 0 1 1-12 0c0-3 2-5 3-7 1.2-2.3 2-3 3-7z" '+
+      'fill="#ff7a1a" stroke="#7a1f00" stroke-width="0.7"/>'+
+      '<path d="M12 12c.6 1.4-.4 2.2-.9 3.3-.6 1.4.5 2.4 1.4 2.4s2-1 1.5-2.6C15.6 16 12.7 13 12 12z" fill="#ffd24a"/></svg>');
+    const fireEntities=new Map(), fireById=new Map();
+    let firesOn=false, fireTimer=null, fireMoveTimer=null;
+    const frpColor=(f)=> f==null?"#ff7a1a" : f>=100?"#ff2d2d" : f>=30?"#ff5a1a" : f>=10?"#ff8c1a" : "#ffbb33";
+    function clearFires(){ for(const [,en] of fireEntities) viewer.entities.remove(en); fireEntities.clear(); fireById.clear(); }
+    async function loadFires(){
+      const r=viewRect(); if(!r) return;
+      let fires=[]; try{ fires=(await (await fetch(`/api/firms?s=${r.s}&w=${r.w}&n=${r.n}&e=${r.e}`)).json()).fires||[]; }catch{}
+      clearFires();
+      fires.forEach((f,i)=>{ const id="fire:"+i; fireById.set(id,f);
+        const col=Cesium.Color.fromCssColorString(frpColor(f.frp));
+        fireEntities.set(id, viewer.entities.add({ id, position:Cesium.Cartesian3.fromDegrees(f.lon,f.lat,0),
+          billboard:{ image:FIRE_IMG, width:22, height:22, color:col,
+            scale:new Cesium.CallbackProperty(()=>1+0.12*Math.sin(performance.now()/240 + i),false),
+            disableDepthTestDistance:Number.POSITIVE_INFINITY } })); });
+      cullFires();
+      statusEl.textContent = fires.length ? `🔥 ${fires.length} focos activos (FIRMS)` : "Sin incendios en esta vista (FIRMS)";
+    }
+    function cullFires(){ try{ _occ.cameraPosition=viewer.camera.positionWC;
+      for(const [,en] of fireEntities){ const p=en.position.getValue(viewer.clock.currentTime); if(p) en.show=_occ.isPointVisible(p); } }catch{} }
+    if(!cfg.firms) $("lyr-fires-row").style.display="none";
+    else {
+      $("lyr-fires").addEventListener("change", e=>{
+        if(e.target.checked){ firesOn=true; hackFX("NASA FIRMS · INCENDIOS", loadFires());
+          fireTimer=setInterval(loadFires, 180000); }
+        else { firesOn=false; clearInterval(fireTimer); clearFires(); }
+      });
+      viewer.camera.moveEnd.addEventListener(()=>{ if(firesOn){ clearTimeout(fireMoveTimer); fireMoveTimer=setTimeout(loadFires,1500); } });
     }
 
     // ---- Panel de rastreo ---------------------------------------------

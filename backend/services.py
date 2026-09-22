@@ -231,6 +231,56 @@ async def iss_position() -> dict | None:
         return None
 
 
+async def firms_fires(s: float, w: float, n: float, e: float,
+                      source: str = "VIIRS_SNPP_NRT", days: int = 1) -> list[dict]:
+    """Focos de incendio activos (NASA FIRMS) en el bbox, últimas 24 h."""
+    key = os.getenv("FIRMS_MAP_KEY", "")
+    if not key:
+        return []
+    area = f"{w},{s},{e},{n}"  # FIRMS espera west,south,east,north
+    url = f"https://firms.modaps.eosdis.nasa.gov/api/area/csv/{key}/{source}/{area}/{days}"
+    try:
+        text = (await _http.get(url)).text
+    except Exception:
+        return []
+    lines = text.strip().splitlines()
+    if len(lines) < 2 or "," not in lines[0]:
+        return []
+    header = [h.strip() for h in lines[0].split(",")]
+
+    def col(name: str) -> int:
+        return header.index(name) if name in header else -1
+
+    ilat, ilon = col("latitude"), col("longitude")
+    ifrp, iconf = col("frp"), col("confidence")
+    idate, itime, idn = col("acq_date"), col("acq_time"), col("daynight")
+    ibr = col("bright_ti4") if col("bright_ti4") >= 0 else col("brightness")
+    if ilat < 0 or ilon < 0:
+        return []
+    out: list[dict] = []
+    for ln in lines[1:]:
+        p = ln.split(",")
+        if len(p) <= max(ilat, ilon):
+            continue
+        try:
+            lat, lon = float(p[ilat]), float(p[ilon])
+        except Exception:
+            continue
+
+        def g(i: int) -> str:
+            return p[i].strip() if 0 <= i < len(p) else ""
+
+        try:
+            frp = float(g(ifrp)) if ifrp >= 0 and g(ifrp) else None
+        except Exception:
+            frp = None
+        out.append({"lat": lat, "lon": lon, "frp": frp, "conf": g(iconf),
+                    "date": g(idate), "time": g(itime), "daynight": g(idn), "bright": g(ibr)})
+        if len(out) >= 3000:
+            break
+    return out
+
+
 VOICE_SYSTEM = """Eres el copiloto de voz de JARC'S EYE View, un mapa 3D tipo "God's Eye".
 Convierte la orden del usuario (español o inglés) en UNA sola acción JSON.
 Responde SOLO JSON válido: {"action":"...", ...campos, "text":"confirmación breve en español"}.
