@@ -1579,13 +1579,25 @@
     }
 
     // ---- Dead-reckoning (#1): posición extrapolada entre polls ---------
-    function extrapolate(m) {
-      const dt = Math.min((performance.now() - m.t0) / 1000, 25);   // no derivar si el dato se queda viejo
-      const dist = m.speed * dt;                 // metros
-      const hdg = Cesium.Math.toRadians(m.heading);
+    // Posición extrapolada de una "pista" (base + velocidad·tiempo). kind 'p' = pista anterior (para el blend)
+    function trackLL(m, prev) {
+      const t0 = prev ? m.pt0 : m.t0, sp = prev ? m.ps : m.speed, hd = prev ? m.ph : m.heading;
+      const bLat = prev ? m.pl : m.lat, bLon = prev ? m.plo : m.lon;
+      const dt = Math.min((performance.now() - t0) / 1000, 25);   // no derivar si el dato se queda viejo
+      const dist = sp * dt, hdg = Cesium.Math.toRadians(hd);
       const dlat = (dist * Math.cos(hdg)) / 111320;
-      const dlon = (dist * Math.sin(hdg)) / (111320 * Math.cos(Cesium.Math.toRadians(m.lat)) || 1e-6);
-      return Cesium.Cartesian3.fromDegrees(m.lon + dlon, m.lat + dlat, m.alt || 0);
+      const dlon = (dist * Math.sin(hdg)) / (111320 * Math.cos(Cesium.Math.toRadians(bLat)) || 1e-6);
+      return { lat: bLat + dlat, lon: bLon + dlon };
+    }
+    function extrapolate(m) {
+      const nw = trackLL(m, false);
+      let lat = nw.lat, lon = nw.lon;
+      if (m.blendT0 != null) {   // suaviza el reajuste al llegar una posición nueva (~1 s)
+        const b = (performance.now() - m.blendT0) / m.blendDur;
+        if (b < 1) { const op = trackLL(m, true); lat = op.lat + (nw.lat - op.lat) * b; lon = op.lon + (nw.lon - op.lon) * b; }
+        else m.blendT0 = null;
+      }
+      return Cesium.Cartesian3.fromDegrees(lon, lat, m.alt || 0);
     }
 
     // entities: icao24 -> { entity, trail, history[], meta, _data }
@@ -1639,8 +1651,10 @@
       e.entity.billboard.rotation = Cesium.Math.toRadians(-d.heading);
       e.entity.label.text = d.name;
       e.trail.polyline.material = Cesium.Color.fromCssColorString(speedColor(d.speed)).withAlpha(0.6);
-      if (moved) {   // nueva posición real → reinicia la base de extrapolación (una vez por actualización)
-        e.meta = { lat:d.lat, lon:d.lon, alt:d.alt||0, heading:d.heading, speed:d.speed, t0:performance.now() };
+      if (moved) {   // nueva posición real → base nueva + blend suave desde la pista anterior
+        const p = e.meta, now = performance.now();
+        e.meta = { lat:d.lat, lon:d.lon, alt:d.alt||0, heading:d.heading, speed:d.speed, t0:now,
+          pl:p.lat, plo:p.lon, ph:p.heading, ps:p.speed, pt0:p.t0, blendT0:now, blendDur:1000 };
         e.history.push(Cesium.Cartesian3.fromDegrees(d.lon, d.lat, d.alt||0));
         if (e.history.length > TRAIL_MAX) e.history.shift();
       }
