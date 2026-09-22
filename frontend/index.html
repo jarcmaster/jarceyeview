@@ -237,6 +237,18 @@
     #shot-flash { position:absolute; inset:0; z-index:34; pointer-events:none; opacity:0; background:#eaffff; }
     #shot-flash.on { animation:shotflash .45s ease-out; }
     @keyframes shotflash { 0%{opacity:0} 12%{opacity:.9} 100%{opacity:0} }
+    /* Barra Día/Noche */
+    #daynight { position:absolute; z-index:27; bottom:56px; left:50%; transform:translateX(-50%); display:none; align-items:center; gap:12px;
+      padding:8px 14px; background:rgba(6,16,26,.94); border:1px solid #2a6a8f; border-radius:12px; backdrop-filter:blur(8px);
+      box-shadow:0 8px 26px rgba(0,0,0,.55); font-family:"Consolas",monospace; font-size:12px; color:#bfe9ff; }
+    #daynight.on { display:flex; }
+    #daynight #dn-slider { width:260px; }
+    #daynight #dn-time { min-width:74px; color:#dff; }
+    #daynight #dn-auto { margin:0; padding:5px 12px; width:auto; font-size:11px; }
+    #daynight #dn-auto.active { background:#155; border-color:#3aa0ff; color:#bfe9ff; }
+    #daynight .dn-x { cursor:pointer; color:#ffdada; }
+    #daynight .chk { margin:0; }
+
     /* Toggles de UI en OBJETIVO */
     #ui-toggle, #tools-toggle { position:absolute; z-index:29; display:none; align-items:center; justify-content:center;
       width:40px; height:40px; border-radius:10px; background:rgba(6,16,26,.92); border:1px solid #2a6a8f; color:#7fd3ff;
@@ -1087,6 +1099,16 @@
     <div class="dock-btn" id="presets-btn"><span data-ic="layers"></span> PRESETS</div>
     <div class="dock-btn" id="keys-btn"><span data-ic="key"></span> CLAVES</div>
     <div class="dock-btn" id="sim-btn"><span data-ic="car"></span> SIM</div>
+    <div class="dock-btn" id="dn-btn"><span data-ic="p_nvg"></span> DÍA/NOCHE</div>
+  </div>
+
+  <!-- Barra de Día/Noche del mapa -->
+  <div id="daynight">
+    <label class="chk"><input type="checkbox" id="dn-on" checked> Día/Noche</label>
+    <input id="dn-slider" type="range" min="0" max="1440" step="5" title="Avanzar hora del día">
+    <span id="dn-time">--:-- UTC</span>
+    <button id="dn-auto" title="Seguir la hora UTC real / de simulación">AUTO</button>
+    <span class="dn-x" title="Cerrar">✕</span>
   </div>
 
   <!-- Dashboard de simulación de vehículos -->
@@ -2625,11 +2647,36 @@
                      ["anime","ANIME"],["noir","NOIR"],["snow","SNOW"]];
     $("preset-row").innerHTML = PRESETS.map(([k,l]) =>
       `<div class="pbtn ${k==="normal"?"active":""}" data-k="${k}">${icon("p_"+k)}<span>${l}</span></div>`).join("");
-    let currentPreset = "normal", focusFilter = "", glitchFilter = "", enhanceFilter = "";
+    let currentPreset = "normal", focusFilter = "", glitchFilter = "", enhanceFilter = "", dayNightFilter = "";
     function updateCanvasFilter() {
       const base = PRESET_FILTERS[currentPreset];
-      const parts = [(base && base !== "none") ? base : "", focusFilter, glitchFilter, enhanceFilter].filter(Boolean);
+      const parts = [(base && base !== "none") ? base : "", dayNightFilter, focusFilter, glitchFilter, enhanceFilter].filter(Boolean);
       $("cesiumContainer").style.filter = parts.length ? parts.join(" ") : "none";
+    }
+
+    // ===== Día/Noche del mapa (según hora UTC real o de simulación) =====
+    let dnEnabled=true, dnAuto=true, dnHours=new Date().getUTCHours()+new Date().getUTCMinutes()/60;
+    function sunElevation(lat, lon, hUTC){
+      const now=new Date(); const start=Date.UTC(now.getUTCFullYear(),0,0);
+      const doy=Math.floor((Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate())-start)/86400000);
+      const decl=-23.44*Math.cos((2*Math.PI/365)*(doy+10));               // declinación solar (°)
+      const subLon=-15*(hUTC-12);                                         // longitud subsolar (°)
+      const la=lat*Math.PI/180, de=decl*Math.PI/180, ha=((lon-subLon)*Math.PI/180);
+      return Math.asin(Math.sin(la)*Math.sin(de)+Math.cos(la)*Math.cos(de)*Math.cos(ha))*180/Math.PI;
+    }
+    function computeDayNight(){
+      if(!dnEnabled){ if(dayNightFilter){ dayNightFilter=""; updateCanvasFilter(); } return; }
+      if(dnAuto){ dnHours = (typeof vehOn!=="undefined" && vehOn && typeof simTime!=="undefined")
+        ? ((simTime/3600)%24) : (()=>{ const d=new Date(); return d.getUTCHours()+d.getUTCMinutes()/60; })(); }
+      let c; try{ c=(typeof viewCenter==="function")&&viewCenter(); }catch{}
+      const lat=c?c.lat:40, lon=c?c.lon:-73;
+      const elev=sunElevation(lat, lon, dnHours);
+      const night=Math.max(0, Math.min(1, (6-elev)/24));   // 0 día pleno → 1 noche cerrada
+      dayNightFilter = night<0.02 ? "" :
+        `brightness(${(1-night*0.7).toFixed(3)}) saturate(${(1-night*0.35).toFixed(3)}) sepia(${(night*0.4).toFixed(3)}) hue-rotate(${(night*205).toFixed(0)}deg) contrast(${(1+night*0.08).toFixed(3)})`;
+      updateCanvasFilter();
+      const el=document.getElementById("dn-time"); if(el) el.textContent = String(Math.floor(dnHours)).padStart(2,"0")+":"+String(Math.floor((dnHours%1)*60)).padStart(2,"0")+" UTC";
+      const sl=document.getElementById("dn-slider"); if(sl && dnAuto) sl.value=Math.round(dnHours*60);
     }
     function applyPreset(k) {
       currentPreset = k; updateCanvasFilter();
@@ -2776,6 +2823,18 @@
     $("sim-apply").onclick=()=>{ $("sim-apply").classList.remove("dirty");   // ejecuta los nuevos valores
       if(vehOn && survGeo) startTraffic(); logEvent("Config aplicada"); };
     $("sim-defaults").onclick=()=>{ Object.assign(SIMCFG, JSON.parse(JSON.stringify(SIM_DEFAULTS))); renderSimCfg(); simMarkDirty(); logEvent("Config por defecto"); };
+
+    // --- Barra de Día/Noche ---
+    function openDN(){ $("daynight").classList.add("on"); $("dn-btn").classList.add("active"); $("dn-auto").classList.toggle("active",dnAuto); computeDayNight(); }
+    function closeDN(){ $("daynight").classList.remove("on"); $("dn-btn").classList.remove("active"); }
+    $("dn-btn").onclick=()=>{ $("daynight").classList.contains("on")?closeDN():openDN(); };
+    $("daynight").querySelector(".dn-x").onclick=closeDN;
+    $("dn-on").onchange=(e)=>{ dnEnabled=e.target.checked; computeDayNight(); };
+    $("dn-slider").oninput=(e)=>{ dnAuto=false; $("dn-auto").classList.remove("active"); dnHours=(+e.target.value)/60; computeDayNight(); };
+    $("dn-auto").onclick=()=>{ dnAuto=true; $("dn-auto").classList.add("active"); computeDayNight(); };
+    viewer.camera.moveEnd.addEventListener(()=>{ if(dnEnabled) computeDayNight(); });
+    setInterval(()=>{ if(dnEnabled && dnAuto) computeDayNight(); }, 5000);
+    computeDayNight();   // aplica el día/noche según la hora UTC actual al cargar
     // Debug overlay: ruta prevista + destino del vehículo rastreado
     let dbgLine=null, dbgDest=null;
     function bestToward(V,cur,prev,dest){ const v=V.get(cur); if(!v) return null; let outs=[...v.out]; if(!outs.length) outs=[...v.all];
