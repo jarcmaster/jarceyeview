@@ -227,9 +227,56 @@
     /* Máscara oscura del scope (círculo transparente, resto del mapa oscurecido). Debajo de los paneles. */
     #scope-dark { position:absolute; z-index:5; display:none; pointer-events:none; border-radius:50%;
       transform:translate(-50%,-50%); box-shadow:0 0 0 100vmax rgba(0,0,0,.72), inset 0 0 44px 8px rgba(0,0,0,.55); }
-    #surv-hud { position:absolute; z-index:24; display:none; pointer-events:none;
+    #surv-hud { position:absolute; z-index:27; display:none; pointer-events:none;   /* sobre el dock: el círculo queda sobre la barra */
       transform:translate(-50%,-50%); font-family:"Consolas",monospace; color:#8fe3ff; will-change:left,top,width,height;
       animation:survjit 2.2s steps(3) infinite; }
+    /* Óptica militar aplicada SOLO al área del scope (filtra lo que hay detrás del círculo) */
+    #scope-optic { position:absolute; z-index:6; display:none; pointer-events:none; border-radius:50%;
+      transform:translate(-50%,-50%); }
+    /* Flash del disparo de foto */
+    #shot-flash { position:absolute; inset:0; z-index:34; pointer-events:none; opacity:0; background:#eaffff; }
+    #shot-flash.on { animation:shotflash .45s ease-out; }
+    @keyframes shotflash { 0%{opacity:0} 12%{opacity:.9} 100%{opacity:0} }
+    /* Barra de herramientas del OBJETIVO (arriba-centro) */
+    #spy-tools { position:absolute; z-index:28; top:52px; left:50%; transform:translateX(-50%); display:none; gap:8px;
+      background:rgba(6,16,26,.92); border:1px solid #2a6a8f; border-radius:12px; padding:6px; backdrop-filter:blur(8px);
+      box-shadow:0 8px 30px rgba(0,0,0,.6); }
+    #spy-tools.on { display:flex; }
+    .stool { display:flex; align-items:center; gap:6px; padding:7px 11px; font-size:11px; letter-spacing:1px; cursor:pointer;
+      color:#cfefff; border:1px solid transparent; border-radius:8px; user-select:none; }
+    .stool:hover { background:#123449; }
+    .stool.active { background:#155; border-color:#3aa0ff; color:#bfe9ff; box-shadow:0 0 10px rgba(58,160,255,.4); }
+    .ssub { position:absolute; z-index:28; top:104px; left:50%; transform:translateX(-50%); display:none;
+      background:rgba(6,16,26,.94); border:1px solid #2a6a8f; border-radius:12px; padding:8px; backdrop-filter:blur(8px);
+      box-shadow:0 8px 30px rgba(0,0,0,.6); }
+    .ssub.on { display:block; }
+    #sub-card, #sub-optic { display:none; gap:6px; flex-wrap:wrap; max-width:300px; }
+    #sub-card.on, #sub-optic.on { display:flex; }
+    .ssub .cbtn { padding:6px 10px; font-size:11px; letter-spacing:1px; cursor:pointer; color:#cfefff;
+      border:1px solid #2a6a8f; border-radius:7px; user-select:none; }
+    .ssub .cbtn:hover { background:#123449; }
+    .ssub .cbtn.active { background:#155; border-color:#3aa0ff; color:#bfe9ff; }
+    .pan-pad { display:grid; grid-template-columns:repeat(3,40px); grid-auto-rows:40px; gap:4px; }
+    .pan-pad button { margin:0; padding:0; font-size:17px; background:#123449; border:1px solid #2a6a8f; color:#bfe9ff; border-radius:7px; width:100%; }
+    .pan-pad button:hover { background:#18465f; }
+    .pan-pad .pan-c { background:transparent; border:none; cursor:default; }
+    /* Galería de capturas (derecha) */
+    #shots-modal { position:absolute; z-index:33; top:52px; right:12px; width:270px; max-height:calc(100vh - 110px);
+      display:none; flex-direction:column; background:rgba(6,16,26,.96); border:1px solid #2a6a8f; border-radius:12px;
+      overflow:hidden; backdrop-filter:blur(8px); box-shadow:0 8px 34px rgba(0,0,0,.6); }
+    #shots-modal.on { display:flex; }
+    .sm-head { display:flex; align-items:center; gap:7px; padding:9px 12px; font-size:12px; letter-spacing:1px;
+      color:#7fd3ff; font-weight:600; background:rgba(127,211,255,.08); }
+    .sm-x { margin-left:auto; cursor:pointer; color:#ffdada; }
+    #sm-list { overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:8px; }
+    .shot { border:1px solid #21445c; border-radius:9px; overflow:hidden; background:#0b1622; }
+    .shot img { width:100%; height:120px; object-fit:cover; display:block; }
+    .shot .si { padding:6px 8px; font-size:10px; line-height:1.5; color:#bfe9ff; font-family:"Consolas",monospace; }
+    .shot .si b { color:#dff; }
+    .shot .sdel { display:block; width:100%; margin:0; border:none; border-top:1px solid #21445c; border-radius:0;
+      background:#3a1420; color:#ffb4b4; padding:6px; font-size:11px; cursor:pointer; }
+    .shot .sdel:hover { background:#5a1420; }
+    .sm-empty { color:#7a97ad; font-size:11px; text-align:center; padding:16px 8px; }
     @keyframes survjit { 0%,90%,100%{filter:drop-shadow(0 0 5px rgba(120,220,255,.4))}
       93%{filter:drop-shadow(1.6px 0 0 rgba(255,45,45,.55)) drop-shadow(-1.6px 0 0 rgba(45,255,255,.55))} }
     .scope-ring { position:absolute; inset:0; border-radius:50%; border:2px solid rgba(143,227,255,.75);
@@ -588,6 +635,8 @@
   <!-- Scope de vigilancia: círculo + máscara oscura + HUD, anclado y dimensionado a la zona marcada -->
   <div id="surv-fx"></div>
   <div id="scope-dark"></div>
+  <div id="scope-optic"></div>
+  <div id="shot-flash"></div>
   <div id="surv-hud">
     <div class="scope-ring"></div>
     <span class="sc-brk tl"></span><span class="sc-brk tr"></span><span class="sc-brk bl"></span><span class="sc-brk br"></span>
@@ -621,6 +670,31 @@
     <div class="surv-bar"><span>1/60</span><span>F 5.6</span><span class="surv-tc">00:00:00:00</span>
       <span>ISO 800</span><span class="surv-rec">REC <b>●</b></span></div>
     <div class="surv-tag"></div>
+  </div>
+
+  <!-- Barra de herramientas del OBJETIVO -->
+  <div id="spy-tools">
+    <div class="stool" id="tl-pan"><span data-ic="move"></span> PAN</div>
+    <div class="stool" id="tl-north"><span data-ic="compass"></span> NORTE</div>
+    <div class="stool" id="tl-hover"><span data-ic="orbit"></span> HOVER</div>
+    <div class="stool" id="tl-optic"><span data-ic="thermal"></span> ÓPTICA</div>
+    <div class="stool" id="tl-shot"><span data-ic="camera"></span> FOTO</div>
+    <div class="stool" id="tl-shots"><span data-ic="images"></span> GALERÍA</div>
+  </div>
+  <div id="sub-pan" class="ssub">
+    <div class="pan-pad">
+      <button data-d="nw">↖</button><button data-d="n">↑</button><button data-d="ne">↗</button>
+      <button data-d="w">←</button><button class="pan-c"></button><button data-d="e">→</button>
+      <button data-d="sw">↙</button><button data-d="s">↓</button><button data-d="se">↘</button>
+    </div>
+  </div>
+  <div id="sub-card" class="ssub"></div>
+  <div id="sub-optic" class="ssub"></div>
+
+  <!-- Galería de capturas -->
+  <div id="shots-modal">
+    <div class="sm-head"><span data-ic="images"></span> CAPTURAS SPYEYE <span class="sm-x" title="Cerrar">✕</span></div>
+    <div id="sm-list"></div>
   </div>
 
   <div id="wc-player"></div>
@@ -755,6 +829,11 @@
       trash:'<svg class="ic" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/></svg>',
       expand:'<svg class="ic" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>',
       compress:'<svg class="ic" viewBox="0 0 24 24"><path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="M14 10l7-7"/><path d="M3 21l7-7"/></svg>',
+      move:'<svg class="ic" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M12 2l-3 3M12 2l3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3"/></svg>',
+      compass:'<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5.5-5 2 2-5.5z" fill="currentColor" stroke="none"/></svg>',
+      orbit:'<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><ellipse cx="12" cy="12" rx="10" ry="4.4" transform="rotate(35 12 12)"/></svg>',
+      thermal:'<svg class="ic" viewBox="0 0 24 24"><path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/><path d="M12 8v6"/></svg>',
+      images:'<svg class="ic" viewBox="0 0 24 24"><rect x="8" y="2" width="14" height="14" rx="2"/><path d="M2 8v12a2 2 0 0 0 2 2h12"/><circle cx="12.5" cy="6.5" r="1.5"/><path d="m8 13 3-3 4 4"/></svg>',
     };
     const icon = (n) => IC[n] || "";
     document.querySelectorAll("[data-ic]").forEach(e => { e.innerHTML = icon(e.dataset.ic); });
@@ -2235,6 +2314,25 @@
       if(lockAudioOk){ try{ lockAudio.currentTime=0; lockAudio.play(); return; }catch{} }
       synthLock();
     }
+    // Obturador de cámara (foto). Usa assets/objetivo-shot.mp3 si existe; si no, se sintetiza.
+    const shotAudio=new Audio("assets/objetivo-shot.mp3"); let shotAudioOk=false;
+    shotAudio.preload="auto"; shotAudio.volume=0.9;
+    shotAudio.addEventListener("canplaythrough",()=>{ shotAudioOk=true; });
+    shotAudio.addEventListener("error",()=>{ shotAudioOk=false; });
+    function synthShutter(){
+      const ac=ensureAudio(); if(!ac) return; const t=ac.currentTime;
+      const burst=(at,dur,vol)=>{ const len=Math.max(1,Math.floor(ac.sampleRate*dur));
+        const b=ac.createBuffer(1,len,ac.sampleRate), d=b.getChannelData(0);
+        for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2);
+        const n=ac.createBufferSource(); n.buffer=b; const g=ac.createGain(); g.gain.value=vol;
+        const f=ac.createBiquadFilter(); f.type="highpass"; f.frequency.value=1400;
+        n.connect(f).connect(g).connect(ac.destination); n.start(at); };
+      burst(t,0.05,0.5); burst(t+0.075,0.06,0.42);   // clac-clac mecánico
+    }
+    function playShutterSfx(){
+      if(shotAudioOk){ try{ shotAudio.currentTime=0; shotAudio.play(); return; }catch{} }
+      synthShutter();
+    }
     const RETICLE_IMG = "data:image/svg+xml," + encodeURIComponent(
       '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">'+
       '<circle cx="24" cy="24" r="15" fill="none" stroke="#8fe3ff" stroke-width="1.6"/>'+
@@ -2250,7 +2348,7 @@
 
     // ---- Scope de vigilancia: círculo + oscurecido, anclado y dimensionado a la zona marcada ----
     let survActive=false, survGeo=null, survBox=null, survMeta={area:"—",elev:"—"};
-    let survNumTimer=null, survSigTimer=null, survHooked=false;
+    let survNumTimer=null, survSigTimer=null, survHooked=false, opticMode="";
     // Posiciones de los números en % (relativas al círculo dinámico), sobre un anillo a ~44% del radio
     const SURV_NUM_POS = (()=>{ const a=[]; for(let i=0;i<12;i++){ const ang=(i*30-90)*Math.PI/180, R=44;
       a.push({x:50+Math.cos(ang)*R, y:50+Math.sin(ang)*R}); } return a; })();
@@ -2278,21 +2376,27 @@
         `LAT <b>${survGeo.lat.toFixed(6)}</b>&nbsp; LON <b>${survGeo.lon.toFixed(6)}</b><br>`+
         `DIST <b>${fmtDist(dist)}</b>&nbsp; ELEV <b>${survMeta.elev}</b><br>`+
         `AREA <b>${survMeta.area}</b>&nbsp; AZ <b>${az.toFixed(1)}°</b>`; }
+    let survRect=null;   // {cx,cy,d} en píxeles de pantalla (para capturar la zona)
     function survTick(){
       if(!survActive || !survGeo) return;
-      const hud=$("surv-hud"), dark=$("scope-dark"), world=Cesium.Cartesian3.fromDegrees(survGeo.lon,survGeo.lat,0);
+      const hud=$("surv-hud"), dark=$("scope-dark"), optic=$("scope-optic");
+      const world=Cesium.Cartesian3.fromDegrees(survGeo.lon,survGeo.lat,0);
       _occ.cameraPosition = viewer.camera.positionWC;
       const win=projectGeo(survGeo.lon,survGeo.lat);
-      if(!win || !_occ.isPointVisible(world)){ hud.style.visibility="hidden"; dark.style.display="none"; return; }
+      if(!win || !_occ.isPointVisible(world)){ hud.style.visibility="hidden"; dark.style.display="none"; optic.style.display="none"; survRect=null; return; }
       // diámetro dinámico = tamaño de la caja marcada proyectada en pantalla (se ciñe a la zona)
       let d=320;
       if(survBox){ const pa=projectGeo(survBox.aLon,survBox.aLat), pb=projectGeo(survBox.bLon,survBox.bLat);
         if(pa&&pb) d=Math.max(Math.abs(pa.x-pb.x), Math.abs(pa.y-pb.y))*1.08; }
       d=Math.max(150, Math.min(d, Math.min(innerWidth,innerHeight)*0.94));
+      survRect={cx:win.x, cy:win.y, d};
       hud.style.visibility="visible";
       hud.style.left=win.x+"px"; hud.style.top=win.y+"px"; hud.style.width=d+"px"; hud.style.height=d+"px";
       dark.style.display="block";
       dark.style.left=win.x+"px"; dark.style.top=win.y+"px"; dark.style.width=d+"px"; dark.style.height=d+"px";
+      if(opticMode){ optic.style.display="block";
+        optic.style.left=win.x+"px"; optic.style.top=win.y+"px"; optic.style.width=d+"px"; optic.style.height=d+"px"; }
+      else optic.style.display="none";
     }
     function startSurv(lon, lat, opts){
       survGeo={lon,lat}; survActive=true;
@@ -2311,8 +2415,151 @@
       survActive=false; survGeo=null; survBox=null;
       clearInterval(survNumTimer); survNumTimer=null; clearInterval(survSigTimer); survSigTimer=null;
       $("surv-hud").style.display="none"; $("surv-fx").style.display="none";
-      $("scope-dark").style.display="none"; $("cam-overlay").classList.remove("surv-on");
+      $("scope-dark").style.display="none"; $("scope-optic").style.display="none"; $("cam-overlay").classList.remove("surv-on");
     }
+
+    // ================= Herramientas del OBJETIVO: Pan / Norte / Hover / Óptica / Foto / Galería =================
+    const OPTICS = {
+      termal:{label:"TERMAL",      f:"sepia(1) saturate(6) hue-rotate(140deg) contrast(1.5) brightness(1.1)"},
+      heat:  {label:"HEAT SEEKER", f:"sepia(1) saturate(7) hue-rotate(315deg) contrast(1.6) brightness(1.05)"},
+      nvg:   {label:"NVG",         f:"brightness(1.5) contrast(1.3) sepia(1) hue-rotate(55deg) saturate(4)"},
+      flir:  {label:"FLIR",        f:"grayscale(1) contrast(1.5) brightness(1.15)"},
+      noir:  {label:"NOIR",        f:"grayscale(1) contrast(1.7) brightness(.95)"},
+      sar:   {label:"SAR RADAR",   f:"grayscale(1) invert(1) contrast(1.35) brightness(.9)"},
+      uv:    {label:"UV",          f:"hue-rotate(250deg) saturate(3.5) contrast(1.3)"},
+      desert:{label:"DESERT",      f:"sepia(.85) saturate(1.6) contrast(1.2) brightness(1.05)"},
+    };
+    function svTargetCart(){ return survGeo ? Cesium.Cartesian3.fromDegrees(survGeo.lon,survGeo.lat,0)
+      : viewer.camera.pickEllipsoid(new Cesium.Cartesian2(innerWidth/2,innerHeight/2), viewer.scene.globe.ellipsoid); }
+    // --- Óptica militar (backdrop-filter solo sobre el círculo) ---
+    function applyOptic(mode){
+      opticMode = (opticMode===mode) ? "" : mode;
+      const o=$("scope-optic");
+      if(opticMode){ const f=OPTICS[opticMode].f; o.style.backdropFilter=f; o.style.webkitBackdropFilter=f; }
+      else { o.style.backdropFilter=""; o.style.webkitBackdropFilter=""; o.style.display="none"; }
+      document.querySelectorAll("#sub-optic .cbtn").forEach(b=>b.classList.toggle("active", b.dataset.m===opticMode));
+      $("tl-optic").classList.toggle("active", !!opticMode);
+      if(survActive) survTick();
+    }
+    // --- Pan ---
+    function panView(dir){
+      if(hoverOn) setHover(false);
+      const h=viewer.camera.positionCartographic.height, amt=Math.max(20, h*0.12), dg=amt*0.7071;
+      ({ n:()=>viewer.camera.moveUp(amt), s:()=>viewer.camera.moveDown(amt),
+         e:()=>viewer.camera.moveRight(amt), w:()=>viewer.camera.moveLeft(amt),
+         ne:()=>{viewer.camera.moveUp(dg);viewer.camera.moveRight(dg);},
+         nw:()=>{viewer.camera.moveUp(dg);viewer.camera.moveLeft(dg);},
+         se:()=>{viewer.camera.moveDown(dg);viewer.camera.moveRight(dg);},
+         sw:()=>{viewer.camera.moveDown(dg);viewer.camera.moveLeft(dg);} }[dir]||(()=>{}))();
+    }
+    // --- Puntos cardinales ---
+    const CARD=[["N",0],["NE",45],["E",90],["SE",135],["S",180],["SW",225],["W",270],["NW",315]];
+    function buildCardOptic(){
+      $("sub-card").innerHTML=CARD.map(([l,b])=>`<span class="cbtn" data-b="${b}">${l}</span>`).join("");
+      $("sub-card").querySelectorAll(".cbtn").forEach(x=>x.onclick=()=>faceCardinal(+x.dataset.b, x));
+      $("sub-optic").innerHTML=Object.keys(OPTICS).map(k=>`<span class="cbtn" data-m="${k}">${OPTICS[k].label}</span>`).join("");
+      $("sub-optic").querySelectorAll(".cbtn").forEach(x=>x.onclick=()=>applyOptic(x.dataset.m));
+    }
+    function faceCardinal(bearing, el){
+      const t=svTargetCart(); if(!t) return;
+      const range=Cesium.Cartesian3.distance(viewer.camera.positionWC, t), pitch=viewer.camera.pitch;
+      if(hoverOn) setHover(false);
+      viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(t,30),
+        { offset:new Cesium.HeadingPitchRange(Cesium.Math.toRadians(bearing), pitch, range), duration:1.0 });
+      document.querySelectorAll("#sub-card .cbtn").forEach(b=>b.classList.remove("active")); if(el) el.classList.add("active");
+    }
+    // --- Hover: órbita lenta en 3D alrededor del objetivo ---
+    let hoverOn=false, hoverRAF=0, hoverHeading=0, hoverPitch=0, hoverRange=0;
+    function setHover(on){
+      hoverOn=on; $("tl-hover").classList.toggle("active",on);
+      if(on){ const t=svTargetCart(); if(!t){ hoverOn=false; $("tl-hover").classList.remove("active"); return; }
+        hoverHeading=viewer.camera.heading; hoverPitch=Math.min(viewer.camera.pitch, Cesium.Math.toRadians(-25));
+        hoverRange=Math.max(60, Cesium.Cartesian3.distance(viewer.camera.positionWC, t));
+        const orbit=()=>{ if(!hoverOn) return; hoverHeading+=Cesium.Math.toRadians(0.12);
+          viewer.camera.lookAt(t, new Cesium.HeadingPitchRange(hoverHeading, hoverPitch, hoverRange));
+          hoverRAF=requestAnimationFrame(orbit); };
+        orbit();
+      } else { cancelAnimationFrame(hoverRAF); viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY); }
+    }
+    // --- Captura del área del scope (recorte circular, con la óptica aplicada) ---
+    function captureScope(filter){
+      try{
+        viewer.render();
+        const src=viewer.scene.canvas, rect=src.getBoundingClientRect();
+        const kx=src.width/rect.width, ky=src.height/rect.height;
+        const cx=(survRect.cx-rect.left)*kx, cy=(survRect.cy-rect.top)*ky, d=survRect.d*kx;
+        const out=300, tc=document.createElement("canvas"); tc.width=out; tc.height=out;
+        const ctx=tc.getContext("2d"); if(filter) ctx.filter=filter;
+        ctx.drawImage(src, cx-d/2, cy-d/2, d, d, 0,0,out,out);
+        ctx.filter="none"; ctx.globalCompositeOperation="destination-in";
+        ctx.beginPath(); ctx.arc(out/2,out/2,out/2,0,Math.PI*2); ctx.fill();
+        return tc.toDataURL("image/jpeg",0.85);
+      }catch(e){ return null; }
+    }
+    // --- Foto ---
+    let spyShots=[];
+    try{ spyShots=JSON.parse(localStorage.getItem("jarceye_shots")||"[]"); }catch{ spyShots=[]; }
+    function persistShots(){ try{ localStorage.setItem("jarceye_shots", JSON.stringify(spyShots.slice(0,30))); }catch{} }
+    function takePicture(){
+      if(!survActive || !survRect){ return; }
+      autofocus();
+      const sf=$("shot-flash"); sf.classList.remove("on"); void sf.offsetWidth; sf.classList.add("on");
+      playShutterSfx();
+      const img=captureScope(opticMode?OPTICS[opticMode].f:"");
+      if(!img) return;
+      spyShots.unshift({ img, id:spyId, lat:survGeo.lat, lon:survGeo.lon, time:Date.now(),
+        area:survMeta.area, elev:survMeta.elev, dist:fmtDist(viewer.camera.positionCartographic.height),
+        az:(Cesium.Math.toDegrees(viewer.camera.heading)||0).toFixed(1),
+        optic: opticMode?OPTICS[opticMode].label:"ÓPTICA NORMAL" });
+      persistShots(); renderShots(); $("shots-modal").classList.add("on");
+    }
+    // --- Galería de capturas (con confirmación de borrado en línea) ---
+    let pendingDel=-1;
+    function renderShots(){
+      const list=$("sm-list");
+      if(!spyShots.length){ list.innerHTML='<div class="sm-empty">Sin capturas todavía.</div>'; pendingDel=-1; return; }
+      list.innerHTML = spyShots.map((s,i)=>{
+        const dt=new Date(s.time).toLocaleString();
+        const del = (pendingDel===i)
+          ? `<div class="sdelrow"><button class="sd-yes" data-i="${i}">Confirmar</button><button class="sd-no" data-i="${i}">Cancelar</button></div>`
+          : `<button class="sdel" data-i="${i}">${icon("trash")} Eliminar</button>`;
+        return `<div class="shot"><img src="${s.img}" alt="">
+          <div class="si"><b>SPYEYE ${s.id}</b> · ${s.optic}<br>
+            LAT <b>${(+s.lat).toFixed(6)}</b> LON <b>${(+s.lon).toFixed(6)}</b><br>
+            DIST <b>${s.dist}</b> · ELEV <b>${s.elev}</b> · AZ <b>${s.az}°</b><br>
+            AREA <b>${s.area}</b><br>${dt}</div>${del}</div>`;
+      }).join("");
+      list.querySelectorAll(".sdel").forEach(b=>b.onclick=()=>{ pendingDel=+b.dataset.i; renderShots(); });
+      list.querySelectorAll(".sd-yes").forEach(b=>b.onclick=()=>{ spyShots.splice(+b.dataset.i,1); pendingDel=-1; persistShots(); renderShots(); });
+      list.querySelectorAll(".sd-no").forEach(b=>b.onclick=()=>{ pendingDel=-1; renderShots(); });
+    }
+    // --- Barra de herramientas: mostrar/ocultar + wiring ---
+    function showTools(){ $("spy-tools").classList.add("on"); }
+    function hideTools(){
+      $("spy-tools").classList.remove("on");
+      ["sub-pan","sub-card","sub-optic"].forEach(id=>$(id).classList.remove("on"));
+      document.querySelectorAll("#spy-tools .stool").forEach(b=>b.classList.remove("active"));
+      if(hoverOn) setHover(false);
+      if(opticMode){ opticMode=""; const o=$("scope-optic"); o.style.backdropFilter=""; o.style.webkitBackdropFilter=""; o.style.display="none";
+        document.querySelectorAll("#sub-optic .cbtn").forEach(b=>b.classList.remove("active")); }
+      $("shots-modal").classList.remove("on");
+    }
+    function toggleSub(subId, toolId){
+      const sub=$(subId), open=!sub.classList.contains("on");
+      ["sub-pan","sub-card","sub-optic"].forEach(id=>$(id).classList.remove("on"));
+      ["tl-pan","tl-north","tl-optic"].forEach(id=>$(id).classList.remove("active"));
+      if(open){ sub.classList.add("on"); $(toolId).classList.add("active"); }
+    }
+    buildCardOptic();
+    $("tl-pan").onclick   = ()=>toggleSub("sub-pan","tl-pan");
+    $("tl-north").onclick = ()=>toggleSub("sub-card","tl-north");
+    $("tl-optic").onclick = ()=>toggleSub("sub-optic","tl-optic");
+    $("tl-hover").onclick = ()=>setHover(!hoverOn);
+    $("tl-shot").onclick  = takePicture;
+    $("tl-shots").onclick = ()=>{ const m=$("shots-modal"); const on=!m.classList.contains("on");
+      m.classList.toggle("on",on); $("tl-shots").classList.toggle("active",on); if(on) renderShots(); };
+    $("sub-pan").querySelectorAll("button[data-d]").forEach(b=>b.onclick=()=>panView(b.dataset.d));
+    document.querySelector(".sm-x").onclick=()=>{ $("shots-modal").classList.remove("on"); $("tl-shots").classList.remove("active"); };
     function screenToGeo(x,y){
       const rect=viewer.scene.canvas.getBoundingClientRect();
       const c=viewer.camera.pickEllipsoid(new Cesium.Cartesian2(x-rect.left,y-rect.top), viewer.scene.globe.ellipsoid);
@@ -2341,7 +2588,7 @@
         `FRAME <b>${d.wpx}×${d.hpx}px</b>&nbsp; ${d.state}`;
     }
     function endSpy(){
-      spyMode=false; spyDown=false; cancelAnimationFrame(spyAnimRAF); stopCam(); stopSurv();
+      spyMode=false; spyDown=false; cancelAnimationFrame(spyAnimRAF); stopCam(); stopSurv(); hideTools();
       $("spy-capture").style.display="none"; $("spy-hint").style.display="none";
       $("spy-hud").style.display="none"; $("spy-hud").classList.remove("fade");
       const s=$("spy-box"); s.style.display="none"; s.style.transition="";
@@ -2480,7 +2727,7 @@
     }
     $("spy-btn").onclick=()=>{
       objetivoOn=!objetivoOn; $("spy-btn").classList.toggle("active",objetivoOn);
-      if(objetivoOn){ ensureAudio(); armMark("zoom"); } else { disarmMark(); endSpy(); }   // ensureAudio: desbloquea el sonido (gesto de usuario)
+      if(objetivoOn){ ensureAudio(); showTools(); armMark("zoom"); } else { disarmMark(); endSpy(); }   // ensureAudio: desbloquea el sonido (gesto de usuario)
     };
 
     // ===== Live Environment: análisis IA de la vista actual =====
