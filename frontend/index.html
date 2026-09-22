@@ -1580,7 +1580,7 @@
 
     // ---- Dead-reckoning (#1): posición extrapolada entre polls ---------
     function extrapolate(m) {
-      const dt = (performance.now() - m.t0) / 1000;
+      const dt = Math.min((performance.now() - m.t0) / 1000, 25);   // no derivar si el dato se queda viejo
       const dist = m.speed * dt;                 // metros
       const hdg = Cesium.Math.toRadians(m.heading);
       const dlat = (dist * Math.cos(hdg)) / 111320;
@@ -1604,7 +1604,6 @@
 
     function upsert(d) {
       let e = entities.get(d.id);
-      const meta = { lat:d.lat, lon:d.lon, alt:d.alt||0, heading:d.heading, speed:d.speed, t0:performance.now() };
       if (!e) {
         const history = [];
         const entity = viewer.entities.add({
@@ -1623,19 +1622,29 @@
           polyline: { positions:new Cesium.CallbackProperty(() => e.history.concat([extrapolate(e.meta)]), false),
             width:2, material:Cesium.Color.fromCssColorString(speedColor(d.speed)).withAlpha(0.6), arcType:Cesium.ArcType.GEODESIC },
         });
-        e = { entity, trail, history, meta, _data:d, cid:d.id };
+        e = { entity, trail, history,
+          meta:{ lat:d.lat, lon:d.lon, alt:d.alt||0, heading:d.heading, speed:d.speed, t0:performance.now() },
+          _data:d, cid:d.id };
         entities.set(d.id, e);
-      } else {
-        e.meta = meta; e._data = d;
-        e.entity.billboard.color = COLOR[d.status]||Cesium.Color.WHITE;
-        e.entity.billboard.rotation = Cesium.Math.toRadians(-d.heading);
-        e.entity.label.text = d.name;
-        e.trail.polyline.material = Cesium.Color.fromCssColorString(speedColor(d.speed)).withAlpha(0.6);
+        e.history.push(Cesium.Cartesian3.fromDegrees(d.lon, d.lat, d.alt||0));
+        e.entity._data = d;
+        return;
       }
-      // punto histórico para la estela
-      e.history.push(Cesium.Cartesian3.fromDegrees(d.lon, d.lat, d.alt||0));
-      if (e.history.length > TRAIL_MAX) e.history.shift();
-      e.entity._data = d;
+      // ¿la posición REALMENTE cambió? OpenSky solo actualiza cada ~5-10s; las re-consultas
+      // (mover cámara / bbox) reenvían la MISMA posición. Reiniciar la base en cada re-envío
+      // hacía que el avión avanzara (extrapolación) y luego saltara atrás. Solo reiniciamos si cambió.
+      const moved = (d.lat !== e._data.lat) || (d.lon !== e._data.lon);
+      e._data = d; e.entity._data = d;
+      e.entity.billboard.color = COLOR[d.status]||Cesium.Color.WHITE;
+      e.entity.billboard.rotation = Cesium.Math.toRadians(-d.heading);
+      e.entity.label.text = d.name;
+      e.trail.polyline.material = Cesium.Color.fromCssColorString(speedColor(d.speed)).withAlpha(0.6);
+      if (moved) {   // nueva posición real → reinicia la base de extrapolación (una vez por actualización)
+        e.meta = { lat:d.lat, lon:d.lon, alt:d.alt||0, heading:d.heading, speed:d.speed, t0:performance.now() };
+        e.history.push(Cesium.Cartesian3.fromDegrees(d.lon, d.lat, d.alt||0));
+        if (e.history.length > TRAIL_MAX) e.history.shift();
+      }
+      // si no cambió, se mantiene la extrapolación en curso (movimiento constante, sin retroceder)
     }
 
     function render(list) {
