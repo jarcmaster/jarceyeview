@@ -2204,6 +2204,37 @@
     const rnd=(n)=>Math.floor(Math.random()*n);
     const fmtArea=(a)=> a>1e6 ? (a/1e6).toFixed(2)+" km²" : Math.round(a)+" m²";
     const fmtDist=(d)=> d>=1000 ? (d/1000).toFixed(2)+" km" : Math.round(d)+" m";
+    // --- Sonido de "objetivo adquirido" al terminar el zoom ---
+    // Si existe assets/objetivo-lock.mp3 se usa ese; si no, se sintetiza con Web Audio.
+    let audioCtx=null;
+    const lockAudio=new Audio("assets/objetivo-lock.mp3"); let lockAudioOk=false;
+    lockAudio.preload="auto"; lockAudio.volume=0.9;
+    lockAudio.addEventListener("canplaythrough",()=>{ lockAudioOk=true; });
+    lockAudio.addEventListener("error",()=>{ lockAudioOk=false; });
+    function ensureAudio(){ try{ if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch{}
+      if(audioCtx && audioCtx.state==="suspended") audioCtx.resume(); return audioCtx; }
+    function synthLock(){
+      const ac=ensureAudio(); if(!ac) return; const t=ac.currentTime;
+      // barrido descendente (targeting)
+      const o1=ac.createOscillator(), g1=ac.createGain(); o1.type="sawtooth";
+      o1.frequency.setValueAtTime(1500,t); o1.frequency.exponentialRampToValueAtTime(300,t+0.18);
+      g1.gain.setValueAtTime(0.0001,t); g1.gain.exponentialRampToValueAtTime(0.16,t+0.02); g1.gain.exponentialRampToValueAtTime(0.0001,t+0.2);
+      o1.connect(g1).connect(ac.destination); o1.start(t); o1.stop(t+0.22);
+      // doble beep de confirmación (lock)
+      const beep=(f,at,dur=0.09,vol=0.22)=>{ const o=ac.createOscillator(), g=ac.createGain(); o.type="square"; o.frequency.value=f;
+        g.gain.setValueAtTime(0.0001,at); g.gain.exponentialRampToValueAtTime(vol,at+0.008); g.gain.exponentialRampToValueAtTime(0.0001,at+dur);
+        o.connect(g).connect(ac.destination); o.start(at); o.stop(at+dur+0.02); };
+      beep(1200,t+0.24); beep(1760,t+0.36);
+      // golpe grave (impacto)
+      const o2=ac.createOscillator(), g2=ac.createGain(); o2.type="sine";
+      o2.frequency.setValueAtTime(170,t+0.24); o2.frequency.exponentialRampToValueAtTime(58,t+0.5);
+      g2.gain.setValueAtTime(0.0001,t+0.24); g2.gain.exponentialRampToValueAtTime(0.26,t+0.28); g2.gain.exponentialRampToValueAtTime(0.0001,t+0.56);
+      o2.connect(g2).connect(ac.destination); o2.start(t+0.24); o2.stop(t+0.58);
+    }
+    function playLockSfx(){
+      if(lockAudioOk){ try{ lockAudio.currentTime=0; lockAudio.play(); return; }catch{} }
+      synthLock();
+    }
     const RETICLE_IMG = "data:image/svg+xml," + encodeURIComponent(
       '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">'+
       '<circle cx="24" cy="24" r="15" fill="none" stroke="#8fe3ff" stroke-width="1.6"/>'+
@@ -2394,7 +2425,7 @@
         if(done) return; done=true;
         cancelAnimationFrame(spyAnimRAF);
         $("spy-flash").classList.remove("on"); void $("spy-flash").offsetWidth; $("spy-flash").classList.add("on");
-        enhancePulse();
+        enhancePulse(); playLockSfx();   // sonido de objetivo adquirido
         fillSpyData({ id:spyId, lat:m.centerLat, lon:m.centerLon, dist:viewer.camera.positionCartographic.height,
           elev:elevStr, az:Cesium.Math.toDegrees(viewer.camera.heading)||0, wpx:Math.round(tw), hpx:Math.round(th),
           area:fmtArea(m.area), state:'<b style="color:#5fe08a">● LOCK ACQUIRED</b>' });
@@ -2449,7 +2480,7 @@
     }
     $("spy-btn").onclick=()=>{
       objetivoOn=!objetivoOn; $("spy-btn").classList.toggle("active",objetivoOn);
-      if(objetivoOn) armMark("zoom"); else { disarmMark(); endSpy(); }
+      if(objetivoOn){ ensureAudio(); armMark("zoom"); } else { disarmMark(); endSpy(); }   // ensureAudio: desbloquea el sonido (gesto de usuario)
     };
 
     // ===== Live Environment: análisis IA de la vista actual =====
