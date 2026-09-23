@@ -41,11 +41,12 @@ from fastapi.staticfiles import StaticFiles
 
 # Permite `from services import ...` sin importar desde dónde se lance uvicorn.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from services import (OpenSky, RouteService, Telegram, aclose, alpr_cameras,
-                      analyze_scene, earthquakes, enhance_image, firms_fires,
-                      flight_status, geoip, gmap_tile, haversine_km, iss_position,
-                      radio_stations, rain_radar, revgeo, tomtom_tile,
-                      traffic_incidents, voice_intent, webcams)
+from services import (OpenSky, RouteService, Telegram, aclose, ai_chat, ai_health,
+                      alpr_cameras, analyze_scene, earthquakes, enhance_image,
+                      firms_fires, flight_status, generate_image, geoip, gmap_tile,
+                      haversine_km, iss_position, ollama_host, radio_stations,
+                      rain_radar, revgeo, sd_host, tomtom_tile, traffic_incidents,
+                      voice_intent, webcams)
 
 load_dotenv()
 
@@ -464,6 +465,26 @@ async def api_enhance(payload: dict) -> JSONResponse:
     return JSONResponse({"b64": b64} if b64 else {"error": "sin imagen"})
 
 
+@app.post("/api/generate")
+async def api_generate(payload: dict) -> JSONResponse:
+    d = await generate_image(
+        payload.get("prompt", ""), payload.get("negative", ""),
+        payload.get("width", 768), payload.get("height", 768),
+        payload.get("steps"), payload.get("seed", -1), payload.get("image"))
+    return JSONResponse(d or {"error": "generación no disponible"})
+
+
+@app.post("/api/ai/chat")
+async def api_ai_chat(payload: dict) -> JSONResponse:
+    return JSONResponse(await ai_chat(
+        payload.get("text", ""), payload.get("image"), payload.get("history")))
+
+
+@app.get("/api/ai/health")
+async def api_ai_health() -> JSONResponse:
+    return JSONResponse(await ai_health())
+
+
 _TILE_HEADERS = {"Cache-Control": "public, max-age=60"}
 
 
@@ -496,8 +517,12 @@ async def config() -> JSONResponse:
         "telegram": telegram.configured,
         "flightStatus": bool(os.getenv("AVIATIONSTACK_KEY", "")),
         "webcams": bool(os.getenv("WINDY_WEBCAMS_KEY", "")),
-        "voice": bool(os.getenv("OPENAI_API_KEY", "")),
-        "ai": bool(os.getenv("OPENAI_API_KEY", "")),
+        # Voz/IA disponibles vía Ollama local (host por defecto) o OpenAI.
+        "voice": bool(ollama_host() or os.getenv("OPENAI_API_KEY", "")),
+        "ai": bool(ollama_host() or os.getenv("OPENAI_API_KEY", "")),
+        "imggen": bool(sd_host() or os.getenv("OPENAI_API_KEY", "")),
+        "ollamaHost": ollama_host(),
+        "sdHost": sd_host(),
         "traffic": bool(os.getenv("TOMTOM_KEY", "")),
         "gmap2d": bool(os.getenv("GOOGLE_MAPS_API_KEY", "")),
         "ais": bool(os.getenv("AISSTREAM_KEY", "")),
@@ -519,7 +544,11 @@ KEY_DEFS = [
     ("TELEGRAM_CHAT_ID", "Telegram · Chat ID", False, True),
     ("AVIATIONSTACK_KEY", "AviationStack (estado de vuelo)", True, False),
     ("WINDY_WEBCAMS_KEY", "Windy Webcams", True, False),
-    ("OPENAI_API_KEY", "OpenAI (voz / IA / imágenes)", True, False),
+    ("OLLAMA_HOST", "Ollama · Host (IA local)", False, False),
+    ("OLLAMA_MODEL", "Ollama · Modelo texto (auto si vacío)", False, False),
+    ("OLLAMA_VISION_MODEL", "Ollama · Modelo visión (auto si vacío)", False, False),
+    ("SD_HOST", "Stable Diffusion · Host (AUTOMATIC1111)", False, False),
+    ("OPENAI_API_KEY", "OpenAI (respaldo voz / IA / imágenes)", True, False),
     ("OPENAI_MODEL", "OpenAI · Modelo", False, False),
     ("TOMTOM_KEY", "TomTom (tráfico / geocode)", True, False),
     ("AISSTREAM_KEY", "AISStream (barcos AIS)", True, True),

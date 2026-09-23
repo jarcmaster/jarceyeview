@@ -294,9 +294,11 @@ Acciones válidas:
 - {"action":"mapsource","source":"google3d|bing|binglabels|esri|osm","text":"..."}
 - {"action":"track","callsign":"<callsign>","text":"..."}     (rastrear un vuelo)
 - {"action":"streetview","text":"..."}                        (abrir Street View del punto actual)
+- {"action":"generate","prompt":"<descripción en inglés para el generador>","text":"..."}  (generar/crear una imagen)
 - {"action":"say","text":"<respuesta breve>"}                 (si no es un comando o es una pregunta)
 
 Ejemplos:
+"genera una imagen de un dron sobrevolando la ciudad" -> {"action":"generate","prompt":"a surveillance drone flying over a city at dusk, cinematic","text":"Generando imagen"}
 "vuela a Tokio" -> {"action":"flyto","place":"Tokyo","text":"Volando a Tokio"}
 "muéstrame los terremotos" -> {"action":"layer","layer":"quakes","on":true,"text":"Mostrando terremotos"}
 "apaga la lluvia" -> {"action":"layer","layer":"rain","on":false,"text":"Lluvia apagada"}
@@ -308,10 +310,214 @@ Ejemplos:
 "llévame a casa" -> {"action":"mylocation","text":"Yendo a tu ubicación"}"""
 
 
-async def voice_intent(text: str) -> dict | None:
-    """Interpreta una orden de voz en una acción de navegación usando GPT."""
+# --------------------------------------------------------------------------
+# IA LOCAL: Ollama (texto + visión) + Stable Diffusion (AUTOMATIC1111)
+# Todo pasa por el backend (mismo origen que el frontend) → sin problemas CORS.
+# --------------------------------------------------------------------------
+def ollama_host() -> str:
+    return (os.getenv("OLLAMA_HOST", "http://localhost:11434") or "").rstrip("/")
+
+
+def sd_host() -> str:
+    return (os.getenv("SD_HOST", "http://localhost:7860") or "").rstrip("/")
+
+
+# Familias de modelos con VISIÓN habituales en Ollama (para autodetección).
+_VISION_HINTS = ("llava", "vision", "-vl", "vl-", "qwen2.5vl", "qwen2-vl", "qwen3-vl",
+                 "minicpm-v", "moondream", "bakllava", "granite3.2-vision", "gemma3",
+                 "llama3.2-vision", "mistral-small3", "internvl", "cogvlm", "pixtral")
+
+
+def _is_vision(name: str) -> bool:
+    n = (name or "").lower()
+    return any(h in n for h in _VISION_HINTS)
+
+
+def _json_slice(s: str) -> str:
+    """Extrae el primer bloque {...} de una respuesta (por si el modelo añade texto)."""
+    s = (s or "").strip()
+    if s.startswith("```"):
+        s = s.split("```", 2)[1] if s.count("```") >= 2 else s.strip("`")
+        s = s.split("\n", 1)[-1] if s[:4].lower() == "json" else s
+    a, b = s.find("{"), s.rfind("}")
+    return s[a:b + 1] if 0 <= a < b else s
+
+
+async def ollama_models() -> list[str]:
+    host = ollama_host()
+    if not host:
+        return []
+    try:
+        r = await _http.get(f"{host}/api/tags", timeout=5)
+        r.raise_for_status()
+        return [m.get("name", "") for m in (r.json().get("models") or []) if m.get("name")]
+    except Exception:
+        return []
+
+
+def _pick_from(models: list[str], vision: bool) -> str:
+    """Elige el modelo: preferencia .env → autodetección → primero disponible."""
+    env = os.getenv("OLLAMA_VISION_MODEL" if vision else "OLLAMA_MODEL", "").strip()
+    if env and (not models or env in models or any(m.split(":")[0] == env for m in models)):
+        return env
+    if not models:
+        return env  # confiamos en que exista aunque /api/tags falle
+    if vision:
+        vis = [m for m in models if _is_vision(m)]
+        if vis:
+            return vis[0]
+    txt = [m for m in models if "embed" not in m.lower()]
+    return (txt or models)[0]
+
+
+async def pick_model(vision: bool) -> str:
+    return _pick_from(await ollama_models(), vision)
+
+
+async def ollama_chat(messages: list, model: str | None = None, images: list | None = None,
+                      fmt: str | None = None, temperature: float = 0.2,
+                      timeout: float = 90) -> str | None:
+    """Chat contra Ollama (/api/chat). Adjunta imágenes (base64) al último turno de usuario."""
+    host = ollama_host()
+    if not host:
+        return None
+    mdl = model or await pick_model(bool(images))
+    if not mdl:
+        return None
+    msgs = [dict(m) for m in messages]  # copia (no mutar el original)
+    if images:
+        clean = [i.split(",", 1)[-1] for i in images if i]
+        for m in reversed(msgs):
+            if m.get("role") == "user":
+                m["images"] = clean
+                break
+    body = {"model": mdl, "messages": msgs, "stream": False,
+            "options": {"temperature": temperature}}
+    if fmt:
+        body["format"] = fmt  # "json"
+    try:
+        r = await _http.post(f"{host}/api/chat", json=body, timeout=timeout)
+        r.raise_for_status()
+        return (r.json().get("message") or {}).get("content")
+    except Exception:
+        return None
+
+
+async def sd_ready() -> bool:
+    host = sd_host()
+    if not host:
+        return False
+    try:
+        r = await _http.get(f"{host}/sdapi/v1/sd-models", timeout=5)
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
+async def ai_health() -> dict:
+    """Estado de la IA local: Ollama (modelos, visión) + Stable Diffusion."""
+    models = await ollama_models()
+    return {
+        "ollama": bool(models),
+        "ollamaHost": ollama_host(),
+        "models": models,
+        "visionModel": _pick_from(models, True) if models else "",
+        "textModel": _pick_from(models, False) if models else "",
+        "hasVision": any(_is_vision(m) for m in models),
+        "sd": await sd_ready(),
+        "sdHost": sd_host(),
+        "openai": bool(os.getenv("OPENAI_API_KEY", "")),
+    }
+
+
+CHAT_SYSTEM = """Eres JARC, el asistente de IA de JARC'S EYE View, un sistema de vigilancia y mapa 3D tipo "God's Eye".
+Respondes en español, claro y conciso. Si te adjuntan una imagen del mapa, descríbela y analízala.
+NO inventes ni proporciones datos personales reales de personas físicas (nombres, direcciones, matrículas, teléfonos)."""
+
+
+async def ai_chat(text: str, image: str | None = None, history: list | None = None) -> dict:
+    """Asistente de IA general (texto y/o visión) vía Ollama, con respaldo OpenAI."""
+    msgs = [{"role": "system", "content": CHAT_SYSTEM}]
+    for h in (history or [])[-6:]:
+        if isinstance(h, dict) and h.get("role") in ("user", "assistant") and h.get("content"):
+            msgs.append({"role": h["role"], "content": str(h["content"])[:2000]})
+    msgs.append({"role": "user", "content": (text or "").strip() or "Describe y analiza esta vista."})
+    out = await ollama_chat(msgs, images=[image] if image else None,
+                            temperature=0.4, timeout=120)
+    if out:
+        return {"reply": out, "provider": "ollama"}
     key = os.getenv("OPENAI_API_KEY", "")
-    if not key or not (text or "").strip():
+    if key:
+        content: list = [{"type": "text", "text": msgs[-1]["content"]}]
+        if image:
+            url = image if image.startswith("data:") else f"data:image/png;base64,{image}"
+            content.append({"type": "image_url", "image_url": {"url": url}})
+        body = {"model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"), "temperature": 0.4,
+                "messages": msgs[:-1] + [{"role": "user", "content": content}]}
+        try:
+            r = await _http.post("https://api.openai.com/v1/chat/completions",
+                                 headers={"Authorization": f"Bearer {key}"}, json=body, timeout=90)
+            r.raise_for_status()
+            return {"reply": r.json()["choices"][0]["message"]["content"], "provider": "openai"}
+        except Exception:
+            pass
+    return {"error": "IA no disponible. Verifica que Ollama esté corriendo (ollama serve) "
+                     "o configura OPENAI_API_KEY."}
+
+
+async def generate_image(prompt: str, negative: str = "", width: int = 768, height: int = 768,
+                         steps=None, seed: int = -1, image: str | None = None) -> dict | None:
+    """Genera una imagen con Stable Diffusion (AUTOMATIC1111). Con `image` usa img2img."""
+    host = sd_host()
+    if not host or not (prompt or "").strip():
+        # Respaldo: OpenAI (solo edición si hay imagen base)
+        if image:
+            b = await enhance_image(image, prompt or "enhance, sharpen, high detail")
+            return {"b64": b} if b else {"error": "sin generador local (Stable Diffusion) ni OpenAI"}
+        return {"error": "sin generador local (Stable Diffusion): configura SD_HOST"}
+    payload = {
+        "prompt": prompt,
+        "negative_prompt": negative or "blurry, low quality, watermark, text, deformed",
+        "width": int(width), "height": int(height),
+        "steps": int(steps or os.getenv("SD_STEPS", "22") or 22),
+        "cfg_scale": float(os.getenv("SD_CFG", "7") or 7),
+        "sampler_name": os.getenv("SD_SAMPLER", "DPM++ 2M Karras"),
+        "seed": int(seed),
+    }
+    endpoint = "/sdapi/v1/txt2img"
+    if image:
+        payload["init_images"] = [image.split(",", 1)[-1]]
+        payload["denoising_strength"] = float(os.getenv("SD_DENOISE", "0.55") or 0.55)
+        endpoint = "/sdapi/v1/img2img"
+    try:
+        r = await _http.post(f"{host}{endpoint}", json=payload, timeout=300)
+        r.raise_for_status()
+        imgs = r.json().get("images") or []
+        if imgs:
+            return {"b64": imgs[0], "provider": "sd"}
+        return {"error": "el generador no devolvió imagen"}
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"Stable Diffusion: {type(e).__name__}"}
+
+
+async def voice_intent(text: str) -> dict | None:
+    """Interpreta una orden de voz en una acción de navegación (Ollama local → OpenAI)."""
+    text = (text or "").strip()
+    if not text:
+        return None
+    # 1) IA LOCAL (Ollama): modelo de texto autodetectado, salida JSON.
+    out = await ollama_chat(
+        [{"role": "system", "content": VOICE_SYSTEM}, {"role": "user", "content": text}],
+        model=os.getenv("OLLAMA_MODEL", "").strip() or None,
+        fmt="json", temperature=0, timeout=25)
+    if out:
+        try:
+            return json.loads(_json_slice(out))
+        except Exception:
+            pass
+    # 2) Respaldo OpenAI (si hay clave).
+    key = os.getenv("OPENAI_API_KEY", "")
+    if not key:
         return None
     body = {
         "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
@@ -424,9 +630,29 @@ Si no es un edificio (campo, agua, bosque), adapta building/roof y deja arrays v
 
 
 async def analyze_scene(image: str, lat: float, lon: float) -> dict | None:
-    key = os.getenv("OPENAI_API_KEY", "")
-    if not key or not image:
+    if not image:
         return None
+    # 1) VISIÓN LOCAL (Ollama): modelo con visión autodetectado.
+    vis = await ollama_chat(
+        [{"role": "system", "content": ANALYZE_SYSTEM},
+         {"role": "user", "content": f"Coordenadas: {lat:.6f}, {lon:.6f}. Analiza esta vista."}],
+        images=[image], fmt="json", temperature=0.4, timeout=150)
+    if vis:
+        try:
+            d = json.loads(_json_slice(vis))
+            d["coords"] = f"{lat:.6f}, {lon:.6f}"
+            d["provider"] = "ollama"
+            rg = await revgeo(lat, lon)
+            if rg:
+                d["address"] = rg.get("address", "")
+            return d
+        except Exception:
+            pass
+    # 2) Respaldo OpenAI (gpt-4o visión).
+    key = os.getenv("OPENAI_API_KEY", "")
+    if not key:
+        return {"error": "IA de visión local (Ollama) no disponible y sin OpenAI. "
+                         "Instala un modelo con visión: `ollama pull llama3.2-vision`."}
     url = image if image.startswith("data:") else f"data:image/png;base64,{image}"
     body = {
         "model": "gpt-4o", "temperature": 0.4, "max_tokens": 1600,
@@ -460,9 +686,18 @@ async def analyze_scene(image: str, lat: float, lon: float) -> dict | None:
 
 
 async def enhance_image(image: str, prompt: str) -> str | None:
-    """Genera una imagen 'mejorada' a partir de la captura del mapa (gpt-image-1 edits)."""
+    """Mejora/reinterpreta la captura del mapa: Stable Diffusion (img2img) → OpenAI edits."""
+    if not image:
+        return None
+    # 1) LOCAL: Stable Diffusion img2img (si está disponible).
+    if await sd_ready():
+        d = await generate_image(prompt or "enhance, sharpen, upscale, ultra detailed",
+                                 image=image)
+        if d and d.get("b64"):
+            return d["b64"]
+    # 2) Respaldo OpenAI (gpt-image-1 edits).
     key = os.getenv("OPENAI_API_KEY", "")
-    if not key or not image:
+    if not key:
         return None
     try:
         raw = base64.b64decode(image.split(",", 1)[-1])

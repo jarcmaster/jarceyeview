@@ -573,6 +573,43 @@
     #veh-loading .vl-dot { width:11px; height:11px; border-radius:50%; border:2px solid rgba(95,224,138,.35);
       border-top-color:#5fe08a; animation:vlspin .7s linear infinite; }
     @keyframes vlspin { to { transform:rotate(360deg); } }
+    /* ---- Asistente de IA local ---- */
+    #ai-panel { display:none; position:fixed; right:16px; bottom:150px; width:360px; max-width:92vw;
+      z-index:70; flex-direction:column; background:rgba(8,16,12,.94); color:#dfffe9;
+      border:1px solid rgba(95,224,138,.4); border-radius:12px; overflow:hidden;
+      box-shadow:0 10px 40px rgba(0,0,0,.6), 0 0 20px rgba(95,224,138,.15);
+      font:13px/1.45 system-ui,sans-serif; backdrop-filter:blur(6px); }
+    #ai-panel.open { display:flex; }
+    .ai-head { display:flex; align-items:center; gap:8px; padding:9px 12px; font-weight:700; letter-spacing:.5px;
+      background:linear-gradient(90deg, rgba(95,224,138,.16), rgba(95,224,138,0)); border-bottom:1px solid rgba(95,224,138,.25); }
+    .ai-head [data-ic] { display:inline-flex; }
+    .ai-prov { margin-left:auto; font:600 10px/1 ui-monospace,monospace; color:#8fe6ad; opacity:.85; letter-spacing:.3px; }
+    .ai-x { cursor:pointer; padding:0 4px; opacity:.7; font-weight:400; }
+    .ai-x:hover { opacity:1; color:#fff; }
+    .ai-log { max-height:46vh; min-height:90px; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:9px; }
+    .ai-msg { max-width:88%; padding:8px 11px; border-radius:12px; word-wrap:break-word; white-space:pre-wrap; }
+    .ai-msg.user { align-self:flex-end; background:rgba(95,224,138,.18); border:1px solid rgba(95,224,138,.35); border-bottom-right-radius:3px; }
+    .ai-msg.bot { align-self:flex-start; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-bottom-left-radius:3px; }
+    .ai-msg.sys { align-self:center; font-size:11px; opacity:.7; background:none; border:none; padding:2px; }
+    .ai-msg.think { align-self:flex-start; opacity:.75; font-style:italic; }
+    .ai-msg img { display:block; max-width:100%; border-radius:8px; margin-top:4px; }
+    .ai-dl { display:inline-block; margin-top:6px; font-size:11px; color:#5fe08a; text-decoration:none; border:1px solid rgba(95,224,138,.4); border-radius:6px; padding:3px 8px; }
+    .ai-dl:hover { background:rgba(95,224,138,.15); }
+    .ai-suggest { display:flex; flex-wrap:wrap; gap:6px; padding:0 12px 8px; }
+    .ai-chip { cursor:pointer; font-size:11px; padding:4px 9px; border-radius:14px; background:rgba(255,255,255,.06);
+      border:1px solid rgba(95,224,138,.28); color:#cfe; white-space:nowrap; }
+    .ai-chip:hover { background:rgba(95,224,138,.18); }
+    .ai-input { display:flex; align-items:center; gap:6px; padding:9px; border-top:1px solid rgba(95,224,138,.2); }
+    .ai-attach { display:flex; align-items:center; cursor:pointer; font-size:15px; opacity:.75; user-select:none; }
+    .ai-attach input { display:none; }
+    .ai-attach.on { opacity:1; text-shadow:0 0 8px #5fe08a; }
+    #ai-text { flex:1; min-width:0; background:rgba(0,0,0,.35); border:1px solid rgba(95,224,138,.3); color:#eaffef;
+      border-radius:8px; padding:8px 10px; font:13px system-ui,sans-serif; outline:none; }
+    #ai-text:focus { border-color:#5fe08a; }
+    .ai-input button { cursor:pointer; background:rgba(95,224,138,.18); border:1px solid rgba(95,224,138,.4); color:#dfffe9;
+      border-radius:8px; width:34px; height:34px; font-size:15px; flex:0 0 auto; }
+    .ai-input button:hover { background:rgba(95,224,138,.32); }
+    #ai-mic.rec { background:#e0483f; border-color:#e0483f; color:#fff; animation:vlspin 1.2s linear infinite; }
     .surv-scan::after { content:""; position:absolute; inset:0; border-radius:50%;
       background:repeating-conic-gradient(from 0deg, rgba(127,211,255,.16) 0 1deg, transparent 1deg 45deg),
                  radial-gradient(circle, transparent 0 34%, rgba(127,211,255,.12) 34% 35%, transparent 35% 66%, rgba(127,211,255,.12) 66% 67%, transparent 67%); }
@@ -1115,6 +1152,7 @@
     <div class="dock-btn" id="spy-btn"><span data-ic="crosshair"></span> OBJETIVO</div>
     <div class="dock-btn" id="live-btn"><span data-ic="satellite"></span> LIVE ENV</div>
     <div class="dock-btn" id="mic-btn"><span data-ic="mic"></span><span id="mic-status">Pide o comanda</span></div>
+    <div class="dock-btn" id="ai-btn"><span data-ic="satellite"></span> IA</div>
     <div class="dock-btn" id="presets-btn"><span data-ic="layers"></span> PRESETS</div>
     <div class="dock-btn" id="keys-btn"><span data-ic="key"></span> CLAVES</div>
     <div class="dock-btn" id="sim-btn"><span data-ic="car"></span> SIM</div>
@@ -1128,6 +1166,24 @@
     <span id="dn-time">--:-- UTC</span>
     <button id="dn-auto" title="Seguir la hora UTC real / de simulación">AUTO</button>
     <span class="dn-x" title="Cerrar">✕</span>
+  </div>
+
+  <!-- Asistente de IA local (Ollama texto+visión / Stable Diffusion) -->
+  <div id="ai-panel">
+    <div class="ai-head"><span data-ic="satellite"></span> ASISTENTE IA
+      <span class="ai-prov" id="ai-prov">conectando…</span><span class="ai-x" title="Cerrar">✕</span></div>
+    <div class="ai-log" id="ai-log"></div>
+    <div class="ai-suggest" id="ai-suggest">
+      <span class="ai-chip" data-q="¿Qué se ve en esta vista?" data-map="1">🛰️ Analizar vista</span>
+      <span class="ai-chip" data-q="genera una imagen de un dron de vigilancia sobre la ciudad al atardecer">🎨 Generar imagen</span>
+      <span class="ai-chip" data-q="vuela a Tokio">✈️ Vuela a Tokio</span>
+    </div>
+    <div class="ai-input">
+      <label class="ai-attach" id="ai-attach" title="Adjuntar la vista actual del mapa"><input type="checkbox" id="ai-map"> 🛰️</label>
+      <input id="ai-text" type="text" placeholder="Pregunta, comanda o pide una imagen…" autocomplete="off">
+      <button id="ai-mic" title="Dictar">🎤</button>
+      <button id="ai-send" title="Enviar">➤</button>
+    </div>
   </div>
 
   <!-- Dashboard de simulación de vehículos -->
@@ -1352,6 +1408,7 @@
     { const ct=$("car-tag"); if(ct) makeDraggable(ct, ct.querySelector(".ct-head")); }         // etiqueta de vehículo: arrastrar por su encabezado
     { const sp=$("sim-panel"); if(sp) makeDraggable(sp, sp.querySelector(".sm2-head")); }        // dashboard de simulación
     { const g=$("wc-gallery"); if(g) makeDraggable(g, g.querySelector(".wcg-head")); }
+    { const ap=$("ai-panel"); if(ap) makeDraggable(ap, ap.querySelector(".ai-head")); }   // asistente IA: arrastrar por su encabezado
 
     // Coloca una ventana en un area en blanco de la pantalla, sin caer encima de otra ventana visible
     function placeFree(el){
@@ -2932,9 +2989,8 @@
     }
     let recognizing = false, recog = null;
     function startVoice() {
-      if (!cfg.voice) { alert("Configura OPENAI_API_KEY en .env para los comandos de voz."); return; }
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SR) { alert("Tu navegador no soporta dictado por voz. Usa Chrome o Edge."); return; }
+      if (!SR) { alert("Tu navegador no soporta dictado por voz. Usa Chrome o Edge, servido por http://localhost."); return; }
       if (recognizing) { recog && recog.stop(); return; }
       recog = new SR(); recog.lang = "es-ES"; recog.interimResults = true; recog.continuous = false;
       recog.onstart = () => { recognizing = true; setMic(true, "Escuchando…"); };
@@ -2943,17 +2999,60 @@
         setMic(true, t);
         if (e.results[e.results.length - 1].isFinal) handleVoice(t.trim());
       };
-      recog.onerror = () => { recognizing = false; setMic(false, "Pide o comanda"); };
+      recog.onerror = (e) => { recognizing = false;
+        setMic(false, e.error === "not-allowed" ? "Permite el micrófono" :
+                      e.error === "no-speech" ? "No escuché nada" : "Pide o comanda"); };
       recog.onend = () => { recognizing = false; $("mic-btn").classList.remove("listening"); };
       recog.start();
     }
+    // Intérprete rápido OFFLINE (sin red): resuelve los comandos comunes al instante.
+    function localIntent(raw) {
+      const t = (raw || "").toLowerCase().trim(); if (!t) return null;
+      const has = (...w) => w.some(x => t.includes(x));
+      // Generar imagen (Stable Diffusion)
+      const gm = t.match(/(?:genera|generar|crea|crear|dibuja|dibujar|imagina|pinta)\b[^]*?(?:imagen|foto|dibujo|render)?\s*(?:de|del|de la|of)?\s*(.+)$/);
+      if ((has("genera", "crea una imagen", "dibuja", "imagina", "pinta", "generate image", "create image", "draw")) && gm && gm[1] && gm[1].trim().length > 2)
+        return { action: "generate", prompt: gm[1].replace(/[.?!]+$/, "").trim(), text: "Generando imagen…" };
+      // Ubicación
+      if (has("mi ubicaci", "a casa", "llévame a casa", "llevame a casa", "dónde estoy", "donde estoy", "my location", "take me home")) return { action: "mylocation", text: "Yendo a tu ubicación" };
+      if (has("street view", "vista de calle")) return { action: "streetview", text: "Street View" };
+      // Presets ópticos
+      const presets = [["nvg", ["visión noct", "vision noct", "nocturna", " nvg", "night vision"]],
+                       ["flir", ["térmic", "termic", "flir", "thermal", "calor"]],
+                       ["crt", [" crt", "retro"]], ["anime", ["anime", "cómic", "comic", "caricatura"]],
+                       ["noir", ["noir", "blanco y negro", "black and white"]],
+                       ["snow", ["nieve", "snow", "invierno"]],
+                       ["normal", ["vista normal", "quita filtro", "sin filtro", "modo normal", "restablece vista"]]];
+      for (const [p, ws] of presets) if (has(...ws)) return { action: "preset", preset: p, text: "Óptica " + p.toUpperCase() };
+      // Capas
+      const off = has("apaga", "apagar", "oculta", "ocultar", "quita", "quitar", "desactiva", "turn off", "hide");
+      const on = has("muestra", "mostrar", "enciende", "activa", "activar", "pon ", "turn on", "show", "ver ");
+      const layer = has("terremoto", "sismo", "earthquake", "quake") ? "quakes"
+                  : has("lluvia", "rain", "radar") ? "rain"
+                  : (has("estación espacial", "estacion espacial", "space station", " iss") ? "iss" : null);
+      if (layer && (on || off)) return { action: "layer", layer, on: !off, text: (off ? "Apagando " : "Mostrando ") + layer };
+      // Escaneos
+      if (has("escanea radio", "escanear radio", "radios", "radio stations")) return { action: "scan", kind: "radio", text: "Escaneando radios" };
+      if (has("webcam", "cámaras web", "camaras web")) return { action: "scan", kind: "webcams", text: "Buscando webcams" };
+      if (has("cámaras de tráfico", "camaras de trafico", "cámaras de carretera", "camaras de carretera", "tráfico", "trafico", "traffic cam")) return { action: "scan", kind: "traffic", text: "Cámaras de tráfico" };
+      // Fuente del mapa
+      if (has("openstreetmap", "osm")) return { action: "mapsource", source: "osm", text: "Mapa OSM" };
+      if (has("google 3d", "fotorrealista", "google tiles", "tres d")) return { action: "mapsource", source: "google3d", text: "Google 3D" };
+      if (has("esri")) return { action: "mapsource", source: "esri", text: "Esri" };
+      // Volar a un lugar
+      const m = t.match(/(?:vuela a|volar a|ve a|ir a|llévame a|llevame a|vamos a|navega a|dirígete a|dirigete a|fly to|go to)\s+(.+)$/);
+      if (m && m[1]) { const place = m[1].replace(/[.?!]+$/, "").trim(); if (place.length > 1) return { action: "flyto", place, text: "Volando a " + place }; }
+      return null; // → que lo interprete el LLM local (Ollama)
+    }
     async function handleVoice(text) {
       if (!text) return;
-      setMic(false, "⋯ " + text);
+      const local = localIntent(text);
+      if (local) { execIntent(local); setMic(false, local.text || "Hecho"); return; }
+      setMic(false, "⋯ pensando: " + text);
       let a = null;
       try { a = await (await fetch("/api/voice", { method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ text }) })).json(); } catch {}
-      if (!a) { setMic(false, "Sin respuesta"); return; }
+      if (!a) { setMic(false, "IA no disponible (Ollama)"); return; }
       execIntent(a);
       setMic(false, a.text || "Pide o comanda");
     }
@@ -2982,10 +3081,115 @@
           openStreetView(c.lat, c.lon, (lastSearch && lastSearch.name) || "Aquí");
           break;
         }
+        case "generate": if (a.prompt) generateImage(a.prompt); break;
+        case "chat": case "ask": if (a.text) aiSay(a.text); break;
       }
     }
     $("mic-btn").onclick = startVoice;
-    if (!cfg.voice) micStatus.textContent = "voz no configurada";
+
+    // ================= ASISTENTE DE IA LOCAL (Ollama + Stable Diffusion) =================
+    const aiPanel = $("ai-panel"), aiLog = $("ai-log");
+    let aiHistory = [], aiHealth = null;
+    function aiOpen(show) {
+      const on = show == null ? !aiPanel.classList.contains("open") : !!show;
+      aiPanel.classList.toggle("open", on);
+      if (on) { setTimeout(() => $("ai-text").focus(), 30); if (!aiLog.children.length) aiHealthCheck(); }
+    }
+    function aiScroll() { aiLog.scrollTop = aiLog.scrollHeight; }
+    function aiAppend(cls, html) {
+      const d = document.createElement("div"); d.className = "ai-msg " + cls; d.innerHTML = html;
+      aiLog.appendChild(d); aiScroll(); return d;
+    }
+    function speak(text) {
+      try {
+        if (!window.speechSynthesis || !text) return;
+        const u = new SpeechSynthesisUtterance(String(text).slice(0, 400));
+        u.lang = "es-ES"; u.rate = 1.05; speechSynthesis.cancel(); speechSynthesis.speak(u);
+      } catch {}
+    }
+    function aiSay(text, doSpeak) {
+      aiOpen(true); aiAppend("bot", esc(text)); aiHistory.push({ role: "assistant", content: text });
+      if (doSpeak !== false) speak(text);
+    }
+    function esc(s) { return String(s == null ? "" : s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+    async function aiHealthCheck() {
+      try {
+        aiHealth = await (await fetch("/api/ai/health")).json();
+        const p = $("ai-prov");
+        if (aiHealth.ollama) {
+          const parts = [aiHealth.visionModel || aiHealth.textModel || "ollama"];
+          if (aiHealth.sd) parts.push("SD✓");
+          p.textContent = parts.join(" · "); p.style.color = "#8fe6ad";
+          if (!aiHealth.hasVision) aiAppend("sys", "⚠ Sin modelo de visión. Instala uno: <b>ollama pull llama3.2-vision</b>");
+        } else if (aiHealth.openai) {
+          p.textContent = "OpenAI (respaldo)"; p.style.color = "#e8c86a";
+        } else {
+          p.textContent = "IA offline"; p.style.color = "#e0483f";
+          aiAppend("sys", "⚠ Ollama no responde en " + esc(aiHealth.ollamaHost || "localhost:11434") + ". Ejecuta <b>ollama serve</b>.");
+        }
+        if (aiHealth.sd) $("ai-attach").title = "Adjuntar la vista actual del mapa";
+      } catch { $("ai-prov").textContent = "sin backend"; }
+    }
+    async function aiSend(text) {
+      text = (text || $("ai-text").value || "").trim(); if (!text) return;
+      $("ai-text").value = "";
+      aiAppend("user", esc(text)); aiHistory.push({ role: "user", content: text });
+      // 1) ¿Es un comando de navegación/óptica/generación? → ejecútalo directo.
+      const act = localIntent(text);
+      if (act) { execIntent(act); if (act.action !== "generate") aiSay(act.text, false); return; }
+      // 2) Chat con la IA (texto y, opcional, visión del mapa).
+      const withMap = $("ai-map").checked;
+      const think = aiAppend("think", withMap ? "analizando la vista…" : "pensando…");
+      let img = null; if (withMap) { try { img = captureMap(1024); } catch {} }
+      let d = null;
+      try {
+        d = await (await fetch("/api/ai/chat", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, image: img, history: aiHistory.slice(0, -1) }) })).json();
+      } catch {}
+      think.remove();
+      if (d && d.reply) { aiSay(d.reply); }
+      else { aiAppend("sys", "⚠ " + esc((d && d.error) || "Sin respuesta de la IA.")); }
+    }
+    async function generateImage(prompt, opts) {
+      prompt = (prompt || "").trim(); if (!prompt) return;
+      aiOpen(true);
+      aiAppend("user", "🎨 " + esc(prompt));
+      const think = aiAppend("think", "generando imagen… (puede tardar)");
+      let d = null;
+      try {
+        d = await (await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(Object.assign({ prompt }, opts || {})) })).json();
+      } catch {}
+      think.remove();
+      if (d && d.b64) {
+        const src = d.b64.startsWith("data:") ? d.b64 : "data:image/png;base64," + d.b64;
+        aiAppend("bot", "<img src='" + src + "' alt='generada'>" +
+          "<a class='ai-dl' download='jarceye_ia.png' href='" + src + "'>⬇ Descargar</a>");
+      } else {
+        aiAppend("sys", "⚠ " + esc((d && d.error) || "No se pudo generar. Configura Stable Diffusion (SD_HOST)."));
+      }
+    }
+    // Dictado dentro del asistente → rellena el input y envía
+    let aiRecog = null;
+    function aiDictate() {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { alert("Tu navegador no soporta dictado. Usa Chrome/Edge en http://localhost."); return; }
+      if (aiRecog) { aiRecog.stop(); return; }
+      aiRecog = new SR(); aiRecog.lang = "es-ES"; aiRecog.interimResults = true; aiRecog.continuous = false;
+      const btn = $("ai-mic"); btn.classList.add("rec");
+      aiRecog.onresult = (e) => { let t = ""; for (const r of e.results) t += r[0].transcript;
+        $("ai-text").value = t; if (e.results[e.results.length - 1].isFinal) { aiSend(t.trim()); } };
+      aiRecog.onerror = () => {}; aiRecog.onend = () => { btn.classList.remove("rec"); aiRecog = null; };
+      aiRecog.start();
+    }
+    $("ai-btn").onclick = () => aiOpen();
+    aiPanel.querySelector(".ai-x").onclick = () => aiOpen(false);
+    $("ai-send").onclick = () => aiSend();
+    $("ai-mic").onclick = aiDictate;
+    $("ai-text").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); aiSend(); } });
+    $("ai-attach").addEventListener("change", () => $("ai-attach").classList.toggle("on", $("ai-map").checked));
+    $("ai-suggest").addEventListener("click", (e) => { const c = e.target.closest(".ai-chip"); if (!c) return;
+      if (c.dataset.map) $("ai-map").checked = true, $("ai-attach").classList.add("on"); aiSend(c.dataset.q); });
 
     // --- Modo OBJETIVO: recuadro + zoom cinematográfico estilo satélite ---
     let spyMode=false, spyDown=false, spyA=null, spyId="", spyAnimRAF=null, spyAddr="", spyPurpose="zoom", objetivoOn=false;
