@@ -418,6 +418,16 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="JARC's EYE View", lifespan=lifespan)
 
 
+@app.middleware("http")
+async def _no_cache_html(request, call_next):
+    """El navegador no debe cachear el HTML/JS: así siempre carga la última versión del frontend."""
+    resp = await call_next(request)
+    ct = resp.headers.get("content-type", "")
+    if "text/html" in ct or "javascript" in ct:
+        resp.headers["Cache-Control"] = "no-store, must-revalidate"
+    return resp
+
+
 @app.get("/api/geoip")
 async def api_geoip() -> JSONResponse:
     return JSONResponse(await geoip() or {})

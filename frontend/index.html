@@ -4394,19 +4394,23 @@
       trafficToken=token;     // stopTraffic invalida el token; lo restauramos
       const dmul = densityByTime()*SIMCFG.DENSITY;
       const areaKm2 = Math.PI*Math.pow(scopeRadiusM()/1000, 2);
+      let modeMsg, modeOk;
       if(V && keys.length){   // tráfico por calles reales (direcciones correctas)
         trafficFree=false; trafficGraph=V; trafficKeys=keys; trafficCenter={lat:survGeo.lat, lon:survGeo.lon}; computeTrafficInner(); buildLights();
         // llena las calles del círculo: por nº de nodos y por área, entre 40 y MAX_VEH
         // (varios coches por nodo + alta densidad por km² → permite miles en áreas grandes)
         trafficTargetN = Math.round(Math.max(40, Math.min(Math.min(MAX_VEH_LIMIT, SIMCFG.MAX_VEH), Math.min(trafficInner.length*4, areaKm2*250))) * dmul);
+        modeMsg="🛣 SOBRE CALLES · "+keys.length+" nodos ("+trafficInner.length+" en zona)"; modeOk=true;
       } else {   // sin calles (agua/campo o Overpass no respondió): tráfico libre MODERADO para que se vean
         trafficFree=true; trafficGraph=null; simLights.clear();
         trafficTargetN = Math.round(Math.max(12, Math.min(Math.min(MAX_VEH_LIMIT, SIMCFG.MAX_VEH), Math.min(45, areaKm2*22))) * dmul);
-        try{ logEvent("Sin calles cargadas (Overpass): tráfico libre. Reintenta o usa una zona con calles en OSM."); }catch{}
+        modeMsg="⚠ SIN CALLES cargadas · modo libre (¿zona sin calles o red bloqueada?)"; modeOk=false;
+        try{ logEvent("Sin calles cargadas (Overpass): tráfico libre."); }catch{}
       }
       for(let i=0;i<trafficTargetN;i++) spawnCar();   // aparecen cuando terminan de "cargar"
       $("surv-hud").classList.remove("scanning");
-      $("veh-loading").classList.remove("on");
+      { const vl=$("veh-loading"); if(vl){ const t=vl.querySelector("span:last-child"); if(t) t.textContent=modeMsg;
+        vl.style.borderColor=modeOk?"":"#e0736a"; clearTimeout(vl._h); vl._h=setTimeout(()=>vl.classList.remove("on"), 3500); } }
       // Abre el panel de rastreo (con buscador) en cuanto hay vehículos que buscar/seguir.
       $("veh-feed").classList.add("on"); renderTrackList();
       updateCarScale();   // dimensiona los coches al tamaño real según el zoom actual
