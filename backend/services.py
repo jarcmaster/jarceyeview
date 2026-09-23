@@ -298,6 +298,19 @@ Acciones válidas:
 - {"action":"track","callsign":"<callsign>","text":"..."}     (rastrear un vuelo)
 - {"action":"streetview","text":"..."}                        (abrir Street View del punto actual)
 - {"action":"generate","prompt":"<descripción en inglés para el generador>","text":"..."}  (generar/crear una imagen)
+- {"action":"carfollow","orbit":true|false,"text":"..."}      (seguir el vehículo seleccionado; orbit=false = sin órbita)
+- {"action":"cartag","tag":"<nombre>","text":"..."}           (etiquetar el vehículo; omite "tag" para que la app la pida)
+- {"action":"cartrackoff","text":"..."}                       (cancelar el rastreo del vehículo)
+- {"action":"daynight","mode":"day|night|off","text":"..."}   (vista de día / de noche / apagar)
+- {"action":"objetivo","on":true|false,"text":"..."}          (modo OBJETIVO / spy zoom)
+- {"action":"north","text":"..."}                             (orientar la cámara al norte)
+- {"action":"hover","on":true|false,"text":"..."}             (sobrevolar/orbitar el objetivo)
+- {"action":"detect","kind":"people|structures|vehicles","on":true|false,"text":"..."}  (personas/estructuras/vehículos)
+- {"action":"optic","mode":"termal|heat|nvg|flir|noir|sar|uv|desert","text":"..."}  (óptica del visor; omite mode para abrir el menú)
+- {"action":"photo","text":"..."}                             (tomar foto)
+- {"action":"gallery","on":true|false,"text":"..."}           (abrir/cerrar la galería)
+- {"action":"panels","text":"..."}                            (mostrar/ocultar el panel de CAPAS)
+- {"action":"close","text":"..."}                             (cerrar las ventanas flotantes)
 - {"action":"say","text":"<respuesta breve>"}                 (si no es un comando o es una pregunta)
 
 Ejemplos:
@@ -312,6 +325,19 @@ Ejemplos:
 "cámaras de carretera" -> {"action":"scan","kind":"traffic","text":"Cámaras de tráfico"}
 "muéstrame los parques de esta zona" -> {"action":"pois","kind":"parks","on":true,"text":"Marcando los parques"}
 "enciende las cámaras ALPR" -> {"action":"layer","layer":"alpr","on":true,"text":"Cámaras ALPR activadas"}
+"sigue este vehículo en órbita" -> {"action":"carfollow","orbit":true,"text":"Siguiendo en órbita"}
+"síguelo sin órbita" -> {"action":"carfollow","orbit":false,"text":"Siguiendo sin órbita"}
+"ponle la etiqueta sospechoso uno" -> {"action":"cartag","tag":"SOSPECHOSO 1","text":"Etiqueta aplicada"}
+"aplica una etiqueta" -> {"action":"cartag","text":"¿Qué etiqueta le pongo?"}
+"cancela el rastreo" -> {"action":"cartrackoff","text":"Rastreo cancelado"}
+"pon la vista de noche" -> {"action":"daynight","mode":"night","text":"Modo noche"}
+"activa el objetivo" -> {"action":"objetivo","on":true,"text":"Objetivo activado"}
+"orienta al norte" -> {"action":"north","text":"Al norte"}
+"muéstrame las personas" -> {"action":"detect","kind":"people","on":true,"text":"Mostrando personas"}
+"óptica térmica" -> {"action":"optic","mode":"termal","text":"Óptica térmica"}
+"toma una foto" -> {"action":"photo","text":"Tomando foto"}
+"abre la galería" -> {"action":"gallery","on":true,"text":"Galería"}
+"cierra las ventanas" -> {"action":"close","text":"Cerrando ventanas"}
 "llévame a casa" -> {"action":"mylocation","text":"Yendo a tu ubicación"}"""
 
 
@@ -768,6 +794,16 @@ Responde SIEMPRE en JSON válido con esta forma exacta:
 - {"action":"track","callsign":"<callsign>"}                   (rastrear un vuelo)
 - {"action":"streetview"}                                      (Street View del punto actual)
 - {"action":"generate","prompt":"<descripción en inglés>"}     (generar una imagen)
+- {"action":"carfollow","orbit":true|false}                    (seguir el vehículo seleccionado; orbit=false = sin órbita)
+- {"action":"cartag","tag":"<nombre>"}                         (etiquetar el vehículo; omite "tag" para que la app la pida)
+- {"action":"cartrackoff"}                                     (cancelar el rastreo del vehículo)
+- {"action":"daynight","mode":"day|night|off"}                 (vista de día / de noche)
+- {"action":"objetivo","on":true|false}                        (modo OBJETIVO / spy zoom)
+- {"action":"north"} · {"action":"hover","on":true|false}      (norte / sobrevolar el objetivo)
+- {"action":"detect","kind":"people|structures|vehicles","on":true|false}  (detección en OBJETIVO)
+- {"action":"optic","mode":"termal|heat|nvg|flir|noir|sar|uv|desert"}  (óptica del visor)
+- {"action":"photo"} · {"action":"gallery","on":true|false}    (tomar foto / abrir-cerrar galería)
+- {"action":"panels"} · {"action":"close"}                     (paneles CAPAS / cerrar ventanas)
 
 Reglas:
 - Si el usuario pide una acción (muéstrame X, activa/apaga X, vuela a X, genera X), incluye "action" y confírmalo en "reply".

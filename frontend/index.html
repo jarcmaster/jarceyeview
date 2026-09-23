@@ -2988,7 +2988,7 @@
       $("mic-btn").classList.toggle("listening", !!listening);
       if (text != null) micStatus.textContent = text;
     }
-    let recognizing = false, recog = null, listenMode = false;
+    let recognizing = false, recog = null, listenMode = false, pendingTag = false;
     // El micrófono es un INTERRUPTOR: al activarlo escucha en continuo (se reinicia solo)
     // hasta que lo vuelvas a pulsar. Lo que no es un comando se pasa al asistente IA.
     function startVoice() {
@@ -3031,6 +3031,42 @@
       const gm = t.match(/(?:genera|generar|crea|crear|dibuja|dibujar|imagina|pinta)\b[^]*?(?:imagen|foto|dibujo|render)?\s*(?:de|del|de la|of)?\s*(.+)$/);
       if ((has("genera", "crea una imagen", "dibuja", "imagina", "pinta", "generate image", "create image", "draw")) && gm && gm[1] && gm[1].trim().length > 2)
         return { action: "generate", prompt: gm[1].replace(/[.?!]+$/, "").trim(), text: "Generando imagen…" };
+      const onV = has("muestra", "mostrar", "enciende", "activa", "activar", "pon ", "turn on", "show", "ver ", "detecta", "detección", "deteccion");
+      const offV = has("apaga", "apagar", "oculta", "ocultar", "quita", "quitar", "desactiva", "turn off", "hide", "cierra", "cerrar");
+      // ---- Vehículo seguido (panel #car-tag) ----
+      if (has("cancela rastreo", "cancelar rastreo", "cancela el rastreo", "deja de seguir", "detén el seguimiento", "deten el seguimiento", "stop tracking")) return { action: "cartrackoff", text: "Cancelando rastreo" };
+      if (has("sin órbita", "sin orbita", "seguir sin", "sigue sin", "no orbites", "no orbitar")) return { action: "carfollow", orbit: false, text: "Siguiendo (sin órbita)" };
+      if (has("seguir órbita", "seguir orbita", "sigue en órbita", "sigue en orbita", "en órbita", "en orbita", "orbita el", "órbita el", "seguir en órbita")) return { action: "carfollow", orbit: true, text: "Siguiendo en órbita" };
+      const tagm = t.match(/(?:aplica(?:r)?\s+(?:el\s+)?tag|ponle?\s+(?:el\s+)?tag|etiquétalo|etiquetalo|etiqueta|nómbralo|nombralo|ponle\s+(?:el\s+)?nombre|ll[aá]malo|tag)\s+(.+)$/);
+      if (tagm && tagm[1] && tagm[1].trim().length > 0) return { action: "cartag", tag: tagm[1].replace(/[.?!]+$/, "").trim(), text: "Aplicando etiqueta" };
+      if (has("aplica tag", "aplicar tag", "aplica etiqueta", "aplicar etiqueta", "ponle tag", "pon tag", "etiquétalo", "etiquetalo", "aplica la etiqueta")) return { action: "cartag", text: "¿Qué etiqueta?" };
+      // ---- Día / noche ----
+      if (has("modo noche", "modo nocturno", "vista de noche", "ponlo de noche", "hazlo de noche", "pon de noche", "pasa a noche", "night mode")) return { action: "daynight", mode: "night", text: "Modo noche" };
+      if (has("modo día", "modo dia", "vista de día", "vista de dia", "ponlo de día", "ponlo de dia", "hazlo de día", "pon de día", "pasa a día", "day mode")) return { action: "daynight", mode: "day", text: "Modo día" };
+      if (has("quita día y noche", "apaga día y noche", "sin día y noche", "desactiva día y noche")) return { action: "daynight", mode: "off", text: "Día/Noche apagado" };
+      // ---- OBJETIVO (spy zoom) ----
+      if (has("cierra objetivo", "cerrar objetivo", "salir objetivo", "sal del objetivo", "quita objetivo", "desactiva objetivo", "sal de objetivo")) return { action: "objetivo", on: false, text: "Objetivo cerrado" };
+      if (has("activa objetivo", "activar objetivo", "modo objetivo", "abre objetivo", "abrir objetivo", "entra en objetivo", "spy zoom", "zoom espía", "zoom espia", "pon objetivo")) return { action: "objetivo", on: true, text: "Objetivo activado" };
+      // ---- Norte / hover ----
+      if (has("al norte", "mira al norte", "orienta al norte", "apunta al norte", "norte arriba", "face north", "north up", "orientar al norte")) return { action: "north", text: "Al norte" };
+      if (has("hover", "sobrevuela", "quédate encima", "quedate encima", "orbita el objetivo", "órbita el objetivo")) return { action: "hover", on: true, text: "Hover" };
+      // ---- Detección (personas / estructuras / vehículos) ----
+      if ((onV || offV) && has("personas", "gente", "peatones", "people")) return { action: "detect", kind: "people", on: !offV, text: (offV ? "Ocultando" : "Mostrando") + " personas" };
+      if ((onV || offV) && has("estructuras", "edificios", "structures")) return { action: "detect", kind: "structures", on: !offV, text: (offV ? "Ocultando" : "Mostrando") + " estructuras" };
+      if ((onV || offV) && has("vehículos", "vehiculos", "coches", "autos", "vehicles")) return { action: "detect", kind: "vehicles", on: !offV, text: (offV ? "Ocultando" : "Mostrando") + " vehículos" };
+      // ---- Óptica del visor (OBJETIVO) ----
+      if (has("óptica", "optica", "visor", "scope")) {
+        const opt = has("termal", "térmica", "termica") ? "termal" : (has("nvg", "nocturn") ? "nvg" : (has("flir") ? "flir" : (has("noir") ? "noir" : (has(" sar", "radar sar") ? "sar" : (has(" uv", "ultraviole") ? "uv" : (has("desert", "desierto") ? "desert" : (has("heat", "calor") ? "heat" : null)))))));
+        return opt ? { action: "optic", mode: opt, text: "Óptica " + opt.toUpperCase() } : { action: "optic", text: "Óptica" };
+      }
+      // ---- Foto / galería ----
+      if (has("toma foto", "tomar foto", "toma una foto", "captura", "capturar", "screenshot", "haz una foto", "saca foto", "saca una foto", "take photo", "toma la foto", "captura de pantalla")) return { action: "photo", text: "Tomando foto" };
+      if (has("cierra galería", "cierra galeria", "cerrar galería", "cerrar galeria", "oculta galería", "oculta galeria")) return { action: "gallery", on: false, text: "Galería cerrada" };
+      if ((onV || has("abre", "abrir", "gallery")) && has("galería", "galeria", "fotos", "gallery")) return { action: "gallery", on: true, text: "Galería" };
+      // ---- Paneles (CAPAS) / presets / cerrar ----
+      if (has("abre capas", "muestra capas", "panel de capas", "oculta paneles", "muestra paneles", "botón layer", "boton layer", "toggle capas", "capas panel", "ocultar paneles")) return { action: "panels", text: "Paneles" };
+      if (has("abre presets", "abrir presets", "muestra presets", "menú de presets", "menu de presets", "abre los presets", "abrir los presets")) return { action: "preset", text: "Presets" };
+      if (has("cierra ventanas", "cerrar ventanas", "cierra todo", "cierra las ventanas", "cierra los paneles", "cierra paneles", "cerrar paneles", "close windows", "cierra todas las ventanas")) return { action: "close", text: "Cerrando ventanas" };
       // Ubicación
       if (has("mi ubicaci", "a casa", "llévame a casa", "llevame a casa", "dónde estoy", "donde estoy", "my location", "take me home")) return { action: "mylocation", text: "Yendo a tu ubicación" };
       if (has("street view", "vista de calle")) return { action: "streetview", text: "Street View" };
@@ -3064,6 +3100,12 @@
     }
     async function handleVoice(text) {
       if (!text) return;
+      // 0) ¿Estamos esperando el nombre de la etiqueta del vehículo? → úsalo como tag.
+      if (pendingTag) {
+        pendingTag = false;
+        if ($("car-tag").dataset.car) { applyCarTag(text); setMic(listenMode, "Etiqueta: " + text.trim().toUpperCase()); speak("Etiqueta aplicada: " + text); }
+        return;
+      }
       // 1) Comando común OFFLINE (instantáneo).
       const local = localIntent(text);
       if (local) { execIntent(local); setMic(listenMode, local.text || "Hecho"); return; }
@@ -3105,7 +3147,7 @@
           else if (a.kind === "webcams") { $("wc-traffic").checked = false; scanWebcams(); }
           else scanRadios();
           break;
-        case "preset": applyPreset(a.preset); break;
+        case "preset": if (a.preset) applyPreset(a.preset); else { const b = $("presets-btn"); if (b) b.click(); } break;
         case "mapsource": setMapSource(a.source); break;
         case "track": if (a.callsign && ws) ws.send(JSON.stringify({ type:"track", callsign:a.callsign })); break;
         case "streetview": {
@@ -3113,9 +3155,94 @@
           openStreetView(c.lat, c.lon, (lastSearch && lastSearch.name) || "Aquí");
           break;
         }
+        // ---- Vehículo seguido (panel #car-tag) ----
+        case "carfollow": {
+          if (!$("car-tag").dataset.car) { setMic(listenMode, "Sin vehículo seleccionado"); speak("No hay vehículo seleccionado."); break; }
+          try { setCarFollow(a.orbit !== false); } catch {}   // órbita por defecto
+          setMic(listenMode, a.orbit === false ? "Siguiendo (sin órbita)" : "Siguiendo en órbita");
+          break;
+        }
+        case "cartag": {
+          if (!$("car-tag").classList.contains("on") || !$("car-tag").dataset.car) {
+            setMic(listenMode, "Sin vehículo seleccionado"); speak("No hay vehículo seleccionado."); break;
+          }
+          if (a.tag && String(a.tag).trim()) { applyCarTag(a.tag); setMic(listenMode, "Etiqueta: " + String(a.tag).trim().toUpperCase()); }
+          else { pendingTag = true; try { $("ct-input").focus(); } catch {} speak("¿Qué etiqueta le pongo?"); setMic(listenMode, "Dime la etiqueta…"); }
+          break;
+        }
+        case "cartrackoff": try { cancelCarTracking(false); } catch {} setMic(listenMode, "Rastreo cancelado"); break;
+        // ---- Día / noche ----
+        case "daynight": {
+          try {
+            if (a.mode === "off") { dnEnabled = false; }
+            else { dnEnabled = true; if (a.mode === "day") { dnAuto = false; dnHours = 12; } else if (a.mode === "night") { dnAuto = false; dnHours = 0; } }
+            computeDayNight();
+          } catch {}
+          try { $("dn-on").checked = (a.mode !== "off"); } catch {}
+          try { $("dn-auto").classList.remove("active"); } catch {}
+          try { if (a.mode === "day" || a.mode === "night") $("dn-slider").value = (a.mode === "day" ? 720 : 0); } catch {}  // minutos (12h=720)
+          break;
+        }
+        // ---- OBJETIVO (spy zoom) ----
+        case "objetivo": {
+          const active = (typeof objetivoOn !== "undefined" && objetivoOn);
+          if ((a.on !== false) !== active) { const b = $("spy-btn"); if (b) b.click(); }
+          break;
+        }
+        // ---- Cámara al norte ----
+        case "north": {
+          try { const cam = viewer.camera;
+            viewer.camera.flyTo({ destination: cam.positionWC.clone(),
+              orientation: { heading: 0, pitch: cam.pitch, roll: 0 }, duration: 0.8 });
+          } catch {}
+          break;
+        }
+        // ---- Hover / órbita del objetivo ----
+        case "hover": try { setHover(a.on !== false); } catch {} break;
+        // ---- Detección: personas / estructuras / vehículos ----
+        case "detect": {
+          const on = a.on !== false;
+          try {
+            if (a.kind === "people") showPeople(on);
+            else if (a.kind === "structures") showStruct(on);
+            else if (a.kind === "vehicles") showVeh(on);
+          } catch {}
+          break;
+        }
+        // ---- Óptica del visor (OBJETIVO) ----
+        case "optic":
+          try { if (a.mode) applyOptic(a.mode); else { const b = $("tl-optic"); if (b) b.click(); } } catch {}
+          break;
+        // ---- Tomar foto ----
+        case "photo": try { takePicture(); } catch {} setMic(listenMode, "📸 Foto tomada"); break;
+        // ---- Galería ----
+        case "gallery": {
+          const m = $("shots-modal"); if (!m) break;
+          const want = a.on !== false;
+          m.classList.toggle("on", want);
+          if (want) { try { renderShots(); } catch {} }
+          break;
+        }
+        // ---- Paneles de la izquierda (CAPAS) ----
+        case "panels": { const b = $("panels-btn"); if (b) b.click(); break; }
+        // ---- Cerrar ventanas flotantes ----
+        case "close": {
+          try { if (typeof closeDN === "function") closeDN(); } catch {}
+          try { aiOpen(false); } catch {}
+          ["car-tag", "preset-panel", "shots-modal", "shot-view", "live-modal", "keys-modal", "sim-panel", "daynight"].forEach(id => { const el = $(id); if (el) el.classList.remove("on"); });
+          break;
+        }
         case "generate": if (a.prompt) generateImage(a.prompt); break;
         case "chat": case "ask": if (a.text) aiSay(a.text); break;
       }
+    }
+    // Aplica una etiqueta al vehículo del panel #car-tag (misma lógica que el botón "Aplicar tag").
+    function applyCarTag(text) {
+      const c = trafficCars.get($("car-tag").dataset.car); if (!c) return;
+      c.tag = String(text).trim().toUpperCase();
+      try { $("ct-input").value = c.tag; } catch {}
+      try { styleCar(c, c.tracked); } catch {}
+      if (trackedCarId === c.id) { try { renderVehData(c); } catch {} }
     }
     $("mic-btn").onclick = startVoice;
 
