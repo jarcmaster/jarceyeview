@@ -4465,6 +4465,25 @@
       c.ent.label.fillColor = Cesium.Color.fromCssColorString(on?"#ff9090":"#5fe08a"); c.ent.label.text=carLabel(c);
       c.ent.label.show = (showCarLabels || on); }   // el rastreado se distingue por tamaño y etiqueta roja
     // ---- Rastreo MÚLTIPLE de vehículos ----
+    // Icono SVG base (top-down coloreado) de un coche.
+    function svgIconFor(c){ return carIconFor(c.info&&c.info.color, c.info&&((c.info.make||"")+" "+(c.info.model||""))); }
+    function revertCarIcon(c){ if(c&&c.ent&&c.ent.billboard){ try{ c.ent.billboard.image=svgIconFor(c); }catch{} } }
+    // Icono FOTORREALISTA top-down (con fondo de asfalto) SOLO para el vehículo rastreado.
+    const _carPhotoCache=new Map();
+    async function genCarMapIcon(c){
+      if(!c||!c.ent||!c.info) return;
+      const info=c.info, key=(info.color||"")+"|"+(info.make||"")+"|"+(info.model||"")+"|"+(info.year||"");
+      const apply=(uri)=>{ const cc=trafficCars.get(c.id); if(uri && cc && cc.ent && trackedCarIds.has(c.id)){ cc.photoIcon=uri; cc.ent.billboard.image=uri; } };
+      if(c.photoIcon){ apply(c.photoIcon); return; }
+      if(_carPhotoCache.has(key)){ apply(_carPhotoCache.get(key)); return; }
+      const color=String(info.color||"").trim(), make=String(info.make||"car").trim(), model=String(info.model||"").trim(), year=String(info.year||"").trim();
+      const prompt=`directly overhead top-down satellite view of a single ${color} ${year} ${make} ${model} car, centered, the car fills the frame, parked on plain grey asphalt, photorealistic, high detail, accurate ${color} car paint color, sharp, no text, no people`;
+      try{
+        const r=await (await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({prompt, negative:"wrong color, side view, front view, angled view, text, watermark, blurry, multiple cars, people", width:512, height:512, steps:8})})).json();
+        if(r&&r.b64){ const uri="data:image/png;base64,"+r.b64; _carPhotoCache.set(key,uri); apply(uri); }
+      }catch{}
+    }
     function trackCar(c){   // añade c al rastreo y lo ENFOCA (vídeo + datos)
       if(!c) return;
       trackedCarIds.add(c.id); c.tracked=true; styleCar(c,true);
@@ -4475,11 +4494,12 @@
       trackedCarId=id;
       $("veh-feed").classList.add("on");
       showVehVideo(); renderVehData(c); renderTrackList();
+      genCarMapIcon(c);   // genera/aplica el icono fotorrealista top-down del rastreado
     }
     function untrackCar(id){   // deja de rastrear UNO
       const c=trafficCars.get(id);
       trackedCarIds.delete(id);
-      if(c){ c.tracked=false; styleCar(c,false); }
+      if(c){ c.tracked=false; styleCar(c,false); revertCarIcon(c); }   // vuelve al icono SVG coloreado
       if(trackedCarId===id){        // si era el enfocado, pasa a otro (o ninguno)
         if(carOrbitOn) setCarFollowOff();
         $("car-tag").classList.remove("on"); scopeHalf=null;
@@ -4491,7 +4511,7 @@
     }
     function untrackAll(){   // detiene TODO el rastreo y cierra el panel
       if(carOrbitOn) setCarFollowOff();
-      for(const id of [...trackedCarIds]){ const c=trafficCars.get(id); if(c){ c.tracked=false; styleCar(c,false); } }
+      for(const id of [...trackedCarIds]){ const c=trafficCars.get(id); if(c){ c.tracked=false; styleCar(c,false); revertCarIcon(c); } }
       trackedCarIds.clear(); trackedCarId=null; scopeHalf=null;
       $("car-tag").classList.remove("on"); clearVehData(); renderTrackList();
       $("veh-feed").classList.remove("on"); try{$("veh-video").pause();}catch{}
