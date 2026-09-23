@@ -908,6 +908,7 @@
       <label class="chk" id="lyr-inc-row"><input type="checkbox" id="lyr-inc" /> <span data-ic="car"></span> Incidentes de tráfico</label>
       <label class="chk" id="lyr-fires-row"><input type="checkbox" id="lyr-fires" /> <span class="dot" style="color:#ff6a1a">●</span> Incendios (NASA FIRMS)</label>
       <label class="chk" id="lyr-veh-row"><input type="checkbox" id="lyr-veh" /> <span data-ic="car"></span> Vehículos (simulación)</label>
+      <label class="chk" id="veh-labels-row" style="padding-left:24px;font-size:11px;opacity:.85"><input type="checkbox" id="veh-labels" /> Mostrar etiquetas de vehículos</label>
     </div>
 
     <div id="webcams" class="panel">
@@ -3822,6 +3823,7 @@
       else { stopTraffic(); }
     }
     $("tl-veh").onclick=()=>showVeh(!vehOn);
+    $("veh-labels").addEventListener("change",(e)=>{ showCarLabels=e.target.checked; applyCarLabels(); });
     // CAPAS → Vehículos (simulación): activa/para el tráfico sin necesitar OBJETIVO
     $("lyr-veh").addEventListener("change", (e)=>{
       if(!e.target.checked){ showVeh(false); return; }
@@ -4139,6 +4141,9 @@
     let trafficTimer=null, trafficGraph=null, trafficKeys=[], trafficInner=[], trafficTargetN=0,
         trafficSeq=0, trafficToken=null, trackedCarId=null, trafficCenter=null, trafficRefetch=null, trafficFree=false;
     const trackedCarIds=new Set();   // rastreo MÚLTIPLE: todos los vehículos seguidos (trackedCarId = el enfocado)
+    let showCarLabels=false;   // etiquetas de vehículos OCULTAS por defecto (toggle en CAPAS)
+    const CAR_SCALE=new Cesium.NearFarScalar(100,1.0,4000,0.16);   // los coches se ajustan a la vista (más pequeños al alejar)
+    function applyCarLabels(){ for(const [,c] of trafficCars){ if(c.ent&&c.ent.label) c.ent.label.show = (showCarLabels || c.tracked); } }
 
     // ============= MOTOR DE SIMULACIÓN DE VEHÍCULOS (agentes autónomos · datos 100% ficticios) =============
     const SIMCFG = { MAX_SPEED:12, MIN_SPEED:1, ACCEL:0.9, DECEL:3.2, SAFE_BASE:6, REACTION:0.9, SAFE_CRIT:5,
@@ -4264,9 +4269,9 @@
         // llena las calles del círculo: por nº de nodos y por área, entre 40 y MAX_VEH
         // (varios coches por nodo + alta densidad por km² → permite miles en áreas grandes)
         trafficTargetN = Math.round(Math.max(40, Math.min(Math.min(MAX_VEH_LIMIT, SIMCFG.MAX_VEH), Math.min(trafficInner.length*4, areaKm2*250))) * dmul);
-      } else {   // sin calles (agua/campo o Overpass falló): tráfico libre, poca densidad para no llenar de coches off-road
+      } else {   // sin calles (agua/campo o Overpass falló): MUY pocos coches libres para no llenar de off-road
         trafficFree=true; trafficGraph=null; simLights.clear();
-        trafficTargetN = Math.round(Math.max(20, Math.min(Math.min(MAX_VEH_LIMIT, SIMCFG.MAX_VEH), areaKm2*30)) * dmul);
+        trafficTargetN = Math.round(Math.max(8, Math.min(Math.min(MAX_VEH_LIMIT, SIMCFG.MAX_VEH), Math.min(24, areaKm2*10))) * dmul);
       }
       for(let i=0;i<trafficTargetN;i++) spawnCar();   // aparecen cuando terminan de "cargar"
       $("surv-hud").classList.remove("scanning");
@@ -4303,9 +4308,9 @@
         tracked:false, info:genCarInfo() };
       car.ent=viewer.entities.add({ id, position:Cesium.Cartesian3.fromDegrees(car.lon,car.lat,0),
         billboard:{ image:CAR_IMG, width:32, height:32, rotation:0, alignedAxis:Cesium.Cartesian3.ZERO,
-          disableDepthTestDistance:Number.POSITIVE_INFINITY },
+          scaleByDistance:CAR_SCALE, disableDepthTestDistance:Number.POSITIVE_INFINITY },
         label:{ text:carLabel(car), font:"bold 9px monospace", pixelOffset:new Cesium.Cartesian2(0,-23),
-          fillColor:Cesium.Color.fromCssColorString("#5fe08a"), showBackground:true,
+          show:showCarLabels, fillColor:Cesium.Color.fromCssColorString("#5fe08a"), showBackground:true,
           backgroundColor:Cesium.Color.fromCssColorString("rgba(0,0,0,.6)"), disableDepthTestDistance:Number.POSITIVE_INFINITY,
           distanceDisplayCondition:new Cesium.DistanceDisplayCondition(0,2600) } });
       trafficCars.set(id, car);
@@ -4403,7 +4408,8 @@
     function styleCar(c, on){ if(!c||!c.ent) return;
       c.ent.billboard.width=on?46:32; c.ent.billboard.height=on?46:32;
       c.ent.billboard.color = on?Cesium.Color.fromCssColorString("#ff5252"):Cesium.Color.WHITE;
-      c.ent.label.fillColor = Cesium.Color.fromCssColorString(on?"#ff9090":"#5fe08a"); c.ent.label.text=carLabel(c); }
+      c.ent.label.fillColor = Cesium.Color.fromCssColorString(on?"#ff9090":"#5fe08a"); c.ent.label.text=carLabel(c);
+      c.ent.label.show = (showCarLabels || on); }   // etiqueta visible solo si el toggle está activo o el coche está rastreado
     // ---- Rastreo MÚLTIPLE de vehículos ----
     function trackCar(c){   // añade c al rastreo y lo ENFOCA (vídeo + datos)
       if(!c) return;
