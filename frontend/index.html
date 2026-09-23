@@ -4719,7 +4719,9 @@
          </div>
          <div class="lc-disc">⚠ Análisis IA a partir de la imagen de la zona: placas, modelos y medidas son ESTIMACIONES para demostración, no datos verificados.</div>`;
       if(img && V.length) decorateVehicles(img, V);
-      const btn=$("gen-imgs"); if(btn) btn.onclick=()=>generateViews(img);
+      const btn=$("gen-imgs"); if(btn) btn.onclick=()=>generateViews(img, d);
+      // Auto: en cuanto está el análisis, la IA produce la imagen HD de la zona (autos + estructuras).
+      if(img) generateViews(img, d);
     }
     function cropThumb(el, bb){
       const iw=el.naturalWidth, ih=el.naturalHeight;
@@ -4744,14 +4746,27 @@
       };
       el.src=img;
     }
-    async function generateViews(img){
-      const cont=$("lc-imgs");
-      cont.innerHTML=`<div class="lc-img" id="lci-0"><div class="ph">realzando la zona…</div><div class="cap">Zona realzada</div></div>`;
+    // Resumen de elementos detectados (autos con color/marca + edificio) para guiar el realce HD.
+    function sceneHints(d){
+      if(!d) return "";
+      const parts=[];
+      const V=(d.vehicles||[]).map(v=>[v.color,v.make].filter(Boolean).join(" ").trim()).filter(Boolean).slice(0,12);
+      if(V.length) parts.push(V.length+" cars ("+V.join(", ")+")");
+      const b=d.building||{};
+      const bs=[b.stories, b.use&&(b.use+" building")].filter(Boolean).join(" ");
+      if(bs) parts.push(bs);
+      return parts.join("; ");
+    }
+    async function generateViews(img, d){
+      const cont=$("lc-imgs"); if(!cont) return;
+      cont.innerHTML=`<div class="lc-img" id="lci-0"><div class="ph">realzando la zona en alta resolución…</div><div class="cap">Zona realzada</div></div>`;
+      const hints=sceneHints(d);
+      const prompt="High-definition photorealistic elevated aerial/oblique view of this EXACT scene. Keep the SAME layout: same buildings, streets, trees, cars, colors and positions. Rebuild every structure and every vehicle crisp and sharp: high-detail architecture, clean rooftops, defined edges, realistic materials, and clearly rendered cars with their real colors."+(hints?(" Scene elements to render: "+hints+"."):"")+" Ultra-detailed, high resolution, natural daylight. Do NOT add, remove or move elements.";
       try{
         const r=await (await fetch("/api/enhance",{method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({image:img,prompt:"High-definition photorealistic elevated aerial/oblique view of this exact scene. Keep the SAME layout: same buildings, streets, cars, trees, colors and positions. Rebuild every structure crisp and sharp with high-detail architecture, clean rooftops, defined edges and realistic materials. Ultra-detailed, high resolution, natural daylight. Do NOT add, remove or move elements."})})).json();
+          body:JSON.stringify({image:img,prompt})})).json();
         const el=$("lci-0");
-        if(r.b64) el.innerHTML=`<img src="data:image/png;base64,${r.b64}"><div class="cap">Zona realzada</div>`;
+        if(r.b64) el.innerHTML=`<img src="data:image/png;base64,${r.b64}"><div class="cap">Zona realzada · alta resolución</div>`;
         else if(el) el.querySelector(".ph").textContent="no disponible";
       }catch{ const el=$("lci-0"); if(el) el.querySelector(".ph").textContent="error"; }
     }
