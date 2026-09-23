@@ -2931,8 +2931,11 @@
       ["P_REROUTE","Prob. reruteo"],["LIGHT_GREEN","Semáforo verde (s)"],["MAX_VEH","Máx. vehículos"]];
     function simMarkDirty(){ $("sim-apply").classList.add("dirty"); }
     function renderSimCfg(){ const box=$("sim-cfg");
-      box.innerHTML=CFG_FIELDS.map(([k,l])=>`<div class="cf"><label>${l}</label><input data-cf="${k}" type="number" step="0.001" value="${SIMCFG[k]}"></div>`).join("");
-      box.querySelectorAll("input[data-cf]").forEach(inp=>inp.oninput=()=>{ const v=parseFloat(inp.value); if(!isNaN(v)){ SIMCFG[inp.dataset.cf]=v; simMarkDirty(); } }); }
+      box.innerHTML=CFG_FIELDS.map(([k,l])=>{ const attr = k==="MAX_VEH" ? ` min="1" max="${MAX_VEH_LIMIT}" step="1"` : ' step="0.001"';
+        return `<div class="cf"><label>${l}</label><input data-cf="${k}" type="number"${attr} value="${SIMCFG[k]}"></div>`; }).join("");
+      box.querySelectorAll("input[data-cf]").forEach(inp=>inp.oninput=()=>{ let v=parseFloat(inp.value); if(!isNaN(v)){
+        if(inp.dataset.cf==="MAX_VEH"){ v=Math.max(1, Math.min(MAX_VEH_LIMIT, Math.round(v))); if(String(v)!==inp.value) inp.value=v; }
+        SIMCFG[inp.dataset.cf]=v; simMarkDirty(); } }); }
     function renderSimDash(){ if(!$("sim-panel").classList.contains("on")) return;
       $("sim-stats").innerHTML=
         `<div><span class="k">Vehículos</span> <b>${simStats.n}</b></div><div><span class="k">En marcha</span> <b>${simStats.moving}</b></div>`+
@@ -4140,7 +4143,8 @@
     // ============= MOTOR DE SIMULACIÓN DE VEHÍCULOS (agentes autónomos · datos 100% ficticios) =============
     const SIMCFG = { MAX_SPEED:12, MIN_SPEED:1, ACCEL:0.9, DECEL:3.2, SAFE_BASE:6, REACTION:0.9, SAFE_CRIT:5,
       P_PARK:0.004, P_REROUTE:0.006, DENSITY:1.0, LIGHT_GREEN:26, LIGHT_YELLOW:4,
-      SIM_SPEED:1, WEATHER:"CLEAR", DEBUG:false, SEED:0, MAX_VEH:4000, DECISION_MIN:3, DECISION_MAX:20 };
+      SIM_SPEED:1, WEATHER:"CLEAR", DEBUG:false, SEED:0, MAX_VEH:100, DECISION_MIN:3, DECISION_MAX:20 };
+    const MAX_VEH_LIMIT = 4000;   // tope duro de vehículos (no se puede superar)
     const SIM_DEFAULTS = JSON.parse(JSON.stringify(SIMCFG));   // valores por defecto de SIM
     const WEATHER_FX = { CLEAR:{spd:1,safe:1}, CLOUDY:{spd:0.96,safe:1.05}, RAIN:{spd:0.78,safe:1.5}, FOG:{spd:0.68,safe:1.7} };
     const PROFILES = ["CAUTIOUS","NORMAL","AGGRESSIVE","COMMUTER","DELIVERY","DISTRACTED","INDECISIVE","LOCAL_DRIVER","RANDOM"];
@@ -4259,10 +4263,10 @@
         trafficFree=false; trafficGraph=V; trafficKeys=keys; trafficCenter={lat:survGeo.lat, lon:survGeo.lon}; computeTrafficInner(); buildLights();
         // llena las calles del círculo: por nº de nodos y por área, entre 40 y MAX_VEH
         // (varios coches por nodo + alta densidad por km² → permite miles en áreas grandes)
-        trafficTargetN = Math.round(Math.max(40, Math.min(SIMCFG.MAX_VEH, Math.min(trafficInner.length*4, areaKm2*250))) * dmul);
+        trafficTargetN = Math.round(Math.max(40, Math.min(Math.min(MAX_VEH_LIMIT, SIMCFG.MAX_VEH), Math.min(trafficInner.length*4, areaKm2*250))) * dmul);
       } else {   // sin calles (agua/campo o Overpass falló): tráfico libre, poca densidad para no llenar de coches off-road
         trafficFree=true; trafficGraph=null; simLights.clear();
-        trafficTargetN = Math.round(Math.max(20, Math.min(SIMCFG.MAX_VEH, areaKm2*30)) * dmul);
+        trafficTargetN = Math.round(Math.max(20, Math.min(Math.min(MAX_VEH_LIMIT, SIMCFG.MAX_VEH), areaKm2*30)) * dmul);
       }
       for(let i=0;i<trafficTargetN;i++) spawnCar();   // aparecen cuando terminan de "cargar"
       $("surv-hud").classList.remove("scanning");
