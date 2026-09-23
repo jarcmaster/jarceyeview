@@ -400,8 +400,17 @@
     #veh-feed .pf-count { margin-left:4px; font-size:9.5px; white-space:nowrap; }
     #veh-feed .veh-x { margin-left:4px; cursor:pointer; color:#e0736a; font-size:12px; line-height:1; }
     #veh-feed .veh-x:hover { color:#ff5c50; }
-    .veh-photo { margin:6px 0 2px; } .veh-photo img { width:100%; border-radius:7px; display:block; }
+    .veh-photo { margin:6px 0 2px; position:relative; overflow:hidden; border-radius:7px; }
+    .veh-photo img { width:100%; border-radius:7px; display:block; transition:filter .4s; }
     .veh-photo .vp-ph { font-size:10px; color:#8fb4cc; padding:4px 0; }
+    /* En marcha: la foto vibra/bota suave + estelas de movimiento; detenido: estática */
+    .veh-photo.driving img { animation: carDrive .45s ease-in-out infinite; }
+    .veh-photo.driving::after { content:""; position:absolute; inset:0; pointer-events:none; border-radius:7px;
+      background:repeating-linear-gradient(0deg, rgba(255,255,255,.07) 0 2px, transparent 2px 16px); animation: roadScroll .28s linear infinite; }
+    @keyframes carDrive { 0%{transform:translateY(0)} 25%{transform:translateY(-1.3px)} 50%{transform:translateY(0)} 75%{transform:translateY(1.3px)} 100%{transform:translateY(0)} }
+    @keyframes roadScroll { from{background-position:0 0} to{background-position:0 16px} }
+    /* De noche: oscurece la foto (los faros ya vienen encendidos en la imagen generada) */
+    .veh-photo.night img { filter:brightness(.62) saturate(.85) contrast(1.08); }
     #veh-feed.big { width:344px; }
     #veh-feed.big #veh-data { max-height:62vh; }
     .veh-search { display:flex; gap:5px; padding:6px 8px 2px; align-items:center; }
@@ -4171,6 +4180,10 @@
       else set("vd-dest","—");
       if(carOrbitOn){ const v=$("veh-video");   // pausa el vídeo cuando el vehículo está detenido (mantiene el mismo clip)
         if(stopped){ if(!v.paused) v.pause(); } else { if(v.paused) v.play().catch(()=>{}); } }
+      // Foto del modelo: animación de marcha si se mueve, estática si está parado.
+      const vp=$("veh-photo"); if(vp) vp.classList.toggle("driving", !stopped);
+      // Cambió de día↔noche → regenera la foto (con/ sin faros); cacheada tras la 1ª vez.
+      if(typeof c.photoNight==="boolean" && c.photoNight!==isNightNow()){ genCarMapIcon(c); }
       if(c.info){ const s=document.getElementById("vd-stops"), rr=document.getElementById("vd-reds");
         if(s) s.textContent=c.info.stops; if(rr) rr.textContent=c.info.reds; }
     }
@@ -4487,18 +4500,22 @@
     // Icono SVG base (top-down coloreado) de un coche.
     function svgIconFor(c){ return carIconFor(c.info&&c.info.color, c.info&&((c.info.make||"")+" "+(c.info.model||""))); }
     function revertCarIcon(c){ if(c&&c.ent&&c.ent.billboard){ try{ c.ent.billboard.image=svgIconFor(c); }catch{} } }
-    // Modelo FOTORREALISTA del vehículo rastreado → se muestra en el PANEL (no como icono del mapa,
-    // porque la foto generada no se puede orientar de forma fiable al rumbo).
+    // ¿Es de noche ahora? (según la hora de día/noche del mapa: sol bajo el horizonte)
+    function isNightNow(){ try{ const c=(typeof viewCenter==="function"&&viewCenter())||{lat:40,lon:-73}; return sunElevation(c.lat,c.lon,dnHours) < 0; }catch{ return false; } }
+    // Modelo FOTORREALISTA del vehículo rastreado → se muestra en el PANEL. De día o de NOCHE
+    // (con faros encendidos) según la hora. No se usa como icono del mapa (no se puede orientar fiable).
     const _carPhotoCache=new Map();
     async function genCarMapIcon(c){
       if(!c||!c.info) return;
-      const info=c.info, key=(info.color||"")+"|"+(info.make||"")+"|"+(info.model||"")+"|"+(info.year||"");
-      const show=(uri)=>{ if(trackedCarId!==c.id) return; const box=$("veh-photo"); if(box&&uri) box.innerHTML='<img src="'+uri+'" alt="modelo del vehículo">'; };
-      if(c.photoIcon){ show(c.photoIcon); return; }
+      const night=isNightNow(); c.photoNight=night;
+      const info=c.info, key=(info.color||"")+"|"+(info.make||"")+"|"+(info.model||"")+"|"+(info.year||"")+"|"+(night?"n":"d");
+      const show=(uri)=>{ if(trackedCarId!==c.id) return; const box=$("veh-photo"); if(box&&uri){ box.innerHTML='<img src="'+uri+'" alt="modelo del vehículo">'; box.classList.toggle("night", night); } };
       if(_carPhotoCache.has(key)){ c.photoIcon=_carPhotoCache.get(key); show(c.photoIcon); return; }
-      const box=$("veh-photo"); if(box) box.innerHTML='<div class="vp-ph">generando modelo…</div>';
+      const box=$("veh-photo"); if(box){ box.innerHTML='<div class="vp-ph">generando modelo'+(night?" (noche)":"")+'…</div>'; box.classList.toggle("night", night); }
       const color=String(info.color||"").trim(), make=String(info.make||"car").trim(), model=String(info.model||"").trim(), year=String(info.year||"").trim();
-      const prompt=`photorealistic ${color} ${year} ${make} ${model} car, top-down overhead view, centered on asphalt, high detail, accurate ${color} car paint color, sharp, no text, no people`;
+      const prompt = night
+        ? `photorealistic ${color} ${year} ${make} ${model} car, top-down overhead view at NIGHT, headlights ON glowing bright, dark night street, wet asphalt light reflections, centered, accurate ${color} car paint color, no text, no people`
+        : `photorealistic ${color} ${year} ${make} ${model} car, top-down overhead view in daylight, centered on asphalt, high detail, accurate ${color} car paint color, sharp, no text, no people`;
       try{
         const r=await (await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},
           body:JSON.stringify({prompt, negative:"wrong color, text, watermark, blurry, multiple cars, people", width:512, height:512, steps:8})})).json();
