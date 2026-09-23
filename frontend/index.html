@@ -3876,7 +3876,8 @@
     function showVeh(on){
       vehOn=on; $("tl-veh").classList.toggle("active",on);
       const cb=$("lyr-veh"); if(cb) cb.checked=on;   // sincroniza la casilla de CAPAS
-      if(on){ if(survGeo) startTraffic(); }   // usa el área (persiste aunque OBJETIVO esté apagado)
+      if(on){ ensure2D();   // fuerza imagen aérea 2D (Google Sat): sobre 3D los coches se salen por el relieve
+        if(survGeo) startTraffic(); }   // usa el área (persiste aunque OBJETIVO esté apagado)
       else { stopTraffic(); }
     }
     $("tl-veh").onclick=()=>showVeh(!vehOn);
@@ -4239,9 +4240,10 @@
     // Altura del suelo (3D tiles) en la zona: los coches se colocan a esta altura para pegarse a la
     // superficie real (en vista oblicua, altura 0 los desplazaba fuera de la calle).
     let trafficGroundH=0, _tickN=0;
-    function sampleGroundH(){ try{ if(survGeo && viewer.scene.sampleHeightSupported){
-      const h=viewer.scene.sampleHeight(Cesium.Cartographic.fromDegrees(survGeo.lon, survGeo.lat));
-      if(h!=null && isFinite(h)) trafficGroundH=h; } }catch{} }
+    function sampleAt(lat,lon){ try{ if(viewer.scene.sampleHeightSupported){
+      const h=viewer.scene.sampleHeight(Cesium.Cartographic.fromDegrees(lon,lat));
+      if(h!=null && isFinite(h)) return h; } }catch{} return null; }
+    function sampleGroundH(){ if(survGeo){ const h=sampleAt(survGeo.lat,survGeo.lon); if(h!=null) trafficGroundH=h; } }
     let showCarLabels=false;   // etiquetas de vehículos OCULTAS por defecto (toggle en CAPAS)
     function applyCarLabels(){ for(const [,c] of trafficCars){ if(c.ent&&c.ent.label) c.ent.label.show = (showCarLabels || c.tracked); } }
     // Tamaño real por-coche: el icono (32px base) representa ~6 m sobre el suelo según SU distancia
@@ -4437,7 +4439,8 @@
         reaction:SIMCFG.REACTION*(0.7+srand()*0.8), hold:0, lane:3.0, state:"DRIVING",
         decisionAt: simTime + (SIMCFG.DECISION_MIN + srand()*(SIMCFG.DECISION_MAX-SIMCFG.DECISION_MIN)),
         tracked:false, info:genCarInfo() };
-      car.ent=viewer.entities.add({ id, position:Cesium.Cartesian3.fromDegrees(car.lon,car.lat,trafficGroundH),
+      { const gh=sampleAt(car.lat,car.lon); car.groundH = (gh!=null?gh:trafficGroundH); }
+      car.ent=viewer.entities.add({ id, position:Cesium.Cartesian3.fromDegrees(car.lon,car.lat,car.groundH),
         billboard:{ image:carIconFor(car.info&&car.info.color, car.info&&((car.info.make||"")+" "+(car.info.model||""))),
           width:32, height:32, alignedAxis:Cesium.Cartesian3.ZERO, scale:1,
           rotation:new Cesium.CallbackProperty(()=>((-(car.hd||0))*Math.PI/180)+viewer.camera.heading, false),   // apunta al rumbo real; compensa el giro de cámara (no gira en órbita)
@@ -4455,7 +4458,8 @@
       const V=trafficGraph, rad=scopeRadiusM(), cC=Cesium.Cartesian3.fromDegrees(survGeo.lon,survGeo.lat,0);
       const wx=WEATHER_FX[SIMCFG.WEATHER]||WEATHER_FX.CLEAR;
       const _sp=carScaleParams();   // params de tamaño real (una vez por tick)
-      if(((_tickN=(_tickN||0)+1)%25)===0) sampleGroundH();   // re-muestrea la altura del suelo periódicamente
+      if(((_tickN=(_tickN||0)+1)%25)===0) sampleGroundH();   // altura media de la zona (respaldo)
+      let _reH=(currentSource==="google3d")?5:0;   // solo re-muestrea alturas por-coche si hay relieve (3D)
       rebuildGrid();
       let moving=0,stopped=0,parked=0,sumspd=0;
       for(const [id,c] of trafficCars){
@@ -4507,8 +4511,10 @@
               if(id===trackedCarId && c.info && deg>=3 && srand()<0.22){ if(srand()<0.5) c.info.reds++; else c.info.stops++; }
             } else if(step>0){ c.lat+=(step*Math.cos(c.hd*Math.PI/180))/111320; c.lon+=(step*Math.sin(c.hd*Math.PI/180))/(111320*Math.cos(c.lat*Math.PI/180)||1e-6); } }
         }
-        const hd=c.hd||0, p=offsetRight(c.lat,c.lon,hd,c.lane), pc=Cesium.Cartesian3.fromDegrees(p.lon,p.lat,trafficGroundH);
-        c.ent.position=pc;   // altura del suelo real → sobre la calle en vista oblicua
+        const hd=c.hd||0, p=offsetRight(c.lat,c.lon,hd,c.lane);
+        if(_reH>0 && (_reH--)>0){ const gh=sampleAt(c.lat,c.lon); if(gh!=null) c.groundH=gh; }   // re-muestreo por-coche (pocos por tick)
+        const pc=Cesium.Cartesian3.fromDegrees(p.lon,p.lat,(c.groundH!=null?c.groundH:trafficGroundH));
+        c.ent.position=pc;   // altura del suelo real por coche → sobre la calle en vista oblicua
         c.ent.billboard.scale=carScaleFor(pc, c.tracked, _sp);   // tamaño real según distancia a la cámara
         // stats
         if(c.state==="PARKED") parked++; else if(c.speed<0.4) stopped++; else { moving++; sumspd+=c.speed; }
