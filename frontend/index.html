@@ -4928,7 +4928,7 @@
       const struct=(d.structural||[]).map(s=>`<div class="kv"><span>${s.label||""}</span><span>${s.detail||""}</span></div>`).join("");
       const vehRows = V.map((v,i)=>`<div class="veh-item">
           <div class="vthumb" id="vth-${i}"></div>
-          <div class="vinfo"><div class="vplate">${v.plate||""}</div><div>${v.make||""}</div>
+          <div class="vinfo"><div class="vplate">${v.plate||(v.id||("V"+String(i+1).padStart(2,"0")))}</div><div>${v.make||""}</div>
             <div class="vmeta">${v.year||""} · ${v.color||""}</div>
             <button class="veh-gen" data-i="${i}">🚗 Generar modelo</button>
             <div class="veh-model" id="vmodel-${i}"></div></div>
@@ -4985,7 +4985,7 @@
           if(ovl){ const box=document.createElement("div"); box.className="vbox";
             box.style.left=(bb[0]*100)+"%"; box.style.top=(bb[1]*100)+"%";
             box.style.width=(bb[2]*100)+"%"; box.style.height=(bb[3]*100)+"%";
-            box.innerHTML=`<span class="vtag">${v.id||("V"+(i+1))} · ${v.plate||""}</span>`; ovl.appendChild(box); }
+            box.innerHTML=`<span class="vtag">${v.id||("V"+(i+1))}${v.plate?(" · "+v.plate):""}</span>`; ovl.appendChild(box); }
           const th=$("vth-"+i); if(th){ const u=cropThumb(el,bb); if(u) th.style.backgroundImage=`url(${u})`; }
         });
       };

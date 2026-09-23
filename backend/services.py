@@ -1138,16 +1138,21 @@ Esquema exacto:
  "building":{"stories":"<p.ej. 1 STORY>","area":"<~X sq ft>","built":"<año est.>","use":"<Commercial / Residential / Industrial>","height":"<X ft>"},
  "roof_sections":[{"id":"ROOF SECTION A","material":"<material>","area":"<X sq ft>"}],
  "hvac":[{"id":"HVAC-1","spec":"<X Ton>"}],
- "vehicles":[{"id":"V01","plate":"<placa estimada>","make":"<marca modelo>","year":"<año>","color":"<color REAL visto>","bbox":[x,y,w,h]}],
+ "vehicles":[{"id":"V01","plate":"","make":"<marca modelo>","year":"<año>","color":"<color REAL visto>","bbox":[x,y,w,h]}],
  "structural":[{"label":"ROOF EDGE","detail":"<material>"},{"label":"WALL PANEL","detail":"..."},{"label":"WINDOW SYSTEM","detail":"..."},{"label":"PARKING LOT","detail":"..."}],
  "summary":"<1-2 frases>"
 }
-IMPORTANTE sobre vehículos: detecta TODOS los que realmente se vean en la imagen (hasta 14).
-- "bbox" = caja del vehículo en la imagen, NORMALIZADA 0..1 como [x, y, w, h] (origen arriba-izquierda). Ajústala al vehículo lo mejor posible.
-- "color" DEBE coincidir con el color real que se ve en la foto.
-- La marca/modelo/año/placa son ESTIMACIONES plausibles (la placa no se puede leer: invéntala con formato de matrícula).
-Cuenta también secciones de techo y unidades HVAC reales.
-Si no es un edificio (campo, agua, bosque), adapta building/roof y deja arrays vacíos."""
+REGLAS CRÍTICAS sobre vehículos (síguelas al pie de la letra):
+- Detecta SOLO vehículos que REALMENTE se ven en la imagen (coches/camionetas/furgonetas claramente
+  visibles sobre calles, entradas, aparcamientos o carreteras).
+- Devuelve EXACTAMENTE la cantidad real que ves. Si NO hay ningún vehículo, devuelve "vehicles":[].
+- NO inventes vehículos. NO rellenes hasta un número fijo. Césped, árboles, sombras, tejados, piscinas,
+  arbustos y manchas NO son vehículos: NO los incluyas.
+- "bbox" = caja del vehículo NORMALIZADA 0..1 como [x, y, w, h] (origen arriba-izquierda), ajustada al vehículo.
+- "color" DEBE coincidir con el color real visto. La marca/modelo/año son ESTIMACIONES plausibles.
+- "plate": la placa NO se puede leer desde satélite → deja SIEMPRE "plate":"" (cadena vacía). NUNCA inventes placas.
+Cuenta también secciones de techo y unidades HVAC REALES.
+Si no es un edificio (campo, agua, bosque), adapta building/roof y deja los arrays vacíos."""
 
 
 DIR_SYSTEM = """You are given a TOP-DOWN (bird's eye / overhead) image of a single car on asphalt.
