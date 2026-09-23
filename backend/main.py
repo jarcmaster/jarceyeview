@@ -44,7 +44,7 @@ from fastapi.staticfiles import StaticFiles
 # Permite `from services import ...` sin importar desde dónde se lance uvicorn.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from services import (OpenSky, RouteService, Telegram, aclose, ai_chat, ai_health,
-                      alpr_cameras, analyze_scene, earthquakes, enhance_image,
+                      alpr_cameras, analyze_scene, comfy_host, earthquakes, enhance_image,
                       firms_fires, flight_status, generate_image, geoip, gmap_tile,
                       haversine_km, iss_position, llamacpp_host, ollama_host, radio_stations,
                       rain_radar, revgeo, sd_host, tomtom_tile, traffic_incidents,
@@ -523,9 +523,10 @@ async def config() -> JSONResponse:
         # Voz/IA disponibles vía IA local (llama.cpp / Ollama) o OpenAI.
         "voice": bool(llamacpp_host() or ollama_host() or os.getenv("OPENAI_API_KEY", "")),
         "ai": bool(llamacpp_host() or ollama_host() or os.getenv("OPENAI_API_KEY", "")),
-        "imggen": bool(sd_host() or os.getenv("OPENAI_API_KEY", "")),
+        "imggen": bool(comfy_host() or sd_host() or os.getenv("OPENAI_API_KEY", "")),
         "llamacppHost": llamacpp_host(),
         "ollamaHost": ollama_host(),
+        "comfyHost": comfy_host(),
         "sdHost": sd_host(),
         "traffic": bool(os.getenv("TOMTOM_KEY", "")),
         "gmap2d": bool(os.getenv("GOOGLE_MAPS_API_KEY", "")),
@@ -553,6 +554,7 @@ KEY_DEFS = [
     ("OLLAMA_HOST", "Ollama · Host (IA local)", False, False),
     ("OLLAMA_MODEL", "Ollama · Modelo texto (auto si vacío)", False, False),
     ("OLLAMA_VISION_MODEL", "Ollama · Modelo visión (auto si vacío)", False, False),
+    ("COMFY_HOST", "ComfyUI · Host (generador de imágenes)", False, False),
     ("SD_HOST", "Stable Diffusion · Host (AUTOMATIC1111)", False, False),
     ("OPENAI_API_KEY", "OpenAI (respaldo voz / IA / imágenes)", True, False),
     ("OPENAI_MODEL", "OpenAI · Modelo", False, False),

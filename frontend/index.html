@@ -3151,14 +3151,16 @@
         if (aiHealth.llamacpp) {
           const lbl = aiHealth.llamacppLabel || "llama.cpp";
           const parts = [lbl + (aiHealth.llamacppVision ? " (VL)" : "")];
-          if (aiHealth.sd) parts.push("SD✓");
+          if (aiHealth.comfy) parts.push("🎨 " + (aiHealth.comfyModel || "ComfyUI"));
+          else if (aiHealth.sd) parts.push("SD✓");
           p.textContent = parts.join(" · "); p.style.color = "#8fe6ad";
           p.title = "llama.cpp · " + (aiHealth.llamacppModel || "");
         } else if (aiHealth.ollama) {
           const mdl = aiHealth.visionModel || aiHealth.textModel || "ollama";
           const running = aiHealth.running || [];
           const parts = [running.includes(mdl) ? mdl + " ●" : mdl];  // ● = ya cargado en memoria
-          if (aiHealth.sd) parts.push("SD✓");
+          if (aiHealth.comfy) parts.push("🎨 " + (aiHealth.comfyModel || "ComfyUI"));
+          else if (aiHealth.sd) parts.push("SD✓");
           p.textContent = parts.join(" · "); p.style.color = "#8fe6ad";
           p.title = running.length ? ("Corriendo ahora: " + running.join(", ")) : "Modelo autodetectado (ninguno cargado aún)";
           if (!aiHealth.hasVision) aiAppend("sys", "⚠ Sin modelo de visión. Instala uno: <b>ollama pull llama3.2-vision</b>");
@@ -3234,10 +3236,16 @@
       think.remove();
       if (d && d.b64) {
         const src = d.b64.startsWith("data:") ? d.b64 : "data:image/png;base64," + d.b64;
-        aiAppend("bot", "<img src='" + src + "' alt='generada'>" +
-          "<a class='ai-dl' download='jarceye_ia.png' href='" + src + "'>⬇ Descargar</a>");
+        const node = aiAppend("bot", "<img src='" + src + "' alt='generada'>" +
+          "<a class='ai-dl' download='jarceye_ia.png' href='" + src + "'>⬇ Descargar</a> " +
+          "<a class='ai-dl' data-act='rmmap' style='cursor:pointer'>🗺️ Quitar del mapa</a>" +
+          (d.provider ? "<span class='ai-dl' style='opacity:.6'>· " + esc(d.provider) + "</span>" : ""));
+        // Muéstrala también SOBRE el mapa (billboard en el centro / último lugar buscado).
+        placeImageOnMap(src, prompt);
+        const rm = node.querySelector("[data-act=rmmap]");
+        if (rm) rm.onclick = () => { clearMapImages(); rm.textContent = "🗺️ quitadas"; rm.onclick = null; };
       } else {
-        aiAppend("sys", "⚠ " + esc((d && d.error) || "No se pudo generar. Configura Stable Diffusion (SD_HOST)."));
+        aiAppend("sys", "⚠ " + esc((d && d.error) || "No se pudo generar. Arranca ComfyUI (COMFY_HOST) o configura SD_HOST."));
       }
     }
     // Dictado dentro del asistente → rellena el input y envía
@@ -3764,6 +3772,29 @@
       }
       return count;
     }
+    // Imágenes generadas colocadas sobre el mapa (billboards) — se pueden limpiar.
+    const genImageEntities=new Map();
+    function placeImageOnMap(src, label){
+      let c=null; try{ c=lastSearch||viewCenter(); }catch{}
+      if(!c) return null;
+      const id="gen:"+Date.now()+":"+Math.random().toString(36).slice(2,7);
+      const ent=viewer.entities.add({
+        position:Cesium.Cartesian3.fromDegrees(c.lon, c.lat),
+        billboard:{ image:src, width:180, height:180,
+          verticalOrigin:Cesium.VerticalOrigin.BOTTOM,
+          scaleByDistance:new Cesium.NearFarScalar(500,1.25,2.0e5,0.22),
+          disableDepthTestDistance:Number.POSITIVE_INFINITY },
+        label: label ? { text:String(label).slice(0,40), font:"600 12px system-ui,sans-serif",
+          fillColor:Cesium.Color.WHITE, style:Cesium.LabelStyle.FILL_AND_OUTLINE,
+          outlineColor:Cesium.Color.BLACK, outlineWidth:3, verticalOrigin:Cesium.VerticalOrigin.TOP,
+          pixelOffset:new Cesium.Cartesian2(0,10), scale:0.85,
+          disableDepthTestDistance:Number.POSITIVE_INFINITY } : undefined
+      });
+      genImageEntities.set(id, ent);
+      try{ viewer.flyTo(ent, { duration:1.2, offset:new Cesium.HeadingPitchRange(0, -0.6, 450) }); }catch{}
+      return ent;
+    }
+    function clearMapImages(){ genImageEntities.forEach(e=>viewer.entities.remove(e)); genImageEntities.clear(); }
     async function fetchFeatures(kind){
       const r=scopeBbox(1.4), bb=`(${r.s},${r.w},${r.n},${r.e})`;
       const q = kind==="veh"

@@ -10,6 +10,7 @@ Author: JOSE RODRIGUEZ, Computer Engineer
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import math
@@ -326,6 +327,156 @@ def sd_host() -> str:
     return (os.getenv("SD_HOST", "http://localhost:7860") or "").rstrip("/")
 
 
+# --------------------------------------------------------------------------
+# GENERADOR DE IMÁGENES: ComfyUI (API de workflow en /prompt) — soporta FLUX/SD/SDXL/SD3
+# --------------------------------------------------------------------------
+def comfy_host() -> str:
+    return (os.getenv("COMFY_HOST", "http://127.0.0.1:8188") or "").rstrip("/")
+
+
+_comfy_cache: dict = {"ckpt": None, "t": 0.0, "up": None}
+
+
+async def comfy_ready() -> bool:
+    host = comfy_host()
+    if not host:
+        return False
+    try:
+        r = await _http.get(f"{host}/system_stats", timeout=4)
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
+async def comfy_checkpoint() -> str:
+    """Primer checkpoint disponible en ComfyUI (o COMFY_CKPT si se fija). Cacheado ~60 s."""
+    env = os.getenv("COMFY_CKPT", "").strip()
+    if env:
+        return env
+    now = time.monotonic()
+    if _comfy_cache["ckpt"] and now - _comfy_cache["t"] < 60:
+        return _comfy_cache["ckpt"]
+    ckpt = ""
+    try:
+        r = await _http.get(f"{comfy_host()}/object_info/CheckpointLoaderSimple", timeout=8)
+        r.raise_for_status()
+        opts = r.json()["CheckpointLoaderSimple"]["input"]["required"]["ckpt_name"][0]
+        ckpt = opts[0] if opts else ""
+    except Exception:
+        pass
+    _comfy_cache["ckpt"], _comfy_cache["t"] = ckpt, now
+    return ckpt
+
+
+async def _comfy_upload(image: str) -> str | None:
+    """Sube una imagen base64 a ComfyUI (para img2img). Devuelve el nombre subido."""
+    try:
+        data = base64.b64decode(image.split(",", 1)[-1])
+    except Exception:
+        return None
+    try:
+        r = await _http.post(f"{comfy_host()}/upload/image",
+                             files={"image": ("jarceye_src.png", data, "image/png")},
+                             data={"overwrite": "true", "type": "input"}, timeout=30)
+        r.raise_for_status()
+        return r.json().get("name")
+    except Exception:
+        return None
+
+
+def _comfy_graph(ckpt: str, flux: bool, prompt: str, negative: str, width: int, height: int,
+                 steps: int, seed: int, cfg: float, src: str | None) -> dict:
+    """Arma un workflow txt2img (o img2img si `src`) adaptado a FLUX/SD3 o SD/SDXL."""
+    denoise = (float(os.getenv("SD_DENOISE", "0.6") or 0.6) if src else 1.0)
+    g: dict = {
+        "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": ckpt}},
+        "2": {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["1", 1]}},
+        "4": {"class_type": "CLIPTextEncode", "inputs": {"text": negative or "", "clip": ["1", 1]}},
+        "6": {"class_type": "KSampler", "inputs": {
+            "seed": seed, "steps": steps, "cfg": (1.0 if flux else cfg),
+            "sampler_name": os.getenv("COMFY_SAMPLER", "euler"),
+            "scheduler": os.getenv("COMFY_SCHEDULER", "simple"), "denoise": denoise,
+            "model": ["1", 0], "positive": ["3" if flux else "2", 0],
+            "negative": ["4", 0], "latent_image": None}},
+        "7": {"class_type": "VAEDecode", "inputs": {"samples": ["6", 0], "vae": ["1", 2]}},
+        "8": {"class_type": "SaveImage", "inputs": {"images": ["7", 0], "filename_prefix": "jarceye"}},
+    }
+    if flux:
+        g["3"] = {"class_type": "FluxGuidance", "inputs": {
+            "conditioning": ["2", 0], "guidance": float(os.getenv("FLUX_GUIDANCE", "3.5") or 3.5)}}
+    if src:
+        g["10"] = {"class_type": "LoadImage", "inputs": {"image": src}}
+        g["11"] = {"class_type": "VAEEncode", "inputs": {"pixels": ["10", 0], "vae": ["1", 2]}}
+        g["6"]["inputs"]["latent_image"] = ["11", 0]
+    else:
+        g["5"] = {"class_type": ("EmptySD3LatentImage" if flux else "EmptyLatentImage"),
+                  "inputs": {"width": width, "height": height, "batch_size": 1}}
+        g["6"]["inputs"]["latent_image"] = ["5", 0]
+    return g
+
+
+async def comfy_generate(prompt: str, negative: str = "", width: int = 768, height: int = 768,
+                         steps=None, seed: int = -1, image: str | None = None) -> dict | None:
+    """Genera (o transforma con img2img) una imagen en ComfyUI. Devuelve {b64} o {error}."""
+    host = comfy_host()
+    if not host:
+        return None
+    ckpt = await comfy_checkpoint()
+    if not ckpt:
+        return {"error": "ComfyUI sin checkpoints (revisa models/checkpoints)"}
+    seed = int(seed)
+    if seed < 0:
+        seed = int.from_bytes(os.urandom(4), "big")
+    steps = int(steps or os.getenv("COMFY_STEPS", "20") or 20)
+    cfg = float(os.getenv("SD_CFG", "7") or 7)
+    flux = ("flux" in ckpt.lower() or "sd3" in ckpt.lower())
+    src = None
+    if image:
+        src = await _comfy_upload(image)
+        if not src:
+            return {"error": "ComfyUI: no se pudo subir la imagen base"}
+    graph = _comfy_graph(ckpt, flux, prompt, negative, int(width), int(height),
+                         steps, seed, cfg, src)
+    try:
+        r = await _http.post(f"{host}/prompt", json={"prompt": graph}, timeout=30)
+        r.raise_for_status()
+        pid = r.json().get("prompt_id")
+        if not pid:
+            return {"error": "ComfyUI no aceptó el prompt"}
+    except httpx.HTTPStatusError as e:
+        try:
+            msg = e.response.json().get("error", {}).get("message", "")
+        except Exception:
+            msg = ""
+        return {"error": f"ComfyUI: {msg or ('HTTP ' + str(e.response.status_code))}"}
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"ComfyUI: {type(e).__name__}"}
+    # Espera el resultado (polling del historial). FLUX puede tardar bastante.
+    for _ in range(240):  # ~360 s
+        await asyncio.sleep(1.5)
+        try:
+            entry = (await _http.get(f"{host}/history/{pid}", timeout=10)).json().get(pid)
+        except Exception:
+            continue
+        if not entry:
+            continue
+        if (entry.get("status") or {}).get("status_str") == "error":
+            return {"error": "ComfyUI: el workflow falló (revisa el modelo/VRAM)"}
+        for node in (entry.get("outputs") or {}).values():
+            for im in (node.get("images") or []):
+                if im.get("type") == "temp":
+                    continue
+                try:
+                    v = await _http.get(f"{host}/view", params={
+                        "filename": im["filename"], "subfolder": im.get("subfolder", ""),
+                        "type": im.get("type", "output")}, timeout=30)
+                    v.raise_for_status()
+                    return {"b64": base64.b64encode(v.content).decode(), "provider": "comfyui"}
+                except Exception:
+                    return {"error": "ComfyUI: no se pudo descargar la imagen generada"}
+    return {"error": "ComfyUI: tiempo de espera agotado"}
+
+
 # Familias de modelos con VISIÓN habituales en Ollama (para autodetección).
 _VISION_HINTS = ("llava", "vision", "-vl", "vl-", "qwen2.5vl", "qwen2-vl", "qwen3-vl",
                  "minicpm-v", "moondream", "bakllava", "granite3.2-vision", "gemma3",
@@ -586,6 +737,9 @@ async def ai_health() -> dict:
         "visionModel": vision_model,
         "textModel": text_model,
         "hasVision": lcpp["vision"] or any(_is_vision(m) for m in models),
+        "comfy": await comfy_ready(),
+        "comfyHost": comfy_host(),
+        "comfyModel": _short_model(await comfy_checkpoint()),
         "sd": await sd_ready(),
         "sdHost": sd_host(),
         "openai": bool(os.getenv("OPENAI_API_KEY", "")),
@@ -684,14 +838,27 @@ async def ai_chat(text: str, image: str | None = None, history: list | None = No
 
 async def generate_image(prompt: str, negative: str = "", width: int = 768, height: int = 768,
                          steps=None, seed: int = -1, image: str | None = None) -> dict | None:
-    """Genera una imagen con Stable Diffusion (AUTOMATIC1111). Con `image` usa img2img."""
+    """Genera una imagen. Prioridad: ComfyUI (workflow) → Stable Diffusion (AUTOMATIC1111) →
+       OpenAI. Con `image` hace img2img."""
+    if not (prompt or "").strip() and not image:
+        return {"error": "escribe qué imagen generar"}
+    # 1) ComfyUI (el generador que corre en COMFY_HOST, p.ej. FLUX en :8188).
+    if await comfy_ready():
+        d = await comfy_generate(prompt, negative, width, height, steps, seed, image)
+        if d and d.get("b64"):
+            return d
+        # Si ComfyUI falla, intenta los siguientes; recuerda su error por si no hay otro.
+        comfy_err = (d or {}).get("error")
+    else:
+        comfy_err = None
+    # 2) Stable Diffusion AUTOMATIC1111 (si está configurado).
     host = sd_host()
     if not host or not (prompt or "").strip():
         # Respaldo: OpenAI (solo edición si hay imagen base)
         if image:
             b = await enhance_image(image, prompt or "enhance, sharpen, high detail")
-            return {"b64": b} if b else {"error": "sin generador local (Stable Diffusion) ni OpenAI"}
-        return {"error": "sin generador local (Stable Diffusion): configura SD_HOST"}
+            return {"b64": b} if b else {"error": comfy_err or "sin generador local (ComfyUI/SD) ni OpenAI"}
+        return {"error": comfy_err or "sin generador local: arranca ComfyUI (COMFY_HOST) o configura SD_HOST"}
     payload = {
         "prompt": prompt,
         "negative_prompt": negative or "blurry, low quality, watermark, text, deformed",
