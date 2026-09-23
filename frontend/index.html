@@ -2800,10 +2800,7 @@
     }
     function computeDayNight(){
       if(!dnEnabled){ if(dayNightFilter){ dayNightFilter=""; updateCanvasFilter(); } return; }
-      if(dnAuto){ let h=null;
-        try{ if(vehOn && Number.isFinite(simTime)) h=(simTime/3600)%24; }catch{}   // evita TDZ si aún no se inicializan
-        if(h==null){ const d=new Date(); h=d.getUTCHours()+d.getUTCMinutes()/60; }
-        dnHours=h; }
+      if(dnAuto){ const d=new Date(); dnHours=d.getUTCHours()+d.getUTCMinutes()/60; }   // hora real (UTC); la capa de vehículos NO cambia la iluminación
       let c; try{ c=(typeof viewCenter==="function")&&viewCenter(); }catch{}
       const lat=c?c.lat:40, lon=c?c.lon:-73;
       const elev=sunElevation(lat, lon, dnHours);
