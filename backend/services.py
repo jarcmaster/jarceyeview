@@ -28,6 +28,15 @@ async def aclose() -> None:
     await _http.aclose()
 
 
+def _openai_ok() -> bool:
+    """OpenAI SOLO se usa si hay clave Y no está el modo local (AI_LOCAL_ONLY, activo por defecto).
+       Así la IA local (llama.cpp/Ollama) + ComfyUI son el único camino y nunca aparecen
+       errores de OpenAI (p.ej. 'no credits')."""
+    if not os.getenv("OPENAI_API_KEY", ""):
+        return False
+    return os.getenv("AI_LOCAL_ONLY", "1").strip().lower() not in ("1", "true", "yes", "on")
+
+
 async def geoip() -> dict | None:
     """Ubicación aproximada por IP pública (el backend corre en la máquina del usuario)."""
     try:
@@ -857,7 +866,7 @@ async def ai_chat(text: str, image: str | None = None, history: list | None = No
     if out:
         return {**_chat_parse(out), "provider": prov}
     key = os.getenv("OPENAI_API_KEY", "")
-    if key:
+    if _openai_ok():
         content: list = [{"type": "text", "text": msgs[-1]["content"]}]
         if image:
             url = image if image.startswith("data:") else f"data:image/png;base64,{image}"
@@ -939,9 +948,8 @@ async def voice_intent(text: str) -> dict | None:
             return json.loads(_json_slice(out))
         except Exception:
             pass
-    # 2) Respaldo OpenAI (si hay clave).
-    key = os.getenv("OPENAI_API_KEY", "")
-    if not key:
+    # 2) Respaldo OpenAI (solo si no es modo local-only y hay clave).
+    if not _openai_ok():
         return None
     body = {
         "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
@@ -1056,27 +1064,28 @@ Si no es un edificio (campo, agua, bosque), adapta building/roof y deja arrays v
 async def analyze_scene(image: str, lat: float, lon: float) -> dict | None:
     if not image:
         return None
-    # 1) VISIÓN LOCAL (llama.cpp o Ollama, modelo con visión autodetectado).
-    vis, prov = await local_chat(
-        [{"role": "system", "content": ANALYZE_SYSTEM},
-         {"role": "user", "content": f"Coordenadas: {lat:.6f}, {lon:.6f}. Analiza esta vista."}],
-        images=[image], fmt="json", temperature=0.4, timeout=150)
-    if vis:
-        try:
-            d = json.loads(_json_slice(vis))
-            d["coords"] = f"{lat:.6f}, {lon:.6f}"
-            d["provider"] = prov
-            rg = await revgeo(lat, lon)
-            if rg:
-                d["address"] = rg.get("address", "")
-            return d
-        except Exception:
-            pass
-    # 2) Respaldo OpenAI (gpt-4o visión).
-    key = os.getenv("OPENAI_API_KEY", "")
-    if not key:
-        return {"error": "IA de visión local no disponible y sin OpenAI. Carga un modelo con "
-                         "visión en llama.cpp (p.ej. Qwen3-VL) o en Ollama (`ollama pull llama3.2-vision`)."}
+    # 1) VISIÓN LOCAL (llama.cpp o Ollama, modelo con visión autodetectado). Reintenta por si
+    #    el JSON viene mal formado, en lugar de saltar a la nube.
+    for attempt in range(2):
+        vis, prov = await local_chat(
+            [{"role": "system", "content": ANALYZE_SYSTEM},
+             {"role": "user", "content": f"Coordenadas: {lat:.6f}, {lon:.6f}. Analiza esta vista y responde SOLO el JSON del esquema."}],
+            images=[image], fmt="json", temperature=(0.4 if attempt == 0 else 0.2), timeout=180)
+        if vis:
+            try:
+                d = json.loads(_json_slice(vis))
+                d["coords"] = f"{lat:.6f}, {lon:.6f}"
+                d["provider"] = prov
+                rg = await revgeo(lat, lon)
+                if rg:
+                    d["address"] = rg.get("address", "")
+                return d
+            except Exception:
+                continue
+    # 2) Respaldo OpenAI (gpt-4o visión) — SOLO si no es modo local-only y hay clave.
+    if not _openai_ok():
+        return {"error": "IA de visión local no respondió. Verifica que llama.cpp (Qwen3-VL) o un "
+                         "modelo con visión en Ollama esté cargado y disponible."}
     url = image if image.startswith("data:") else f"data:image/png;base64,{image}"
     body = {
         "model": "gpt-4o", "temperature": 0.4, "max_tokens": 1600,
@@ -1111,9 +1120,9 @@ async def analyze_scene(image: str, lat: float, lon: float) -> dict | None:
 
 async def _openai_edit(image: str, prompt: str) -> str | None:
     """Edición de imagen con OpenAI (gpt-image-1). Devuelve base64 o None."""
-    key = os.getenv("OPENAI_API_KEY", "")
-    if not key:
+    if not _openai_ok():
         return None
+    key = os.getenv("OPENAI_API_KEY", "")
     try:
         raw = base64.b64decode(image.split(",", 1)[-1])
         r = await _http.post("https://api.openai.com/v1/images/edits",

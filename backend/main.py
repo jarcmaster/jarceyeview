@@ -554,6 +554,7 @@ KEY_DEFS = [
     ("OLLAMA_HOST", "Ollama · Host (IA local)", False, False),
     ("OLLAMA_MODEL", "Ollama · Modelo texto (auto si vacío)", False, False),
     ("OLLAMA_VISION_MODEL", "Ollama · Modelo visión (auto si vacío)", False, False),
+    ("AI_LOCAL_ONLY", "IA · Solo local (1=sí, no usa OpenAI)", False, False),
     ("COMFY_HOST", "ComfyUI · Host (generador de imágenes)", False, False),
     ("SD_HOST", "Stable Diffusion · Host (AUTOMATIC1111)", False, False),
     ("OPENAI_API_KEY", "OpenAI (respaldo voz / IA / imágenes)", True, False),
