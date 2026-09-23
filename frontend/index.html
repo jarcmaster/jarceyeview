@@ -395,15 +395,17 @@
     #veh-data .vd-warn { color:#ffb4b4; }
     #veh-feed .veh-expand { margin-left:auto; cursor:pointer; color:#7fd3ff; display:inline-flex; }
     #veh-feed .veh-expand:hover { color:#bfe9ff; }
-    #veh-feed .pf-count { margin-left:8px; }
-    #veh-feed .veh-x { margin-left:8px; cursor:pointer; color:#e0736a; font-size:13px; line-height:1; }
+    #veh-feed .pf-head { font-size:10px; letter-spacing:.3px; gap:5px; padding:7px 9px; }
+    #veh-feed .pf-title { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #veh-feed .pf-count { margin-left:4px; font-size:9.5px; white-space:nowrap; }
+    #veh-feed .veh-x { margin-left:4px; cursor:pointer; color:#e0736a; font-size:12px; line-height:1; }
     #veh-feed .veh-x:hover { color:#ff5c50; }
     #veh-feed.big { width:344px; }
     #veh-feed.big #veh-data { max-height:62vh; }
-    .veh-search { display:flex; gap:5px; padding:6px 8px 2px; }
-    .veh-search input { flex:1; min-width:0; background:#0a1520; border:1px solid #244; color:#dff; border-radius:5px; padding:5px 7px; font:inherit; font-size:11px; outline:none; }
+    .veh-search { display:flex; gap:4px; padding:6px 8px 2px; align-items:stretch; }
+    .veh-search input { flex:1; min-width:0; background:#0a1520; border:1px solid #244; color:#dff; border-radius:5px; padding:4px 7px; font:inherit; font-size:11px; outline:none; }
     .veh-search input:focus { border-color:#2fa7d8; }
-    .veh-search button { background:#123; border:1px solid #244; color:#7fd3ff; border-radius:5px; padding:4px 8px; cursor:pointer; }
+    .veh-search button { flex:0 0 auto; background:#123; border:1px solid #244; color:#7fd3ff; border-radius:5px; padding:0 6px; font-size:11px; line-height:1; cursor:pointer; }
     .veh-search button:hover { background:#1a3550; }
     #veh-q-msg { padding:0 8px; font-size:10px; color:#e0a86a; min-height:0; }
     #veh-q-msg:empty { display:none; }
@@ -1103,7 +1105,7 @@
 
   <!-- Rastreo de vehículos (ventana movible, vídeo local) -->
   <div id="veh-feed">
-    <div class="pf-head"><span class="pf-live">●</span> RASTREO DE VEHÍCULOS
+    <div class="pf-head"><span class="pf-live">●</span><span class="pf-title">RASTREO DE VEHÍCULOS</span>
       <span class="veh-expand" title="Ampliar detalle"><span data-ic="expand"></span></span><span class="pf-count">TRK</span>
       <span class="veh-x" id="veh-x" title="Cerrar (detiene todo el rastreo)">✕</span></div>
     <div class="veh-search">
