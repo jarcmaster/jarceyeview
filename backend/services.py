@@ -1,5 +1,6 @@
 """
 Servicios externos y utilidades para JARC's EYE View.
+Author: JOSE RODRIGUEZ, Computer Engineer
 
 - OpenSky:  posiciones ADS-B en vivo (por bbox o por icao24).
 - Routes:   origen/destino de un vuelo a partir del callsign (hexdb.io).

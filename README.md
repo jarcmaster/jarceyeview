@@ -1,5 +1,7 @@
 # JARC's EYE View — Rastreador de vuelos en vivo
 
+> **Autor:** JOSE RODRIGUEZ, Computer Engineer
+
 Panel de monitoreo en tiempo real sobre un globo 3D fotorrealista
 (**CesiumJS + Google Photorealistic 3D Tiles**), con backend en **Python (FastAPI)**
 que empuja datos por **WebSocket**.

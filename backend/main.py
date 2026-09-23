@@ -1,6 +1,8 @@
 """
 JARC's EYE View - Backend
 ========================
+Author: JOSE RODRIGUEZ, Computer Engineer
+
 FastAPI + WebSocket. Aviones en vivo (OpenSky) sobre el globo, más:
   #1 estelas/interpolación (lo hace el frontend con los datos que enviamos)
   #2 filtros (frontend)
