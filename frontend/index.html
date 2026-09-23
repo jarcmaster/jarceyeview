@@ -3064,11 +3064,19 @@
           break;
         case "mylocation": flyToMyLocation(); break;
         case "layer": {
-          const id = { quakes:"lyr-quakes", iss:"lyr-iss", rain:"lyr-rain" }[a.layer];
+          const id = { planes:"lyr-planes", quakes:"lyr-quakes", iss:"lyr-iss", rain:"lyr-rain",
+            traffic:"lyr-traffic", streets:"lyr-streets", ships:"lyr-ships", alpr:"lyr-alpr",
+            cameras:"lyr-alpr", inc:"lyr-inc", incidents:"lyr-inc", fires:"lyr-fires",
+            veh:"lyr-veh", vehicles:"lyr-veh" }[a.layer];
           if (id) { const cb = $(id), want = a.on !== false;
-            if (cb.checked !== want) { cb.checked = want; cb.dispatchEvent(new Event("change")); } }
+            if (cb && cb.checked !== want) { cb.checked = want; cb.dispatchEvent(new Event("change")); } }
           break;
         }
+        case "pois":
+          showPOIs(a.kind || "parks", a.on).then(n => {
+            if (typeof n === "number") aiAppend("sys", "📍 " + n + " " + ((a.kind === "parks" || !a.kind) ? "parques / zonas verdes" : "POIs") + " en la vista.");
+          }).catch(() => {});
+          break;
         case "scan":
           if (a.kind === "traffic") { $("wc-traffic").checked = true; scanWebcams(); }
           else if (a.kind === "webcams") { $("wc-traffic").checked = false; scanWebcams(); }
@@ -3154,11 +3162,41 @@
       let d = null;
       try {
         d = await (await fetch("/api/ai/chat", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, image: img, history: aiHistory.slice(0, -1) }) })).json();
+          body: JSON.stringify({ text, image: img, history: aiHistory.slice(0, -1), context: mapContext() }) })).json();
       } catch {}
       think.remove();
-      if (d && d.reply) { aiSay(d.reply); }
+      if (d && d.reply) { aiSay(d.reply); if (d.action) execIntent(d.action); }
+      else if (d && d.action) { execIntent(d.action); }
       else { aiAppend("sys", "⚠ " + esc((d && d.error) || "Sin respuesta de la IA.")); }
+    }
+    // Estado en vivo del mapa que se envía a la IA (para responder "cuántas cámaras hay", etc.).
+    function mapContext() {
+      const num = fn => { try { return fn() | 0; } catch { return 0; } };
+      const on = id => { try { return !!$(id).checked; } catch { return false; } };
+      let loc = null; try { const c = viewCenter(); if (c) loc = { lat: +c.lat.toFixed(5), lon: +c.lon.toFixed(5) }; } catch {}
+      return {
+        location: loc,
+        layers: {
+          planes: on("lyr-planes"), quakes: on("lyr-quakes"), iss: on("lyr-iss"), rain: on("lyr-rain"),
+          traffic: on("lyr-traffic"), streets: on("lyr-streets"), ships: on("lyr-ships"),
+          alpr: on("lyr-alpr"), incidents: on("lyr-inc"), fires: on("lyr-fires"), vehicles: on("lyr-veh")
+        },
+        counts: {
+          flights: num(() => entities.size),
+          flights_airborne: num(() => +$("n-air").textContent),
+          flights_ground: num(() => +$("n-ground").textContent),
+          flights_emergency: num(() => +$("n-emerg").textContent),
+          earthquakes: num(() => quakeEnts.length),
+          ships: num(() => shipEntities.size),
+          alpr_cameras: num(() => alprEntities.size),
+          traffic_incidents: num(() => incEntities.size),
+          fires: num(() => fireEntities.size),
+          webcams: num(() => webcamEntities.size),
+          radios: num(() => radioEntities.size),
+          sim_vehicles: num(() => trafficCars.size),
+          parks_shown: num(() => poiEntities.size)
+        }
+      };
     }
     async function generateImage(prompt, opts) {
       prompt = (prompt || "").trim(); if (!prompt) return;
@@ -3673,6 +3711,35 @@
         }catch{}
       }
       return [];
+    }
+    // POIs (parques / zonas verdes) sobre la VISTA actual — los pide la IA con {action:"pois"}.
+    const poiEntities=new Map();
+    async function showPOIs(kind, on){
+      if(on===false){ poiEntities.forEach(e=>viewer.entities.remove(e)); poiEntities.clear(); return 0; }
+      const rect=viewer.camera.computeViewRectangle();
+      if(!rect) return 0;
+      const D=Cesium.Math.toDegrees;
+      const s=D(rect.south), w=D(rect.west), n=D(rect.north), e=D(rect.east);
+      const bb=`(${s},${w},${n},${e})`;
+      const q=`[out:json][timeout:20];(way["leisure"~"park|garden|playground|recreation_ground|nature_reserve|dog_park"]${bb};way["landuse"~"grass|forest|meadow|village_green|recreation_ground"]${bb};);out geom 200;`;
+      const key="poi:"+kind+":"+s.toFixed(4)+","+w.toFixed(4)+","+n.toFixed(4)+","+e.toFixed(4);
+      let els=[]; try{ els=await overpass(q,key); }catch{}
+      poiEntities.forEach(en=>viewer.entities.remove(en)); poiEntities.clear();
+      const seen=new Set(); let count=0;
+      for(const el of (els||[])){
+        const g=el.geometry; if(!g||!g.length) continue;
+        let la=0,lo=0; for(const p of g){ la+=p.lat; lo+=p.lon; } la/=g.length; lo/=g.length;
+        const name=(el.tags&&el.tags.name)||"Parque";
+        const sig=name+"|"+la.toFixed(4)+"|"+lo.toFixed(4); if(seen.has(sig)) continue; seen.add(sig);
+        const en=viewer.entities.add({
+          position:Cesium.Cartesian3.fromDegrees(lo,la),
+          point:{ pixelSize:10, color:Cesium.Color.fromCssColorString("#39d98a"), outlineColor:Cesium.Color.BLACK, outlineWidth:1.5, disableDepthTestDistance:Number.POSITIVE_INFINITY },
+          label:{ text:name, font:"600 12px system-ui,sans-serif", fillColor:Cesium.Color.WHITE, style:Cesium.LabelStyle.FILL_AND_OUTLINE, outlineColor:Cesium.Color.BLACK, outlineWidth:3, pixelOffset:new Cesium.Cartesian2(0,-16), scale:0.9, disableDepthTestDistance:Number.POSITIVE_INFINITY, translucencyByDistance:new Cesium.NearFarScalar(1.5e3,1.0,4e5,0.0) }
+        });
+        poiEntities.set("poi:"+(el.id||count), en); count++;
+        if(count>=200) break;
+      }
+      return count;
     }
     async function fetchFeatures(kind){
       const r=scopeBbox(1.4), bb=`(${r.s},${r.w},${r.n},${r.e})`;

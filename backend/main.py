@@ -479,7 +479,8 @@ async def api_generate(payload: dict) -> JSONResponse:
 @app.post("/api/ai/chat")
 async def api_ai_chat(payload: dict) -> JSONResponse:
     return JSONResponse(await ai_chat(
-        payload.get("text", ""), payload.get("image"), payload.get("history")))
+        payload.get("text", ""), payload.get("image"), payload.get("history"),
+        payload.get("context")))
 
 
 @app.get("/api/ai/health")

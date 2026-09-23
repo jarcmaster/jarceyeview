@@ -289,7 +289,8 @@ Responde SOLO JSON válido: {"action":"...", ...campos, "text":"confirmación br
 Acciones válidas:
 - {"action":"flyto","place":"<lugar>","text":"..."}          (volar a una ciudad/lugar)
 - {"action":"mylocation","text":"..."}                        (ir a mi ubicación)
-- {"action":"layer","layer":"quakes|iss|rain","on":true|false,"text":"..."}
+- {"action":"layer","layer":"planes|quakes|iss|rain|traffic|streets|ships|alpr|inc|fires|veh","on":true|false,"text":"..."}
+- {"action":"pois","kind":"parks","on":true|false,"text":"..."}  (mostrar/ocultar parques y zonas verdes de la vista)
 - {"action":"scan","kind":"radio|webcams|traffic","text":"..."}
 - {"action":"preset","preset":"normal|crt|nvg|flir|anime|noir|snow","text":"..."}
 - {"action":"mapsource","source":"google3d|bing|binglabels|esri|osm","text":"..."}
@@ -308,6 +309,8 @@ Ejemplos:
 "cambia a OpenStreetMap" -> {"action":"mapsource","source":"osm","text":"Mapa OSM"}
 "escanea radios" -> {"action":"scan","kind":"radio","text":"Escaneando radios"}
 "cámaras de carretera" -> {"action":"scan","kind":"traffic","text":"Cámaras de tráfico"}
+"muéstrame los parques de esta zona" -> {"action":"pois","kind":"parks","on":true,"text":"Marcando los parques"}
+"enciende las cámaras ALPR" -> {"action":"layer","layer":"alpr","on":true,"text":"Cámaras ALPR activadas"}
 "llévame a casa" -> {"action":"mylocation","text":"Yendo a tu ubicación"}"""
 
 
@@ -589,35 +592,90 @@ async def ai_health() -> dict:
     }
 
 
-CHAT_SYSTEM = """Eres JARC, el asistente de IA de JARC'S EYE View, un sistema de vigilancia y mapa 3D tipo "God's Eye".
-Respondes en español, claro y conciso. Si te adjuntan una imagen del mapa, descríbela y analízala.
-NO inventes ni proporciones datos personales reales de personas físicas (nombres, direcciones, matrículas, teléfonos)."""
+CHAT_SYSTEM = """Eres JARC, el copiloto de IA de JARC'S EYE View, un mapa 3D de vigilancia tipo "God's Eye".
+Puedes CONTROLAR el mapa y RESPONDER preguntas sobre su estado en vivo.
+
+Recibes el ESTADO ACTUAL DEL MAPA en JSON (ubicación del centro, capas activas y conteos de entidades
+visibles: vuelos, cámaras ALPR, webcams, barcos, terremotos, incendios, incidentes, vehículos...).
+ÚSALO para responder. Preguntas como "cuántas cámaras hay" o "qué capas están activas" se responden con
+esos números; NUNCA digas que no puedes ver el mapa: tienes el estado delante.
+
+Responde SIEMPRE en JSON válido con esta forma exacta:
+{"reply":"<respuesta en español, breve y clara>", "action": <objeto de acción o null>}
+
+"action" ejecuta algo en el mapa; usa null si solo respondes una pregunta. Formas válidas de "action":
+- {"action":"flyto","place":"<lugar>"}                         (volar a una ciudad/lugar)
+- {"action":"mylocation"}                                       (ir a mi ubicación)
+- {"action":"layer","layer":"planes|quakes|iss|rain|traffic|streets|ships|alpr|inc|fires|veh","on":true|false}
+- {"action":"pois","kind":"parks","on":true|false}             (marcar/ocultar parques y zonas verdes de la vista)
+- {"action":"scan","kind":"radio|webcams|traffic"}             (escanear emisoras/webcams/cámaras de tráfico)
+- {"action":"preset","preset":"normal|crt|nvg|flir|anime|noir|snow"}
+- {"action":"mapsource","source":"google3d|bing|binglabels|esri|osm"}
+- {"action":"track","callsign":"<callsign>"}                   (rastrear un vuelo)
+- {"action":"streetview"}                                      (Street View del punto actual)
+- {"action":"generate","prompt":"<descripción en inglés>"}     (generar una imagen)
+
+Reglas:
+- Si el usuario pide una acción (muéstrame X, activa/apaga X, vuela a X, genera X), incluye "action" y confírmalo en "reply".
+- Si es una PREGUNTA sobre el estado (cuántos/qué hay/qué está activo), usa el ESTADO y responde en "reply" con "action": null.
+- La capa "alpr" son las cámaras ALPR; "veh" los vehículos simulados; "inc" los incidentes de tráfico.
+- Si te adjuntan una imagen del mapa, analízala en "reply".
+- NO inventes datos personales reales de personas (nombres, direcciones, matrículas, teléfonos).
+
+Ejemplos:
+"cuántas cámaras hay en el mapa" -> {"reply":"En la vista hay 12 cámaras ALPR y 3 webcams.","action":null}
+"muéstrame los parques de esta zona" -> {"reply":"Marcando los parques y zonas verdes de la vista.","action":{"action":"pois","kind":"parks","on":true}}
+"apaga el radar de lluvia" -> {"reply":"Radar de lluvia apagado.","action":{"action":"layer","layer":"rain","on":false}}
+"vuela a Tokio" -> {"reply":"Volando a Tokio.","action":{"action":"flyto","place":"Tokyo"}}"""
 
 
-async def ai_chat(text: str, image: str | None = None, history: list | None = None) -> dict:
-    """Asistente de IA general (texto y/o visión) vía Ollama, con respaldo OpenAI."""
-    msgs = [{"role": "system", "content": CHAT_SYSTEM}]
+def _chat_parse(out: str) -> dict:
+    """Convierte la salida JSON del modelo en {reply, action}. Tolera texto plano."""
+    try:
+        d = json.loads(_json_slice(out))
+        reply = (d.get("reply") or d.get("text") or "").strip()
+        action = d.get("action")
+        if not isinstance(action, dict) or not action.get("action"):
+            action = None
+        if reply or action:
+            return {"reply": reply or "Hecho.", "action": action}
+    except Exception:
+        pass
+    return {"reply": (out or "").strip(), "action": None}
+
+
+async def ai_chat(text: str, image: str | None = None, history: list | None = None,
+                  context: dict | None = None) -> dict:
+    """Copiloto de IA (texto/visión) consciente del mapa: responde y puede devolver una acción."""
+    sys = CHAT_SYSTEM
+    if context:
+        try:
+            sys += "\n\nESTADO ACTUAL DEL MAPA (JSON):\n" + json.dumps(context, ensure_ascii=False)[:2000]
+        except Exception:
+            pass
+    msgs = [{"role": "system", "content": sys}]
     for h in (history or [])[-6:]:
         if isinstance(h, dict) and h.get("role") in ("user", "assistant") and h.get("content"):
             msgs.append({"role": h["role"], "content": str(h["content"])[:2000]})
     msgs.append({"role": "user", "content": (text or "").strip() or "Describe y analiza esta vista."})
     out, prov = await local_chat(msgs, images=[image] if image else None,
-                                 temperature=0.4, timeout=120)
+                                 fmt="json", temperature=0.3, timeout=120)
     if out:
-        return {"reply": out, "provider": prov}
+        return {**_chat_parse(out), "provider": prov}
     key = os.getenv("OPENAI_API_KEY", "")
     if key:
         content: list = [{"type": "text", "text": msgs[-1]["content"]}]
         if image:
             url = image if image.startswith("data:") else f"data:image/png;base64,{image}"
             content.append({"type": "image_url", "image_url": {"url": url}})
-        body = {"model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"), "temperature": 0.4,
+        body = {"model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"), "temperature": 0.3,
+                "response_format": {"type": "json_object"},
                 "messages": msgs[:-1] + [{"role": "user", "content": content}]}
         try:
             r = await _http.post("https://api.openai.com/v1/chat/completions",
                                  headers={"Authorization": f"Bearer {key}"}, json=body, timeout=90)
             r.raise_for_status()
-            return {"reply": r.json()["choices"][0]["message"]["content"], "provider": "openai"}
+            return {**_chat_parse(r.json()["choices"][0]["message"]["content"]), "provider": "openai"}
         except Exception:
             pass
     return {"error": "IA no disponible. Arranca tu servidor llama.cpp (llama-server) o "
