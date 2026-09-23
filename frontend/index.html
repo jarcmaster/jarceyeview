@@ -3118,9 +3118,12 @@
         aiHealth = await (await fetch("/api/ai/health")).json();
         const p = $("ai-prov");
         if (aiHealth.ollama) {
-          const parts = [aiHealth.visionModel || aiHealth.textModel || "ollama"];
+          const mdl = aiHealth.visionModel || aiHealth.textModel || "ollama";
+          const running = aiHealth.running || [];
+          const parts = [running.includes(mdl) ? mdl + " ●" : mdl];  // ● = ya cargado en memoria
           if (aiHealth.sd) parts.push("SD✓");
           p.textContent = parts.join(" · "); p.style.color = "#8fe6ad";
+          p.title = running.length ? ("Corriendo ahora: " + running.join(", ")) : "Modelo autodetectado (ninguno cargado aún)";
           if (!aiHealth.hasVision) aiAppend("sys", "⚠ Sin modelo de visión. Instala uno: <b>ollama pull llama3.2-vision</b>");
         } else if (aiHealth.openai) {
           p.textContent = "OpenAI (respaldo)"; p.style.color = "#e8c86a";

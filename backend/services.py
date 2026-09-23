@@ -345,6 +345,7 @@ def _json_slice(s: str) -> str:
 
 
 async def ollama_models() -> list[str]:
+    """Modelos INSTALADOS en Ollama (/api/tags)."""
     host = ollama_host()
     if not host:
         return []
@@ -354,6 +355,30 @@ async def ollama_models() -> list[str]:
         return [m.get("name", "") for m in (r.json().get("models") or []) if m.get("name")]
     except Exception:
         return []
+
+
+async def ollama_running() -> list[str]:
+    """Modelos actualmente CARGADOS en memoria (Ollama /api/ps): la IA que corre ahora."""
+    host = ollama_host()
+    if not host:
+        return []
+    try:
+        r = await _http.get(f"{host}/api/ps", timeout=5)
+        r.raise_for_status()
+        return [m.get("name", "") for m in (r.json().get("models") or []) if m.get("name")]
+    except Exception:
+        return []
+
+
+def _prefer_running(running: list[str], vision: bool) -> str:
+    """Del conjunto ya cargado en memoria, elige el más apto (visión/texto). '' si no hay."""
+    if not running:
+        return ""
+    if vision:
+        rv = [m for m in running if _is_vision(m)]
+        return rv[0] if rv else ""
+    rt = [m for m in running if "embed" not in m.lower()]
+    return rt[0] if rt else ""
 
 
 def _pick_from(models: list[str], vision: bool) -> str:
@@ -372,6 +397,17 @@ def _pick_from(models: list[str], vision: bool) -> str:
 
 
 async def pick_model(vision: bool) -> str:
+    """Elige el modelo a usar, en este orden:
+       1) preferencia explícita en .env (OLLAMA_MODEL / OLLAMA_VISION_MODEL)
+       2) el modelo que YA esté corriendo/cargado en Ollama (/api/ps) → sin recargar
+       3) autodetección entre los instalados (/api/tags)
+    """
+    env = os.getenv("OLLAMA_VISION_MODEL" if vision else "OLLAMA_MODEL", "").strip()
+    if env:
+        return env
+    pref = _prefer_running(await ollama_running(), vision)
+    if pref:
+        return pref
     return _pick_from(await ollama_models(), vision)
 
 
@@ -418,12 +454,18 @@ async def sd_ready() -> bool:
 async def ai_health() -> dict:
     """Estado de la IA local: Ollama (modelos, visión) + Stable Diffusion."""
     models = await ollama_models()
+    running = await ollama_running()
+    env_txt = os.getenv("OLLAMA_MODEL", "").strip()
+    env_vis = os.getenv("OLLAMA_VISION_MODEL", "").strip()
+    text_model = env_txt or _prefer_running(running, False) or (_pick_from(models, False) if models else "")
+    vision_model = env_vis or _prefer_running(running, True) or (_pick_from(models, True) if models else "")
     return {
         "ollama": bool(models),
         "ollamaHost": ollama_host(),
         "models": models,
-        "visionModel": _pick_from(models, True) if models else "",
-        "textModel": _pick_from(models, False) if models else "",
+        "running": running,
+        "visionModel": vision_model,
+        "textModel": text_model,
         "hasVision": any(_is_vision(m) for m in models),
         "sd": await sd_ready(),
         "sdHost": sd_host(),
