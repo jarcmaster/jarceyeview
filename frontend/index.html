@@ -2988,23 +2988,40 @@
       $("mic-btn").classList.toggle("listening", !!listening);
       if (text != null) micStatus.textContent = text;
     }
-    let recognizing = false, recog = null;
+    let recognizing = false, recog = null, listenMode = false;
+    // El micrófono es un INTERRUPTOR: al activarlo escucha en continuo (se reinicia solo)
+    // hasta que lo vuelvas a pulsar. Lo que no es un comando se pasa al asistente IA.
     function startVoice() {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SR) { alert("Tu navegador no soporta dictado por voz. Usa Chrome o Edge, servido por http://localhost."); return; }
-      if (recognizing) { recog && recog.stop(); return; }
-      recog = new SR(); recog.lang = "es-ES"; recog.interimResults = true; recog.continuous = false;
-      recog.onstart = () => { recognizing = true; setMic(true, "Escuchando…"); };
+      listenMode = !listenMode;
+      if (!listenMode) { try { recog && recog.stop(); } catch {} setMic(false, "Pide o comanda"); return; }
+      beginRecog();
+    }
+    function beginRecog() {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR || recognizing) return;
+      recog = new SR(); recog.lang = "es-ES"; recog.interimResults = true; recog.continuous = true;
+      recog.onstart = () => { recognizing = true; setMic(true, "Escucha activa…"); };
       recog.onresult = (e) => {
-        let t = ""; for (const r of e.results) t += r[0].transcript;
-        setMic(true, t);
-        if (e.results[e.results.length - 1].isFinal) handleVoice(t.trim());
+        if (window.speechSynthesis && speechSynthesis.speaking) return;  // no te escuches a ti mismo (TTS)
+        const res = e.results[e.results.length - 1];
+        const t = (res[0].transcript || "").trim();
+        if (t) setMic(true, t);
+        if (res.isFinal && t.length > 1) handleVoice(t);
       };
-      recog.onerror = (e) => { recognizing = false;
-        setMic(false, e.error === "not-allowed" ? "Permite el micrófono" :
-                      e.error === "no-speech" ? "No escuché nada" : "Pide o comanda"); };
-      recog.onend = () => { recognizing = false; $("mic-btn").classList.remove("listening"); };
-      recog.start();
+      recog.onerror = (e) => {
+        if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+          listenMode = false; setMic(false, "Permite el micrófono");
+        }
+        // "no-speech" / "aborted" / "network": onend lo reintenta si sigue activo.
+      };
+      recog.onend = () => {
+        recognizing = false;
+        if (listenMode) { setTimeout(beginRecog, 350); }   // sigue escuchando
+        else { setMic(false, "Pide o comanda"); }
+      };
+      try { recog.start(); } catch {}
     }
     // Intérprete rápido OFFLINE (sin red): resuelve los comandos comunes al instante.
     function localIntent(raw) {
@@ -3047,15 +3064,21 @@
     }
     async function handleVoice(text) {
       if (!text) return;
+      // 1) Comando común OFFLINE (instantáneo).
       const local = localIntent(text);
-      if (local) { execIntent(local); setMic(false, local.text || "Hecho"); return; }
-      setMic(false, "⋯ pensando: " + text);
+      if (local) { execIntent(local); setMic(listenMode, local.text || "Hecho"); return; }
+      // 2) Interpretación rápida de comando por el LLM (una sola acción).
+      setMic(listenMode, "⋯ " + text);
       let a = null;
       try { a = await (await fetch("/api/voice", { method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ text }) })).json(); } catch {}
-      if (!a) { setMic(false, "IA no disponible (Ollama)"); return; }
-      execIntent(a);
-      setMic(false, a.text || "Pide o comanda");
+      if (a && a.action && !["say", "ask", "chat"].includes(a.action)) {
+        execIntent(a); setMic(listenMode, a.text || "Hecho"); return;
+      }
+      // 3) No es un comando reconocido → pásalo al asistente IA (con contexto del mapa).
+      setMic(listenMode, "Preguntando a la IA…");
+      aiOpen(true);
+      aiSend(text);
     }
     function execIntent(a) {
       switch (a.action) {
