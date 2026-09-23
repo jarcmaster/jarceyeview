@@ -15,3 +15,6 @@ Thumbs.db
 
 # Vídeos locales servidos por el frontend (no subir al repo)
 frontend/assets/*.mp4
+
+# Caché local del backend (datos de calles OSM/Overpass) — no subir
+.cache/
