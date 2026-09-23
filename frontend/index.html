@@ -3862,7 +3862,7 @@
         .forEach(([lo,la])=>{ r=Math.max(r, Cesium.Cartesian3.distance(c, Cesium.Cartesian3.fromDegrees(lo,la,0))); });
       return Math.max(60, r*0.94);
     }
-    function scopeBbox(mult){ const r=Math.min(scopeRadiusM()*(mult||1.4), 4000);   // tope: consulta rápida aunque el círculo sea enorme
+    function scopeBbox(mult){ const r=Math.min(scopeRadiusM()*(mult||1.4), 2800);   // tope: consulta de calles fiable (evita timeout->modo libre off-road)
       const dLat=r/111320, dLon=r/(111320*Math.cos(survGeo.lat*Math.PI/180)||1e-6);
       return { s:survGeo.lat-dLat, n:survGeo.lat+dLat, w:survGeo.lon-dLon, e:survGeo.lon+dLon }; }
     function makeWanderEnt(kind){
@@ -3946,7 +3946,7 @@
     async function fetchFeatures(kind){
       const r=scopeBbox(1.4), bb=`(${r.s},${r.w},${r.n},${r.e})`;
       const q = kind==="veh"
-        ? `[out:json][timeout:25];(way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|road|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"]["access"!~"^(no|private)$"]${bb};);out geom 12000;`
+        ? `[out:json][timeout:25];(way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|road|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"]["access"!~"^(no|private)$"]${bb};);out geom 8000;`
         : `[out:json][timeout:20];(way["building"]${bb};way["leisure"~"park|garden|pitch|playground|recreation_ground|golf_course"]${bb};way["landuse"~"grass|recreation_ground|forest|meadow|cemetery"]${bb};);out geom 400;`;
       const key = kind+":"+r.s.toFixed(4)+","+r.w.toFixed(4)+","+r.n.toFixed(4)+","+r.e.toFixed(4);
       return await overpass(q, key);
@@ -4260,9 +4260,9 @@
         // llena las calles del círculo: por nº de nodos y por área, entre 40 y MAX_VEH
         // (varios coches por nodo + alta densidad por km² → permite miles en áreas grandes)
         trafficTargetN = Math.round(Math.max(40, Math.min(SIMCFG.MAX_VEH, Math.min(trafficInner.length*4, areaKm2*250))) * dmul);
-      } else {   // SIEMPRE hay vehículos: si no hay calles, tráfico libre que concentra todo el círculo
+      } else {   // sin calles (agua/campo o Overpass falló): tráfico libre, poca densidad para no llenar de coches off-road
         trafficFree=true; trafficGraph=null; simLights.clear();
-        trafficTargetN = Math.round(Math.max(40, Math.min(SIMCFG.MAX_VEH, areaKm2*200)) * dmul);
+        trafficTargetN = Math.round(Math.max(20, Math.min(SIMCFG.MAX_VEH, areaKm2*30)) * dmul);
       }
       for(let i=0;i<trafficTargetN;i++) spawnCar();   // aparecen cuando terminan de "cargar"
       $("surv-hud").classList.remove("scanning");
