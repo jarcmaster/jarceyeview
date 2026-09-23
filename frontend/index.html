@@ -3117,7 +3117,13 @@
       try {
         aiHealth = await (await fetch("/api/ai/health")).json();
         const p = $("ai-prov");
-        if (aiHealth.ollama) {
+        if (aiHealth.llamacpp) {
+          const lbl = aiHealth.llamacppLabel || "llama.cpp";
+          const parts = [lbl + (aiHealth.llamacppVision ? " (VL)" : "")];
+          if (aiHealth.sd) parts.push("SD✓");
+          p.textContent = parts.join(" · "); p.style.color = "#8fe6ad";
+          p.title = "llama.cpp · " + (aiHealth.llamacppModel || "");
+        } else if (aiHealth.ollama) {
           const mdl = aiHealth.visionModel || aiHealth.textModel || "ollama";
           const running = aiHealth.running || [];
           const parts = [running.includes(mdl) ? mdl + " ●" : mdl];  // ● = ya cargado en memoria
@@ -3129,7 +3135,7 @@
           p.textContent = "OpenAI (respaldo)"; p.style.color = "#e8c86a";
         } else {
           p.textContent = "IA offline"; p.style.color = "#e0483f";
-          aiAppend("sys", "⚠ Ollama no responde en " + esc(aiHealth.ollamaHost || "localhost:11434") + ". Ejecuta <b>ollama serve</b>.");
+          aiAppend("sys", "⚠ Sin IA local. Arranca <b>llama.cpp</b> (" + esc(aiHealth.llamacppHost || "127.0.0.1:8080") + ") o <b>Ollama</b> (" + esc(aiHealth.ollamaHost || "localhost:11434") + ").");
         }
         if (aiHealth.sd) $("ai-attach").title = "Adjuntar la vista actual del mapa";
       } catch { $("ai-prov").textContent = "sin backend"; }

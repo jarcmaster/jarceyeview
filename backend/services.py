@@ -440,6 +440,106 @@ async def ollama_chat(messages: list, model: str | None = None, images: list | N
         return None
 
 
+# --------------------------------------------------------------------------
+# IA LOCAL: llama.cpp (llama-server, OpenAI-compatible en /v1/*)
+# --------------------------------------------------------------------------
+def llamacpp_host() -> str:
+    return (os.getenv("LLAMACPP_HOST", "http://127.0.0.1:8080") or "").rstrip("/")
+
+
+def _short_model(path_or_name: str) -> str:
+    """Nombre corto para mostrar: basename del gguf sin extensión."""
+    n = (path_or_name or "").replace("\\", "/").rsplit("/", 1)[-1]
+    return n[:-5] if n.lower().endswith(".gguf") else (n or path_or_name)
+
+
+_lcpp_cache: dict = {"t": 0.0, "info": None}
+
+
+async def llamacpp_info(force: bool = False) -> dict:
+    """Estado del servidor llama.cpp (cacheado ~8 s):
+       {up, model, vision}. Autodetecta el modelo cargado y si es multimodal."""
+    now = time.monotonic()
+    cached = _lcpp_cache["info"]
+    if not force and cached is not None and now - _lcpp_cache["t"] < 8:
+        return cached
+    info = {"up": False, "model": "", "vision": False}
+    host = llamacpp_host()
+    if host:
+        try:
+            r = await _http.get(f"{host}/v1/models", timeout=5)
+            r.raise_for_status()
+            j = r.json()
+            data = j.get("data") or []
+            info["model"] = (data[0].get("id") if data else "") or ""
+            caps: list = []
+            for m in (j.get("models") or []):
+                caps = m.get("capabilities") or caps
+            info["vision"] = ("multimodal" in caps) or _is_vision(info["model"])
+            info["up"] = bool(info["model"])
+        except Exception:
+            pass
+    _lcpp_cache["t"], _lcpp_cache["info"] = now, info
+    return info
+
+
+async def llamacpp_chat(messages: list, model: str | None = None, images: list | None = None,
+                        fmt: str | None = None, temperature: float = 0.2,
+                        timeout: float = 90) -> str | None:
+    """Chat contra llama.cpp (/v1/chat/completions, formato OpenAI). Visión vía image_url."""
+    host = llamacpp_host()
+    if not host:
+        return None
+    mdl = model or (await llamacpp_info())["model"] or "local"
+    msgs = [dict(m) for m in messages]
+    if images:
+        for m in reversed(msgs):
+            if m.get("role") == "user":
+                txt = m.get("content") if isinstance(m.get("content"), str) else ""
+                content: list = [{"type": "text", "text": txt or "Analiza esta imagen."}]
+                for im in images:
+                    if not im:
+                        continue
+                    url = im if im.startswith("data:") else f"data:image/png;base64,{im}"
+                    content.append({"type": "image_url", "image_url": {"url": url}})
+                m["content"] = content
+                break
+    body = {"model": mdl, "messages": msgs, "stream": False, "temperature": temperature}
+    if fmt == "json":
+        body["response_format"] = {"type": "json_object"}
+    try:
+        r = await _http.post(f"{host}/v1/chat/completions", json=body, timeout=timeout)
+        r.raise_for_status()
+        return ((r.json().get("choices") or [{}])[0].get("message") or {}).get("content")
+    except Exception:
+        return None
+
+
+async def local_chat(messages: list, images: list | None = None, fmt: str | None = None,
+                     temperature: float = 0.2, timeout: float = 90) -> tuple[str | None, str | None]:
+    """Chat contra el backend LOCAL disponible. Devuelve (texto, proveedor).
+       AI_BACKEND controla la prioridad: 'auto' (por defecto) → llama.cpp si responde,
+       luego Ollama; o fija 'llamacpp' / 'ollama'."""
+    want_vision = bool(images)
+    pref = (os.getenv("AI_BACKEND", "auto") or "auto").strip().lower()
+    order = {"llamacpp": ["llamacpp"], "ollama": ["ollama"]}.get(pref, ["llamacpp", "ollama"])
+    for b in order:
+        if b == "llamacpp":
+            info = await llamacpp_info()
+            if info["up"] and (info["vision"] or not want_vision):
+                out = await llamacpp_chat(messages, model=info["model"], images=images,
+                                          fmt=fmt, temperature=temperature, timeout=timeout)
+                if out is not None:
+                    return out, "llamacpp"
+        else:
+            if await ollama_models():
+                out = await ollama_chat(messages, images=images, fmt=fmt,
+                                        temperature=temperature, timeout=timeout)
+                if out is not None:
+                    return out, "ollama"
+    return None, None
+
+
 async def sd_ready() -> bool:
     host = sd_host()
     if not host:
@@ -452,21 +552,37 @@ async def sd_ready() -> bool:
 
 
 async def ai_health() -> dict:
-    """Estado de la IA local: Ollama (modelos, visión) + Stable Diffusion."""
+    """Estado de la IA local: llama.cpp + Ollama (modelos, visión) + Stable Diffusion."""
     models = await ollama_models()
     running = await ollama_running()
+    lcpp = await llamacpp_info(force=True)
     env_txt = os.getenv("OLLAMA_MODEL", "").strip()
     env_vis = os.getenv("OLLAMA_VISION_MODEL", "").strip()
     text_model = env_txt or _prefer_running(running, False) or (_pick_from(models, False) if models else "")
     vision_model = env_vis or _prefer_running(running, True) or (_pick_from(models, True) if models else "")
+    pref = (os.getenv("AI_BACKEND", "auto") or "auto").strip().lower()
+    if lcpp["up"] and pref in ("auto", "llamacpp"):
+        active = "llamacpp"
+    elif models and pref in ("auto", "ollama"):
+        active = "ollama"
+    elif os.getenv("OPENAI_API_KEY", ""):
+        active = "openai"
+    else:
+        active = ""
     return {
+        "active": active,
+        "llamacpp": lcpp["up"],
+        "llamacppHost": llamacpp_host(),
+        "llamacppModel": lcpp["model"],
+        "llamacppLabel": _short_model(lcpp["model"]),
+        "llamacppVision": lcpp["vision"],
         "ollama": bool(models),
         "ollamaHost": ollama_host(),
         "models": models,
         "running": running,
         "visionModel": vision_model,
         "textModel": text_model,
-        "hasVision": any(_is_vision(m) for m in models),
+        "hasVision": lcpp["vision"] or any(_is_vision(m) for m in models),
         "sd": await sd_ready(),
         "sdHost": sd_host(),
         "openai": bool(os.getenv("OPENAI_API_KEY", "")),
@@ -485,10 +601,10 @@ async def ai_chat(text: str, image: str | None = None, history: list | None = No
         if isinstance(h, dict) and h.get("role") in ("user", "assistant") and h.get("content"):
             msgs.append({"role": h["role"], "content": str(h["content"])[:2000]})
     msgs.append({"role": "user", "content": (text or "").strip() or "Describe y analiza esta vista."})
-    out = await ollama_chat(msgs, images=[image] if image else None,
-                            temperature=0.4, timeout=120)
+    out, prov = await local_chat(msgs, images=[image] if image else None,
+                                 temperature=0.4, timeout=120)
     if out:
-        return {"reply": out, "provider": "ollama"}
+        return {"reply": out, "provider": prov}
     key = os.getenv("OPENAI_API_KEY", "")
     if key:
         content: list = [{"type": "text", "text": msgs[-1]["content"]}]
@@ -504,8 +620,8 @@ async def ai_chat(text: str, image: str | None = None, history: list | None = No
             return {"reply": r.json()["choices"][0]["message"]["content"], "provider": "openai"}
         except Exception:
             pass
-    return {"error": "IA no disponible. Verifica que Ollama esté corriendo (ollama serve) "
-                     "o configura OPENAI_API_KEY."}
+    return {"error": "IA no disponible. Arranca tu servidor llama.cpp (llama-server) o "
+                     "Ollama (ollama serve), o configura OPENAI_API_KEY."}
 
 
 async def generate_image(prompt: str, negative: str = "", width: int = 768, height: int = 768,
@@ -544,14 +660,13 @@ async def generate_image(prompt: str, negative: str = "", width: int = 768, heig
 
 
 async def voice_intent(text: str) -> dict | None:
-    """Interpreta una orden de voz en una acción de navegación (Ollama local → OpenAI)."""
+    """Interpreta una orden de voz en una acción de navegación (IA local → OpenAI)."""
     text = (text or "").strip()
     if not text:
         return None
-    # 1) IA LOCAL (Ollama): modelo de texto autodetectado, salida JSON.
-    out = await ollama_chat(
+    # 1) IA LOCAL (llama.cpp o Ollama, autodetectado): salida JSON.
+    out, _ = await local_chat(
         [{"role": "system", "content": VOICE_SYSTEM}, {"role": "user", "content": text}],
-        model=os.getenv("OLLAMA_MODEL", "").strip() or None,
         fmt="json", temperature=0, timeout=25)
     if out:
         try:
@@ -675,8 +790,8 @@ Si no es un edificio (campo, agua, bosque), adapta building/roof y deja arrays v
 async def analyze_scene(image: str, lat: float, lon: float) -> dict | None:
     if not image:
         return None
-    # 1) VISIÓN LOCAL (Ollama): modelo con visión autodetectado.
-    vis = await ollama_chat(
+    # 1) VISIÓN LOCAL (llama.cpp o Ollama, modelo con visión autodetectado).
+    vis, prov = await local_chat(
         [{"role": "system", "content": ANALYZE_SYSTEM},
          {"role": "user", "content": f"Coordenadas: {lat:.6f}, {lon:.6f}. Analiza esta vista."}],
         images=[image], fmt="json", temperature=0.4, timeout=150)
@@ -684,7 +799,7 @@ async def analyze_scene(image: str, lat: float, lon: float) -> dict | None:
         try:
             d = json.loads(_json_slice(vis))
             d["coords"] = f"{lat:.6f}, {lon:.6f}"
-            d["provider"] = "ollama"
+            d["provider"] = prov
             rg = await revgeo(lat, lon)
             if rg:
                 d["address"] = rg.get("address", "")
@@ -694,8 +809,8 @@ async def analyze_scene(image: str, lat: float, lon: float) -> dict | None:
     # 2) Respaldo OpenAI (gpt-4o visión).
     key = os.getenv("OPENAI_API_KEY", "")
     if not key:
-        return {"error": "IA de visión local (Ollama) no disponible y sin OpenAI. "
-                         "Instala un modelo con visión: `ollama pull llama3.2-vision`."}
+        return {"error": "IA de visión local no disponible y sin OpenAI. Carga un modelo con "
+                         "visión en llama.cpp (p.ej. Qwen3-VL) o en Ollama (`ollama pull llama3.2-vision`)."}
     url = image if image.startswith("data:") else f"data:image/png;base64,{image}"
     body = {
         "model": "gpt-4o", "temperature": 0.4, "max_tokens": 1600,

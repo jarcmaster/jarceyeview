@@ -46,7 +46,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from services import (OpenSky, RouteService, Telegram, aclose, ai_chat, ai_health,
                       alpr_cameras, analyze_scene, earthquakes, enhance_image,
                       firms_fires, flight_status, generate_image, geoip, gmap_tile,
-                      haversine_km, iss_position, ollama_host, radio_stations,
+                      haversine_km, iss_position, llamacpp_host, ollama_host, radio_stations,
                       rain_radar, revgeo, sd_host, tomtom_tile, traffic_incidents,
                       voice_intent, webcams)
 
@@ -519,10 +519,11 @@ async def config() -> JSONResponse:
         "telegram": telegram.configured,
         "flightStatus": bool(os.getenv("AVIATIONSTACK_KEY", "")),
         "webcams": bool(os.getenv("WINDY_WEBCAMS_KEY", "")),
-        # Voz/IA disponibles vía Ollama local (host por defecto) o OpenAI.
-        "voice": bool(ollama_host() or os.getenv("OPENAI_API_KEY", "")),
-        "ai": bool(ollama_host() or os.getenv("OPENAI_API_KEY", "")),
+        # Voz/IA disponibles vía IA local (llama.cpp / Ollama) o OpenAI.
+        "voice": bool(llamacpp_host() or ollama_host() or os.getenv("OPENAI_API_KEY", "")),
+        "ai": bool(llamacpp_host() or ollama_host() or os.getenv("OPENAI_API_KEY", "")),
         "imggen": bool(sd_host() or os.getenv("OPENAI_API_KEY", "")),
+        "llamacppHost": llamacpp_host(),
         "ollamaHost": ollama_host(),
         "sdHost": sd_host(),
         "traffic": bool(os.getenv("TOMTOM_KEY", "")),
@@ -546,6 +547,8 @@ KEY_DEFS = [
     ("TELEGRAM_CHAT_ID", "Telegram · Chat ID", False, True),
     ("AVIATIONSTACK_KEY", "AviationStack (estado de vuelo)", True, False),
     ("WINDY_WEBCAMS_KEY", "Windy Webcams", True, False),
+    ("LLAMACPP_HOST", "llama.cpp · Host (llama-server)", False, False),
+    ("AI_BACKEND", "IA local · backend (auto/llamacpp/ollama)", False, False),
     ("OLLAMA_HOST", "Ollama · Host (IA local)", False, False),
     ("OLLAMA_MODEL", "Ollama · Modelo texto (auto si vacío)", False, False),
     ("OLLAMA_VISION_MODEL", "Ollama · Modelo visión (auto si vacío)", False, False),
