@@ -4037,11 +4037,13 @@
     }
     function clearMapImages(){ genImageEntities.forEach(e=>viewer.entities.remove(e)); genImageEntities.clear(); }
     async function fetchFeatures(kind){
-      const r=scopeBbox(1.4), bb=`(${r.s},${r.w},${r.n},${r.e})`;
+      const r=scopeBbox(1.4), GR=0.012;   // rejilla ~1.3 km: bbox redondeado → áreas cercanas comparten caché (menos consultas a Overpass, evita rate-limit)
+      const s=Math.floor(r.s/GR)*GR, w=Math.floor(r.w/GR)*GR, n=Math.ceil(r.n/GR)*GR, e=Math.ceil(r.e/GR)*GR;
+      const bb=`(${s.toFixed(4)},${w.toFixed(4)},${n.toFixed(4)},${e.toFixed(4)})`;
       const q = kind==="veh"
         ? `[out:json][timeout:25];(way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|road|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"]["access"!~"^(no|private)$"]${bb};);out geom 8000;`
         : `[out:json][timeout:20];(way["building"]${bb};way["leisure"~"park|garden|pitch|playground|recreation_ground|golf_course"]${bb};way["landuse"~"grass|recreation_ground|forest|meadow|cemetery"]${bb};);out geom 400;`;
-      const key = kind+":"+r.s.toFixed(4)+","+r.w.toFixed(4)+","+r.n.toFixed(4)+","+r.e.toFixed(4);
+      const key = kind+":"+bb;   // misma clave para bboxes redondeados iguales
       return await overpass(q, key);
     }
     async function startWander(kind){

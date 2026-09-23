@@ -79,9 +79,9 @@ def _ov_disk_write(query: str, els: list) -> None:
         pass
 
 
-async def _overpass_one(ep: str, query: str) -> list | None:
+async def _overpass_one(ep: str, query: str, timeout: float) -> list | None:
     try:
-        r = await _http.post(ep, data={"data": query}, timeout=20)
+        r = await _http.post(ep, data={"data": query}, timeout=timeout)
         if r.status_code != 200:
             return None
         els = [e for e in (r.json().get("elements") or [])
@@ -92,8 +92,9 @@ async def _overpass_one(ep: str, query: str) -> list | None:
 
 
 async def overpass_query(query: str, key: str = "") -> list:
-    """Consulta Overpass en PARALELO en varios servidores (gana el primero que responde con
-       datos), con caché de 5 min por `key`. Evita que un servidor lento cuelgue la respuesta."""
+    """Consulta Overpass SECUENCIAL (una petición a la vez, timeout corto) con failover y caché
+       en memoria (5 min) + disco (30 días). Secuencial = amable con el rate-limit de Overpass
+       (no dispara varias peticiones a la vez)."""
     if not (query or "").strip():
         return []
     now = time.monotonic()
@@ -107,18 +108,17 @@ async def overpass_query(query: str, key: str = "") -> list:
         if key:
             _overpass_cache[key] = (now, disk)
         return disk
-    tasks = [asyncio.create_task(_overpass_one(ep, query)) for ep in _OVERPASS_EPS]
+    # Overpass LOCAL (si OVERPASS_URL está configurado) primero: fiable, sin rate-limit.
+    eps = list(_OVERPASS_EPS)
+    local = os.getenv("OVERPASS_URL", "").strip()
+    if local:
+        eps = [local] + eps
     result: list = []
-    try:
-        for coro in asyncio.as_completed(tasks, timeout=25):
-            els = await coro
-            if els:
-                result = els
-                break
-    except Exception:
-        pass
-    for t in tasks:
-        t.cancel()
+    for ep in eps:                               # uno a la vez, abandonando rápido el lento
+        els = await _overpass_one(ep, query, timeout=(20 if ep == local else 9))
+        if els:
+            result = els
+            break
     if result:
         if key:
             _overpass_cache[key] = (now, result)
