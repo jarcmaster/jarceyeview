@@ -1150,6 +1150,31 @@ Cuenta también secciones de techo y unidades HVAC reales.
 Si no es un edificio (campo, agua, bosque), adapta building/roof y deja arrays vacíos."""
 
 
+DIR_SYSTEM = """You are given a TOP-DOWN (bird's eye / overhead) image of a single car on asphalt.
+Determine the direction the FRONT of the car (hood, windshield, headlights) points toward.
+Use an angle in DEGREES where 0 = towards the TOP of the image and the angle increases CLOCKWISE
+(90 = right, 180 = bottom, 270 = left).
+Respond with ONLY valid JSON: {"angle": <integer 0-359>}."""
+
+
+async def image_direction(image: str) -> dict:
+    """Ángulo (0=arriba, horario) hacia el que apunta el FRENTE del coche en una imagen top-down,
+       usando el modelo de visión local. Devuelve {"angle": <0-359>}."""
+    if not image:
+        return {"angle": 0}
+    out, _ = await local_chat(
+        [{"role": "system", "content": DIR_SYSTEM},
+         {"role": "user", "content": "¿Hacia qué ángulo apunta el frente del coche? Responde solo el JSON."}],
+        images=[image], fmt="json", temperature=0, timeout=45)
+    if out:
+        try:
+            a = float(json.loads(_json_slice(out)).get("angle", 0))
+            return {"angle": a % 360}
+        except Exception:
+            pass
+    return {"angle": 0}
+
+
 async def analyze_scene(image: str, lat: float, lon: float) -> dict | None:
     if not image:
         return None

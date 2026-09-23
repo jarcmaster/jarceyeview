@@ -45,6 +45,7 @@ from fastapi.staticfiles import StaticFiles
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from services import (OpenSky, RouteService, Telegram, aclose, ai_chat, ai_health,
                       alpr_cameras, analyze_scene, comfy_host, earthquakes, enhance_image,
+                      image_direction,
                       firms_fires, flight_status, generate_image, geoip, gmap_tile,
                       haversine_km, iss_position, llamacpp_host, ollama_host, overpass_query,
                       radio_stations,
@@ -477,6 +478,11 @@ async def api_revgeo(lat: float, lon: float) -> JSONResponse:
 async def api_overpass(payload: dict) -> JSONResponse:
     els = await overpass_query(payload.get("query", ""), payload.get("key", ""))
     return JSONResponse({"elements": els})
+
+
+@app.post("/api/imgdir")
+async def api_imgdir(payload: dict) -> JSONResponse:
+    return JSONResponse(await image_direction(payload.get("image", "")))
 
 
 @app.post("/api/analyze")

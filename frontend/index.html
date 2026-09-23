@@ -400,6 +400,8 @@
     #veh-feed .pf-count { margin-left:4px; font-size:9.5px; white-space:nowrap; }
     #veh-feed .veh-x { margin-left:4px; cursor:pointer; color:#e0736a; font-size:12px; line-height:1; }
     #veh-feed .veh-x:hover { color:#ff5c50; }
+    .veh-photo { margin:6px 0 2px; } .veh-photo img { width:100%; border-radius:7px; display:block; }
+    .veh-photo .vp-ph { font-size:10px; color:#8fb4cc; padding:4px 0; }
     #veh-feed.big { width:344px; }
     #veh-feed.big #veh-data { max-height:62vh; }
     .veh-search { display:flex; gap:5px; padding:6px 8px 2px; align-items:center; }
@@ -4119,6 +4121,7 @@
       const d=$("veh-data"), i=c.info; if(!i){ return; }
       const ini=i.owner.split(" ").map(w=>w[0]).slice(0,2).join("");
       d.innerHTML =
+        `<div id="veh-photo" class="veh-photo"></div>`+
         `<div class="vd-t">VEHÍCULO SIMULADO</div>`+
         `<div class="vd-r"><span>SIM-ID</span><span>${c.simId||("SIM-V-"+String(c.num).padStart(4,"0"))}</span></div>`+
         `<div class="vd-r"><span>Estado</span><span id="vd-state">—</span></div>`+
@@ -4309,7 +4312,7 @@
     const carLabel=(c)=> (c.tag?("["+c.tag+"] "):"") + "V"+c.num+" · "+c.plate + (c.tracked?"  ◉":"");
     async function startTraffic(){
       if(!survGeo) return;   // el área puede persistir aunque OBJETIVO esté apagado
-      stopTraffic();
+      // Consulta las calles ANTES de destruir nada (para no perder el grafo bueno si Overpass falla).
       const token={}; trafficToken=token;
       $("surv-hud").classList.add("scanning");   // animación de carga/escaneo de cuadrantes
       $("veh-loading").classList.add("on");      // indicador visible aunque OBJETIVO esté apagado
@@ -4317,6 +4320,15 @@
       if(trafficToken!==token || !survGeo){ $("surv-hud").classList.remove("scanning"); $("veh-loading").classList.remove("on"); return; }
       const V = els.length ? buildRoadGraph(els) : null;
       const keys = V ? [...V.keys()].filter(k=>V.get(k).out.size||V.get(k).all.size) : [];
+      // Si es un RE-fetch (ya hay tráfico sobre calles) y Overpass no devolvió calles → CONSERVA lo actual
+      // en vez de borrar el grafo bueno y caer a modo libre (off-road).
+      if((!V || !keys.length) && trafficTimer && trafficGraph && !trafficFree){
+        $("surv-hud").classList.remove("scanning"); $("veh-loading").classList.remove("on");
+        try{ logEvent("Overpass no respondió al recargar: se mantienen las calles actuales."); }catch{}
+        return;
+      }
+      stopTraffic();          // ahora sí reconstruye (hay calles nuevas, o es el arranque inicial)
+      trafficToken=token;     // stopTraffic invalida el token; lo restauramos
       const dmul = densityByTime()*SIMCFG.DENSITY;
       const areaKm2 = Math.PI*Math.pow(scopeRadiusM()/1000, 2);
       if(V && keys.length){   // tráfico por calles reales (direcciones correctas)
@@ -4475,20 +4487,22 @@
     // Icono SVG base (top-down coloreado) de un coche.
     function svgIconFor(c){ return carIconFor(c.info&&c.info.color, c.info&&((c.info.make||"")+" "+(c.info.model||""))); }
     function revertCarIcon(c){ if(c&&c.ent&&c.ent.billboard){ try{ c.ent.billboard.image=svgIconFor(c); }catch{} } }
-    // Icono FOTORREALISTA top-down (con fondo de asfalto) SOLO para el vehículo rastreado.
+    // Modelo FOTORREALISTA del vehículo rastreado → se muestra en el PANEL (no como icono del mapa,
+    // porque la foto generada no se puede orientar de forma fiable al rumbo).
     const _carPhotoCache=new Map();
     async function genCarMapIcon(c){
-      if(!c||!c.ent||!c.info) return;
+      if(!c||!c.info) return;
       const info=c.info, key=(info.color||"")+"|"+(info.make||"")+"|"+(info.model||"")+"|"+(info.year||"");
-      const apply=(uri)=>{ const cc=trafficCars.get(c.id); if(uri && cc && cc.ent && trackedCarIds.has(c.id)){ cc.photoIcon=uri; cc.ent.billboard.image=uri; } };
-      if(c.photoIcon){ apply(c.photoIcon); return; }
-      if(_carPhotoCache.has(key)){ apply(_carPhotoCache.get(key)); return; }
+      const show=(uri)=>{ if(trackedCarId!==c.id) return; const box=$("veh-photo"); if(box&&uri) box.innerHTML='<img src="'+uri+'" alt="modelo del vehículo">'; };
+      if(c.photoIcon){ show(c.photoIcon); return; }
+      if(_carPhotoCache.has(key)){ c.photoIcon=_carPhotoCache.get(key); show(c.photoIcon); return; }
+      const box=$("veh-photo"); if(box) box.innerHTML='<div class="vp-ph">generando modelo…</div>';
       const color=String(info.color||"").trim(), make=String(info.make||"car").trim(), model=String(info.model||"").trim(), year=String(info.year||"").trim();
-      const prompt=`directly overhead top-down satellite view of a single ${color} ${year} ${make} ${model} car, the car is oriented VERTICALLY with its FRONT (hood/windshield/headlights) pointing straight UP toward the top edge of the image and its rear at the bottom, centered, the car fills the frame, parked on plain grey asphalt, photorealistic, high detail, accurate ${color} car paint color, sharp, no text, no people`;
+      const prompt=`photorealistic ${color} ${year} ${make} ${model} car, top-down overhead view, centered on asphalt, high detail, accurate ${color} car paint color, sharp, no text, no people`;
       try{
         const r=await (await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({prompt, negative:"horizontal car, sideways, rotated, diagonal, wrong color, side view, front view, angled view, text, watermark, blurry, multiple cars, people", width:512, height:512, steps:8})})).json();
-        if(r&&r.b64){ const uri="data:image/png;base64,"+r.b64; _carPhotoCache.set(key,uri); apply(uri); }
+          body:JSON.stringify({prompt, negative:"wrong color, text, watermark, blurry, multiple cars, people", width:512, height:512, steps:8})})).json();
+        if(r&&r.b64){ const uri="data:image/png;base64,"+r.b64; _carPhotoCache.set(key,uri); c.photoIcon=uri; show(uri); }
       }catch{}
     }
     function trackCar(c){   // añade c al rastreo y lo ENFOCA (vídeo + datos)
