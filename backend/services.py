@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import json
 import math
 import os
 import time
 from dataclasses import dataclass, asdict
+from pathlib import Path
 
 import httpx
 
@@ -49,11 +51,49 @@ _OVERPASS_EPS = [
     "https://overpass.osm.jp/api/interpreter",
 ]
 _overpass_cache: dict[str, tuple[float, list]] = {}
+# Caché EN DISCO: las calles no cambian; una vez traídas se reutilizan mucho tiempo,
+# evitando re-consultar Overpass y disparar su rate-limit.
+_OVERPASS_DIR = Path(__file__).resolve().parent.parent / ".cache" / "overpass"
+_OVERPASS_TTL_DISK = 30 * 24 * 3600   # 30 días
+
+
+def _ov_disk_path(query: str) -> Path:
+    return _OVERPASS_DIR / (hashlib.md5(query.encode("utf-8")).hexdigest() + ".json")
+
+
+def _ov_disk_read(query: str) -> list | None:
+    try:
+        p = _ov_disk_path(query)
+        if p.exists() and (time.time() - p.stat().st_mtime) < _OVERPASS_TTL_DISK:
+            return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return None
+
+
+def _ov_disk_write(query: str, els: list) -> None:
+    try:
+        _OVERPASS_DIR.mkdir(parents=True, exist_ok=True)
+        _ov_disk_path(query).write_text(json.dumps(els), encoding="utf-8")
+    except Exception:
+        pass
+
+
+async def _overpass_one(ep: str, query: str) -> list | None:
+    try:
+        r = await _http.post(ep, data={"data": query}, timeout=20)
+        if r.status_code != 200:
+            return None
+        els = [e for e in (r.json().get("elements") or [])
+               if e.get("geometry") and len(e["geometry"]) > 1]
+        return els or None
+    except Exception:
+        return None
 
 
 async def overpass_query(query: str, key: str = "") -> list:
-    """Ejecuta una consulta Overpass con failover entre servidores y caché de 5 min por `key`.
-       Devuelve la lista de elementos con geometría."""
+    """Consulta Overpass en PARALELO en varios servidores (gana el primero que responde con
+       datos), con caché de 5 min por `key`. Evita que un servidor lento cuelgue la respuesta."""
     if not (query or "").strip():
         return []
     now = time.monotonic()
@@ -61,20 +101,29 @@ async def overpass_query(query: str, key: str = "") -> list:
         t, els = _overpass_cache[key]
         if now - t < 300:
             return els
-    for ep in _OVERPASS_EPS:
-        try:
-            r = await _http.post(ep, data={"data": query}, timeout=25)
-            if r.status_code != 200:
-                continue
-            els = [e for e in (r.json().get("elements") or [])
-                   if e.get("geometry") and len(e["geometry"]) > 1]
+    # Caché en disco (por contenido de la consulta): sobrevive reinicios y evita rate-limit.
+    disk = _ov_disk_read(query)
+    if disk:
+        if key:
+            _overpass_cache[key] = (now, disk)
+        return disk
+    tasks = [asyncio.create_task(_overpass_one(ep, query)) for ep in _OVERPASS_EPS]
+    result: list = []
+    try:
+        for coro in asyncio.as_completed(tasks, timeout=25):
+            els = await coro
             if els:
-                if key:
-                    _overpass_cache[key] = (now, els)
-                return els
-        except Exception:
-            continue
-    return []
+                result = els
+                break
+    except Exception:
+        pass
+    for t in tasks:
+        t.cancel()
+    if result:
+        if key:
+            _overpass_cache[key] = (now, result)
+        _ov_disk_write(query, result)
+    return result
 
 
 async def geoip() -> dict | None:
