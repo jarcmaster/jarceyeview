@@ -3841,7 +3841,7 @@
         .forEach(([lo,la])=>{ r=Math.max(r, Cesium.Cartesian3.distance(c, Cesium.Cartesian3.fromDegrees(lo,la,0))); });
       return Math.max(60, r*0.94);
     }
-    function scopeBbox(mult){ const r=Math.min(scopeRadiusM()*(mult||1.4), 2200);   // tope: consulta rápida aunque el círculo sea enorme
+    function scopeBbox(mult){ const r=Math.min(scopeRadiusM()*(mult||1.4), 4000);   // tope: consulta rápida aunque el círculo sea enorme
       const dLat=r/111320, dLon=r/(111320*Math.cos(survGeo.lat*Math.PI/180)||1e-6);
       return { s:survGeo.lat-dLat, n:survGeo.lat+dLat, w:survGeo.lon-dLon, e:survGeo.lon+dLon }; }
     function makeWanderEnt(kind){
@@ -3925,7 +3925,7 @@
     async function fetchFeatures(kind){
       const r=scopeBbox(1.4), bb=`(${r.s},${r.w},${r.n},${r.e})`;
       const q = kind==="veh"
-        ? `[out:json][timeout:25];(way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|road|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"]["access"!~"^(no|private)$"]${bb};);out geom 4000;`
+        ? `[out:json][timeout:25];(way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|road|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"]["access"!~"^(no|private)$"]${bb};);out geom 12000;`
         : `[out:json][timeout:20];(way["building"]${bb};way["leisure"~"park|garden|pitch|playground|recreation_ground|golf_course"]${bb};way["landuse"~"grass|recreation_ground|forest|meadow|cemetery"]${bb};);out geom 400;`;
       const key = kind+":"+r.s.toFixed(4)+","+r.w.toFixed(4)+","+r.n.toFixed(4)+","+r.e.toFixed(4);
       return await overpass(q, key);
@@ -4118,7 +4118,7 @@
     // ============= MOTOR DE SIMULACIÓN DE VEHÍCULOS (agentes autónomos · datos 100% ficticios) =============
     const SIMCFG = { MAX_SPEED:12, MIN_SPEED:1, ACCEL:0.9, DECEL:3.2, SAFE_BASE:6, REACTION:0.9, SAFE_CRIT:5,
       P_PARK:0.004, P_REROUTE:0.006, DENSITY:1.0, LIGHT_GREEN:26, LIGHT_YELLOW:4,
-      SIM_SPEED:1, WEATHER:"CLEAR", DEBUG:false, SEED:0, MAX_VEH:160, DECISION_MIN:3, DECISION_MAX:20 };
+      SIM_SPEED:1, WEATHER:"CLEAR", DEBUG:false, SEED:0, MAX_VEH:4000, DECISION_MIN:3, DECISION_MAX:20 };
     const SIM_DEFAULTS = JSON.parse(JSON.stringify(SIMCFG));   // valores por defecto de SIM
     const WEATHER_FX = { CLEAR:{spd:1,safe:1}, CLOUDY:{spd:0.96,safe:1.05}, RAIN:{spd:0.78,safe:1.5}, FOG:{spd:0.68,safe:1.7} };
     const PROFILES = ["CAUTIOUS","NORMAL","AGGRESSIVE","COMMUTER","DELIVERY","DISTRACTED","INDECISIVE","LOCAL_DRIVER","RANDOM"];
@@ -4236,10 +4236,11 @@
       if(V && keys.length){   // tráfico por calles reales (direcciones correctas)
         trafficFree=false; trafficGraph=V; trafficKeys=keys; trafficCenter={lat:survGeo.lat, lon:survGeo.lon}; computeTrafficInner(); buildLights();
         // llena las calles del círculo: por nº de nodos y por área, entre 40 y MAX_VEH
-        trafficTargetN = Math.round(Math.max(40, Math.min(SIMCFG.MAX_VEH, Math.min(trafficInner.length*0.9, areaKm2*22))) * dmul);
+        // (varios coches por nodo + alta densidad por km² → permite miles en áreas grandes)
+        trafficTargetN = Math.round(Math.max(40, Math.min(SIMCFG.MAX_VEH, Math.min(trafficInner.length*4, areaKm2*250))) * dmul);
       } else {   // SIEMPRE hay vehículos: si no hay calles, tráfico libre que concentra todo el círculo
         trafficFree=true; trafficGraph=null; simLights.clear();
-        trafficTargetN = Math.round(Math.max(40, Math.min(SIMCFG.MAX_VEH, areaKm2*16)) * dmul);
+        trafficTargetN = Math.round(Math.max(40, Math.min(SIMCFG.MAX_VEH, areaKm2*200)) * dmul);
       }
       for(let i=0;i<trafficTargetN;i++) spawnCar();   // aparecen cuando terminan de "cargar"
       $("surv-hud").classList.remove("scanning");
