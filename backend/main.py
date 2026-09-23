@@ -53,7 +53,7 @@ from services import (OpenSky, RouteService, Telegram, aclose, ai_chat, ai_healt
 load_dotenv()
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
-POLL_INTERVAL = float(os.getenv("POLL_INTERVAL", "8"))
+POLL_INTERVAL = float(os.getenv("POLL_INTERVAL", "12"))  # 12s: el frontend interpola entre consultas; ahorra cuota OpenSky
 DEFAULT_BBOX = (18.5, -100.5, 20.5, -98.0)
 THRESHOLDS = [30, 20, 15, 10, 5]  # minutos antes de aterrizar
 
@@ -216,19 +216,36 @@ _poll_lock = asyncio.Lock()
 _bbox_fetch_task: asyncio.Task | None = None
 
 
+# Backoff ante rate-limit (429) de OpenSky: al recibir 429 dejamos de consultar un rato
+# creciente (30s,60s,…,cap 10min) para que la cuota se recupere en vez de insistir y quedar
+# bloqueados permanentemente. Se resetea en cuanto una consulta vuelve a funcionar.
+_backoff_until = 0.0
+_backoff_step = 0
+
+
 async def poll_once() -> None:
     """Una consulta a OpenSky + broadcast (usada por el ciclo y por eventos)."""
+    global _backoff_until, _backoff_step
     if _poll_lock.locked():   # evita consultas solapadas
+        return
+    if time.monotonic() < _backoff_until:   # en backoff por 429: no consultes (deja recuperar cuota)
         return
     async with _poll_lock:
         try:
             aircraft = [asdict(a) for a in await opensky.fetch(bbox=world.bbox)]
             world.snapshot = aircraft
             world.last_error = ""
+            _backoff_step = 0
+            _backoff_until = 0.0
             await check_emergencies(aircraft)
         except httpx.HTTPStatusError as e:
-            world.last_error = f"OpenSky HTTP {e.response.status_code}" + (
-                " (cuota agotada)" if e.response.status_code == 429 else "")
+            if e.response.status_code == 429:
+                _backoff_step = min(_backoff_step + 1, 6)
+                wait = min(30 * (2 ** (_backoff_step - 1)), 600)   # 30,60,120,240,480,600s
+                _backoff_until = time.monotonic() + wait
+                world.last_error = f"OpenSky 429 (cuota agotada) · reintento en {int(wait)}s"
+            else:
+                world.last_error = f"OpenSky HTTP {e.response.status_code}"
         except Exception as e:
             world.last_error = f"{type(e).__name__}: {e}"
         await broadcast({"type": "state", "entities": world.snapshot, "error": world.last_error})
