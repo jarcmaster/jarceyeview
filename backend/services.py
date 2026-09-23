@@ -16,7 +16,9 @@ import hashlib
 import json
 import math
 import os
+import re
 import time
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
@@ -91,10 +93,57 @@ async def _overpass_one(ep: str, query: str, timeout: float) -> list | None:
         return None
 
 
+_ov_fail = 0          # fallos consecutivos (todos los servidores)
+_ov_down_until = 0.0  # circuit breaker: hasta cuándo NO consultar Overpass
+
+# Respaldo: API principal de OSM (api.openstreetmap.org) — OTRO host, no sufre el rate-limit/bloqueo
+# de los servidores Overpass. Devuelve XML del bbox; lo convertimos al mismo formato (ways con geometría).
+_DRIVABLE = re.compile(r"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|"
+                       r"living_street|service|road)(_link)?$")
+
+
+async def _osm_api_roads(query: str) -> list:
+    """Extrae el bbox de la consulta Overpass y pide las calles a la API principal de OSM."""
+    m = re.search(r"\(\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*\)", query)
+    if not m:
+        return []
+    s, w, n, e = (float(x) for x in m.groups())
+    try:
+        r = await _http.get("https://api.openstreetmap.org/api/0.6/map",
+                            params={"bbox": f"{w},{s},{e},{n}"}, timeout=25)
+        if r.status_code != 200:
+            return []
+        root = ET.fromstring(r.text)
+    except Exception:
+        return []
+    nodes: dict = {}
+    for nd in root.findall("node"):
+        try:
+            nodes[nd.get("id")] = (float(nd.get("lat")), float(nd.get("lon")))
+        except Exception:
+            continue
+    els: list = []
+    for way in root.findall("way"):
+        tags = {t.get("k"): t.get("v") for t in way.findall("tag")}
+        if not _DRIVABLE.match(tags.get("highway", "")):
+            continue
+        if tags.get("access") in ("no", "private"):
+            continue
+        geom = []
+        for ref in way.findall("nd"):
+            p = nodes.get(ref.get("ref"))
+            if p:
+                geom.append({"lat": p[0], "lon": p[1]})
+        if len(geom) > 1:
+            els.append({"type": "way", "id": int(way.get("id") or 0), "tags": tags, "geometry": geom})
+    return els
+
+
 async def overpass_query(query: str, key: str = "") -> list:
-    """Consulta Overpass SECUENCIAL (una petición a la vez, timeout corto) con failover y caché
-       en memoria (5 min) + disco (30 días). Secuencial = amable con el rate-limit de Overpass
-       (no dispara varias peticiones a la vez)."""
+    """Consulta Overpass SECUENCIAL (una a la vez, timeout corto) con failover, caché en memoria
+       (5 min) + disco (30 días) y CIRCUIT BREAKER: si Overpass no responde varias veces seguidas,
+       deja de consultarlo un rato (respuesta instantánea) para no colgar la app ni martillear."""
+    global _ov_fail, _ov_down_until
     if not (query or "").strip():
         return []
     now = time.monotonic()
@@ -108,18 +157,28 @@ async def overpass_query(query: str, key: str = "") -> list:
         if key:
             _overpass_cache[key] = (now, disk)
         return disk
-    # Overpass LOCAL (si OVERPASS_URL está configurado) primero: fiable, sin rate-limit.
-    eps = list(_OVERPASS_EPS)
     local = os.getenv("OVERPASS_URL", "").strip()
-    if local:
-        eps = [local] + eps
     result: list = []
-    for ep in eps:                               # uno a la vez, abandonando rápido el lento
-        els = await _overpass_one(ep, query, timeout=(20 if ep == local else 9))
-        if els:
-            result = els
-            break
+    # 1) Overpass LOCAL si está configurado (lo más fiable/rápido).
+    if local:
+        result = await _overpass_one(local, query, timeout=20) or []
+    # 2) API principal de OSM (api.openstreetmap.org): otro host, no sufre el bloqueo de Overpass. Rápida.
+    if not result:
+        result = await _osm_api_roads(query)
+    # 3) Overpass públicos como último recurso (si el breaker no está abierto).
+    if not result and now >= _ov_down_until:
+        for ep in _OVERPASS_EPS:
+            els = await _overpass_one(ep, query, timeout=8)
+            if els:
+                result = els
+                break
+        if not result:
+            _ov_fail += 1
+            if _ov_fail >= 2:                    # 2 fallos → 5 min sin tocar los Overpass públicos
+                _ov_down_until = time.monotonic() + 300
     if result:
+        _ov_fail = 0
+        _ov_down_until = 0.0
         if key:
             _overpass_cache[key] = (now, result)
         _ov_disk_write(query, result)
