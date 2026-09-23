@@ -411,9 +411,8 @@ async def _comfy_upload(image: str) -> str | None:
 
 
 def _comfy_graph(ckpt: str, flux: bool, prompt: str, negative: str, width: int, height: int,
-                 steps: int, seed: int, cfg: float, src: str | None) -> dict:
+                 steps: int, seed: int, cfg: float, src: str | None, denoise: float) -> dict:
     """Arma un workflow txt2img (o img2img si `src`) adaptado a FLUX/SD3 o SD/SDXL."""
-    denoise = (float(os.getenv("SD_DENOISE", "0.6") or 0.6) if src else 1.0)
     g: dict = {
         "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": ckpt}},
         "2": {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["1", 1]}},
@@ -442,8 +441,10 @@ def _comfy_graph(ckpt: str, flux: bool, prompt: str, negative: str, width: int, 
 
 
 async def comfy_generate(prompt: str, negative: str = "", width: int = 768, height: int = 768,
-                         steps=None, seed: int = -1, image: str | None = None) -> dict | None:
-    """Genera (o transforma con img2img) una imagen en ComfyUI. Devuelve {b64} o {error}."""
+                         steps=None, seed: int = -1, image: str | None = None,
+                         denoise: float | None = None) -> dict | None:
+    """Genera (o transforma con img2img) una imagen en ComfyUI. Devuelve {b64} o {error}.
+       `denoise` (img2img): 0=idéntica, 1=libre; menor = respeta más la foto original."""
     host = comfy_host()
     if not host:
         return None
@@ -461,8 +462,11 @@ async def comfy_generate(prompt: str, negative: str = "", width: int = 768, heig
         src = await _comfy_upload(image)
         if not src:
             return {"error": "ComfyUI: no se pudo subir la imagen base"}
+        dn = float(denoise) if denoise is not None else float(os.getenv("SD_DENOISE", "0.6") or 0.6)
+    else:
+        dn = 1.0
     graph = _comfy_graph(ckpt, flux, prompt, negative, int(width), int(height),
-                         steps, seed, cfg, src)
+                         steps, seed, cfg, src, dn)
     try:
         r = await _http.post(f"{host}/prompt", json={"prompt": graph}, timeout=30)
         r.raise_for_status()
@@ -890,9 +894,10 @@ async def generate_image(prompt: str, negative: str = "", width: int = 768, heig
     # 2) Stable Diffusion AUTOMATIC1111 (si está configurado).
     host = sd_host()
     if not host or not (prompt or "").strip():
-        # Respaldo: OpenAI (solo edición si hay imagen base)
+        # Respaldo: OpenAI (solo edición si hay imagen base). No llamamos a enhance_image
+        # para evitar recursión: usamos el helper de edición directamente.
         if image:
-            b = await enhance_image(image, prompt or "enhance, sharpen, high detail")
+            b = await _openai_edit(image, prompt or "enhance, sharpen, high detail")
             return {"b64": b} if b else {"error": comfy_err or "sin generador local (ComfyUI/SD) ni OpenAI"}
         return {"error": comfy_err or "sin generador local: arranca ComfyUI (COMFY_HOST) o configura SD_HOST"}
     payload = {
@@ -1104,31 +1109,51 @@ async def analyze_scene(image: str, lat: float, lon: float) -> dict | None:
         return {"error": f"{type(e).__name__}"}
 
 
-async def enhance_image(image: str, prompt: str) -> str | None:
-    """Mejora/reinterpreta la captura del mapa: Stable Diffusion (img2img) → OpenAI edits."""
-    if not image:
-        return None
-    # 1) LOCAL: Stable Diffusion img2img (si está disponible).
-    if await sd_ready():
-        d = await generate_image(prompt or "enhance, sharpen, upscale, ultra detailed",
-                                 image=image)
-        if d and d.get("b64"):
-            return d["b64"]
-    # 2) Respaldo OpenAI (gpt-image-1 edits).
+async def _openai_edit(image: str, prompt: str) -> str | None:
+    """Edición de imagen con OpenAI (gpt-image-1). Devuelve base64 o None."""
     key = os.getenv("OPENAI_API_KEY", "")
     if not key:
         return None
     try:
         raw = base64.b64decode(image.split(",", 1)[-1])
-        files = {"image": ("map.png", raw, "image/png")}
-        data = {"model": "gpt-image-1", "prompt": prompt, "size": "1024x1024"}
         r = await _http.post("https://api.openai.com/v1/images/edits",
                              headers={"Authorization": f"Bearer {key}"},
-                             data=data, files=files, timeout=180)
+                             data={"model": "gpt-image-1", "prompt": prompt, "size": "1024x1024"},
+                             files={"image": ("map.png", raw, "image/png")}, timeout=180)
         r.raise_for_status()
         return r.json()["data"][0]["b64_json"]
     except Exception:
         return None
+
+
+# Prompt por defecto para "Realzar esta zona": misma escena/posiciones, pero HD.
+ENHANCE_PROMPT = (
+    "High-definition photorealistic aerial/oblique view of this exact scene. Keep the SAME layout: "
+    "same buildings, streets, cars, trees, colors and positions. Rebuild every structure crisp and "
+    "sharp with high-detail architecture, clean rooftops, defined edges and realistic materials. "
+    "Ultra-detailed, high resolution, natural daylight. Do NOT add, remove or move elements."
+)
+
+
+async def enhance_image(image: str, prompt: str = "") -> str | None:
+    """'Realzar esta zona': re-renderiza la captura en alta definición conservando las
+       posiciones reales. ComfyUI img2img (denoise moderado) → SD (A1111) → OpenAI edits."""
+    if not image:
+        return None
+    p = (prompt or "").strip() or ENHANCE_PROMPT
+    dn = float(os.getenv("ENHANCE_DENOISE", "0.5") or 0.5)  # conserva la composición
+    # 1) ComfyUI img2img (directo, sin pasar por generate_image → sin recursión).
+    if await comfy_ready():
+        d = await comfy_generate(p, image=image, width=1024, height=1024, denoise=dn)
+        if d and d.get("b64"):
+            return d["b64"]
+    # 2) Stable Diffusion A1111 (solo si hay host y ComfyUI no respondió).
+    elif await sd_ready():
+        d = await generate_image(p, image=image)
+        if d and d.get("b64"):
+            return d["b64"]
+    # 3) Respaldo OpenAI (gpt-image-1 edits).
+    return await _openai_edit(image, p)
 
 
 _inc_cache: dict[tuple, tuple[float, list]] = {}

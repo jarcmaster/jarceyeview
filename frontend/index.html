@@ -4749,7 +4749,7 @@
       cont.innerHTML=`<div class="lc-img" id="lci-0"><div class="ph">realzando la zona…</div><div class="cap">Zona realzada</div></div>`;
       try{
         const r=await (await fetch("/api/enhance",{method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({image:img,prompt:"Enhance this exact aerial/satellite image: sharpen, upscale and increase detail and clarity, keeping the SAME scene, same buildings, streets, cars, colors and layout. Photorealistic high-resolution overhead imagery. Do NOT invent or add new structures."})})).json();
+          body:JSON.stringify({image:img,prompt:"High-definition photorealistic elevated aerial/oblique view of this exact scene. Keep the SAME layout: same buildings, streets, cars, trees, colors and positions. Rebuild every structure crisp and sharp with high-detail architecture, clean rooftops, defined edges and realistic materials. Ultra-detailed, high resolution, natural daylight. Do NOT add, remove or move elements."})})).json();
         const el=$("lci-0");
         if(r.b64) el.innerHTML=`<img src="data:image/png;base64,${r.b64}"><div class="cap">Zona realzada</div>`;
         else if(el) el.querySelector(".ph").textContent="no disponible";
