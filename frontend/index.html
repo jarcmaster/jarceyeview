@@ -4484,10 +4484,10 @@
       if(c.photoIcon){ apply(c.photoIcon); return; }
       if(_carPhotoCache.has(key)){ apply(_carPhotoCache.get(key)); return; }
       const color=String(info.color||"").trim(), make=String(info.make||"car").trim(), model=String(info.model||"").trim(), year=String(info.year||"").trim();
-      const prompt=`directly overhead top-down satellite view of a single ${color} ${year} ${make} ${model} car, centered, the car fills the frame, parked on plain grey asphalt, photorealistic, high detail, accurate ${color} car paint color, sharp, no text, no people`;
+      const prompt=`directly overhead top-down satellite view of a single ${color} ${year} ${make} ${model} car, the car is oriented VERTICALLY with its FRONT (hood/windshield/headlights) pointing straight UP toward the top edge of the image and its rear at the bottom, centered, the car fills the frame, parked on plain grey asphalt, photorealistic, high detail, accurate ${color} car paint color, sharp, no text, no people`;
       try{
         const r=await (await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({prompt, negative:"wrong color, side view, front view, angled view, text, watermark, blurry, multiple cars, people", width:512, height:512, steps:8})})).json();
+          body:JSON.stringify({prompt, negative:"horizontal car, sideways, rotated, diagonal, wrong color, side view, front view, angled view, text, watermark, blurry, multiple cars, people", width:512, height:512, steps:8})})).json();
         if(r&&r.b64){ const uri="data:image/png;base64,"+r.b64; _carPhotoCache.set(key,uri); apply(uri); }
       }catch{}
     }
