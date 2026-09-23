@@ -396,8 +396,23 @@
     #veh-feed .veh-expand { margin-left:auto; cursor:pointer; color:#7fd3ff; display:inline-flex; }
     #veh-feed .veh-expand:hover { color:#bfe9ff; }
     #veh-feed .pf-count { margin-left:8px; }
+    #veh-feed .veh-x { margin-left:8px; cursor:pointer; color:#e0736a; font-size:13px; line-height:1; }
+    #veh-feed .veh-x:hover { color:#ff5c50; }
     #veh-feed.big { width:344px; }
     #veh-feed.big #veh-data { max-height:62vh; }
+    .veh-search { display:flex; gap:5px; padding:6px 8px 2px; }
+    .veh-search input { flex:1; min-width:0; background:#0a1520; border:1px solid #244; color:#dff; border-radius:5px; padding:5px 7px; font:inherit; font-size:11px; outline:none; }
+    .veh-search input:focus { border-color:#2fa7d8; }
+    .veh-search button { background:#123; border:1px solid #244; color:#7fd3ff; border-radius:5px; padding:4px 8px; cursor:pointer; }
+    .veh-search button:hover { background:#1a3550; }
+    #veh-q-msg { padding:0 8px; font-size:10px; color:#e0a86a; min-height:0; }
+    #veh-q-msg:empty { display:none; }
+    .veh-chips { display:flex; flex-wrap:wrap; gap:4px; padding:2px 8px 6px; max-height:76px; overflow-y:auto; }
+    .veh-chip { display:inline-flex; align-items:center; gap:5px; background:#0e2233; border:1px solid #2a4a5f; color:#bfe9ff; border-radius:11px; padding:2px 7px; font-size:10px; }
+    .veh-chip.focus { background:#3a1414; border-color:#a33; color:#ff9c9c; }
+    .veh-chip .vc-name { cursor:pointer; white-space:nowrap; }
+    .veh-chip .vc-x { cursor:pointer; color:#e0736a; font-weight:bold; }
+    .veh-chip .vc-x:hover { color:#ff5c50; }
     .vd-owner { display:flex; align-items:center; gap:9px; margin:2px 0 5px; }
     .vd-avatar { width:34px; height:34px; border-radius:50%; background:linear-gradient(135deg,#1c5aa8,#3a8fe0); color:#fff;
       display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; flex:0 0 auto; box-shadow:0 0 8px rgba(90,170,255,.4); }
@@ -1089,7 +1104,14 @@
   <!-- Rastreo de vehículos (ventana movible, vídeo local) -->
   <div id="veh-feed">
     <div class="pf-head"><span class="pf-live">●</span> RASTREO DE VEHÍCULOS
-      <span class="veh-expand" title="Ampliar detalle"><span data-ic="expand"></span></span><span class="pf-count">TRK</span></div>
+      <span class="veh-expand" title="Ampliar detalle"><span data-ic="expand"></span></span><span class="pf-count">TRK</span>
+      <span class="veh-x" id="veh-x" title="Cerrar (detiene todo el rastreo)">✕</span></div>
+    <div class="veh-search">
+      <input id="veh-q" type="text" placeholder="Buscar por placa o VIN…" autocomplete="off" spellcheck="false">
+      <button id="veh-q-btn" title="Buscar y rastrear">🔍</button>
+    </div>
+    <div id="veh-q-msg"></div>
+    <div id="veh-chips" class="veh-chips"></div>
     <div class="pf-body">
       <video id="veh-video" muted playsinline preload="auto"></video>
       <div class="pf-hud"><span>◉ VEHICLE TRACK</span></div>
@@ -4114,6 +4136,7 @@
     const trafficCars=new Map();   // "car:N" -> {id,num,plate,tag,cur,prev,target,lat,lon,speed,hold,lane,ent,tracked}
     let trafficTimer=null, trafficGraph=null, trafficKeys=[], trafficInner=[], trafficTargetN=0,
         trafficSeq=0, trafficToken=null, trackedCarId=null, trafficCenter=null, trafficRefetch=null, trafficFree=false;
+    const trackedCarIds=new Set();   // rastreo MÚLTIPLE: todos los vehículos seguidos (trackedCarId = el enfocado)
 
     // ============= MOTOR DE SIMULACIÓN DE VEHÍCULOS (agentes autónomos · datos 100% ficticios) =============
     const SIMCFG = { MAX_SPEED:12, MIN_SPEED:1, ACCEL:0.9, DECEL:3.2, SAFE_BASE:6, REACTION:0.9, SAFE_CRIT:5,
@@ -4245,6 +4268,8 @@
       for(let i=0;i<trafficTargetN;i++) spawnCar();   // aparecen cuando terminan de "cargar"
       $("surv-hud").classList.remove("scanning");
       $("veh-loading").classList.remove("on");
+      // Abre el panel de rastreo (con buscador) en cuanto hay vehículos que buscar/seguir.
+      $("veh-feed").classList.add("on"); renderTrackList();
       trafficTimer=setInterval(tickTraffic, 120);
     }
     function stopTraffic(){
@@ -4344,8 +4369,7 @@
         // stats
         if(c.state==="PARKED") parked++; else if(c.speed<0.4) stopped++; else { moving++; sumspd+=c.speed; }
         if(Cesium.Cartesian3.distance(cC, Cesium.Cartesian3.fromDegrees(c.lon,c.lat,0))>rad){
-          if(id!==trackedCarId) removeCar(id);
-          else if(!carOrbitOn){ removeCar(id); showLost("veh"); cancelCarTracking(false); }
+          if(!trackedCarIds.has(id)) removeCar(id);   // los vehículos rastreados se conservan
         }
       }
       // El círculo OBJETIVO sigue al vehículo rastreado (con órbita)
@@ -4370,25 +4394,70 @@
       for(const [,c] of trafficCars){ const p=c.ent.position.getValue(t); if(p) c.ent.show=_occ.isPointVisible(p); } }catch{} }
     // Clic en un vehículo: 1º trackear (vídeo) · 2º ventana de etiqueta/cancelar
     function handleCarClick(id){ const c=trafficCars.get(id); if(!c) return;
-      if(trackedCarId!==id) startCarTracking(c);   // trackear (vídeo + datos) si es otro
-      openCarTag(c);                                // SIEMPRE abre la ventanita de etiqueta
+      trackCar(c);          // añade al rastreo múltiple y lo enfoca (vídeo + datos)
+      openCarTag(c);        // SIEMPRE abre la ventanita de etiqueta
     }
     function styleCar(c, on){ if(!c||!c.ent) return;
       c.ent.billboard.width=on?46:32; c.ent.billboard.height=on?46:32;
       c.ent.billboard.color = on?Cesium.Color.fromCssColorString("#ff5252"):Cesium.Color.WHITE;
       c.ent.label.fillColor = Cesium.Color.fromCssColorString(on?"#ff9090":"#5fe08a"); c.ent.label.text=carLabel(c); }
-    function startCarTracking(c){
-      cancelCarTracking(true);            // suelta el anterior (mantiene el vídeo)
-      trackedCarId=c.id; c.tracked=true; styleCar(c,true);
-      showVehVideo();                     // ventana de vídeo (tracking)
-      renderVehData(c);                   // datos del vehículo
+    // ---- Rastreo MÚLTIPLE de vehículos ----
+    function trackCar(c){   // añade c al rastreo y lo ENFOCA (vídeo + datos)
+      if(!c) return;
+      trackedCarIds.add(c.id); c.tracked=true; styleCar(c,true);
+      focusCar(c.id);
     }
-    function cancelCarTracking(keepVideo){
+    function focusCar(id){   // muestra el vídeo/datos de un vehículo ya rastreado
+      const c=trafficCars.get(id); if(!c) return;
+      trackedCarId=id;
+      $("veh-feed").classList.add("on");
+      showVehVideo(); renderVehData(c); renderTrackList();
+    }
+    function untrackCar(id){   // deja de rastrear UNO
+      const c=trafficCars.get(id);
+      trackedCarIds.delete(id);
+      if(c){ c.tracked=false; styleCar(c,false); }
+      if(trackedCarId===id){        // si era el enfocado, pasa a otro (o ninguno)
+        if(carOrbitOn) setCarFollowOff();
+        $("car-tag").classList.remove("on"); scopeHalf=null;
+        const next=[...trackedCarIds][0];
+        if(next){ focusCar(next); } else { trackedCarId=null; clearVehData(); try{$("veh-video").pause();}catch{} }
+      }
+      renderTrackList();
+      if(!trackedCarIds.size && !$("veh-q").value){ /* panel sigue abierto para buscar mientras haya sim */ }
+    }
+    function untrackAll(){   // detiene TODO el rastreo y cierra el panel
       if(carOrbitOn) setCarFollowOff();
-      if(trackedCarId){ const c=trafficCars.get(trackedCarId); if(c){ c.tracked=false; styleCar(c,false); } }
-      trackedCarId=null; scopeHalf=null; $("car-tag").classList.remove("on");
-      clearVehData();
-      if(!keepVideo){ $("veh-feed").classList.remove("on"); try{$("veh-video").pause();}catch{} }
+      for(const id of [...trackedCarIds]){ const c=trafficCars.get(id); if(c){ c.tracked=false; styleCar(c,false); } }
+      trackedCarIds.clear(); trackedCarId=null; scopeHalf=null;
+      $("car-tag").classList.remove("on"); clearVehData(); renderTrackList();
+      $("veh-feed").classList.remove("on"); try{$("veh-video").pause();}catch{}
+    }
+    // compat: usadas por otros sitios (voz, stopTraffic, ct-cancel)
+    function startCarTracking(c){ trackCar(c); }
+    function cancelCarTracking(keepVideo){ untrackAll(); }
+    function renderTrackList(){
+      const box=$("veh-chips"); if(box){
+        box.innerHTML="";
+        for(const id of trackedCarIds){ const c=trafficCars.get(id); if(!c) continue;
+          const chip=document.createElement("span"); chip.className="veh-chip"+(id===trackedCarId?" focus":"");
+          const nm=document.createElement("span"); nm.className="vc-name";
+          nm.textContent=(c.tag?("["+c.tag+"] "):"")+c.plate; nm.onclick=()=>focusCar(id);
+          const x=document.createElement("span"); x.className="vc-x"; x.textContent="✕";
+          x.onclick=(e)=>{ e.stopPropagation(); untrackCar(id); };
+          chip.appendChild(nm); chip.appendChild(x); box.appendChild(chip); }
+      }
+      const cnt=$("veh-feed").querySelector(".pf-count"); if(cnt) cnt.textContent = trackedCarIds.size?("TRK "+trackedCarIds.size):"TRK";
+    }
+    function flyToCar(c){ if(c&&c.ent){ try{ viewer.flyTo(c.ent,{duration:1.1, offset:new Cesium.HeadingPitchRange(0,-0.6,320)}); }catch{} } }
+    function searchVehicle(q){
+      const msg=$("veh-q-msg"); q=(q||"").trim().toUpperCase(); if(!q){ if(msg) msg.textContent=""; return; }
+      const norm=s=>String(s||"").toUpperCase().replace(/[-\s]/g,"");
+      const nq=norm(q); let found=null;
+      for(const [,c] of trafficCars){ const plate=norm(c.plate), vin=norm(c.info&&c.info.vin);
+        if(plate===nq || vin===nq || (nq.length>=3 && (plate.includes(nq)||vin.includes(nq)))){ found=c; break; } }
+      if(found){ $("veh-feed").classList.add("on"); trackCar(found); flyToCar(found); if(msg) msg.textContent="Rastreando "+found.plate+((found.info&&found.info.vin)?(" · VIN "+found.info.vin):""); }
+      else if(msg) msg.textContent="Sin coincidencias para “"+q+"”.";
     }
     // Seguir con la cámara — modo "órbita" (gira) o "sin órbita" (mantiene el ángulo)
     let carSpin=true;
@@ -4425,8 +4494,12 @@
     }
     $("ct-apply").onclick=()=>{ const c=trafficCars.get($("car-tag").dataset.car); if(!c) return;
       c.tag=$("ct-input").value.trim().toUpperCase(); styleCar(c, c.tracked); if(trackedCarId===c.id) renderVehData(c); };
-    $("ct-cancel").onclick=()=>{ cancelCarTracking(false); };
+    $("ct-cancel").onclick=()=>{ const id=$("car-tag").dataset.car; untrackCar(id); $("car-tag").classList.remove("on"); };
     $("car-tag").querySelector(".ct-x").onclick=()=>$("car-tag").classList.remove("on");
+    // Rastreo de vehículos: cerrar ventana (detiene todo) + búsqueda por placa/VIN
+    $("veh-x").onclick=()=>untrackAll();
+    $("veh-q-btn").onclick=()=>searchVehicle($("veh-q").value);
+    $("veh-q").addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); searchVehicle($("veh-q").value); } });
 
     // --- Visor de captura a pantalla completa (con detalles) ---
     function openShotView(i){
