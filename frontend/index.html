@@ -3917,8 +3917,15 @@
     const _ovCache=new Map();   // caché por bbox+kind (evita re-consultas y rate-limit)
     async function overpass(q, key){
       if(key && _ovCache.has(key)){ const c=_ovCache.get(key); if(Date.now()-c.t<300000) return c.els; }
+      // Vía el backend (mismo origen): evita CORS/rate-limit del navegador; failover + caché en servidor.
+      try{ const ctrl=new AbortController(), to=setTimeout(()=>ctrl.abort(), 30000);
+        const r=await fetch("/api/overpass",{method:"POST",headers:{"Content-Type":"application/json"},signal:ctrl.signal,body:JSON.stringify({query:q, key:key||""})}); clearTimeout(to);
+        if(r.ok){ const j=await r.json(); const els=(j.elements||[]).filter(el=>el.geometry&&el.geometry.length>1);
+          if(els.length){ if(key) _ovCache.set(key,{els,t:Date.now()}); return els; } }
+      }catch{}
+      // Respaldo directo (por si el backend no está disponible).
       for(const ep of OVERPASS_EP){
-        try{ const ctrl=new AbortController(), to=setTimeout(()=>ctrl.abort(), 12000);   // abandona el servidor lento (más margen = más fiable cargar calles)
+        try{ const ctrl=new AbortController(), to=setTimeout(()=>ctrl.abort(), 12000);
           const r=await fetch(ep,{method:"POST",body:q,signal:ctrl.signal}); clearTimeout(to);
           if(!r.ok) continue; const j=await r.json(); const els=(j.elements||[]).filter(el=>el.geometry&&el.geometry.length>1);
           if(els.length){ if(key) _ovCache.set(key,{els,t:Date.now()}); return els; }

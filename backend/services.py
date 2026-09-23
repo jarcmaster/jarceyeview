@@ -37,6 +37,46 @@ def _openai_ok() -> bool:
     return os.getenv("AI_LOCAL_ONLY", "1").strip().lower() not in ("1", "true", "yes", "on")
 
 
+# --------------------------------------------------------------------------
+# Overpass (OpenStreetMap) — proxied por el backend: sin CORS, con failover y caché.
+# El navegador hace muchas consultas y cae en rate-limit/CORS → aquí es más fiable.
+# --------------------------------------------------------------------------
+_OVERPASS_EPS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+    "https://overpass.osm.jp/api/interpreter",
+]
+_overpass_cache: dict[str, tuple[float, list]] = {}
+
+
+async def overpass_query(query: str, key: str = "") -> list:
+    """Ejecuta una consulta Overpass con failover entre servidores y caché de 5 min por `key`.
+       Devuelve la lista de elementos con geometría."""
+    if not (query or "").strip():
+        return []
+    now = time.monotonic()
+    if key and key in _overpass_cache:
+        t, els = _overpass_cache[key]
+        if now - t < 300:
+            return els
+    for ep in _OVERPASS_EPS:
+        try:
+            r = await _http.post(ep, data={"data": query}, timeout=25)
+            if r.status_code != 200:
+                continue
+            els = [e for e in (r.json().get("elements") or [])
+                   if e.get("geometry") and len(e["geometry"]) > 1]
+            if els:
+                if key:
+                    _overpass_cache[key] = (now, els)
+                return els
+        except Exception:
+            continue
+    return []
+
+
 async def geoip() -> dict | None:
     """Ubicación aproximada por IP pública (el backend corre en la máquina del usuario)."""
     try:

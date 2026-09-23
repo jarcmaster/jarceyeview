@@ -46,7 +46,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from services import (OpenSky, RouteService, Telegram, aclose, ai_chat, ai_health,
                       alpr_cameras, analyze_scene, comfy_host, earthquakes, enhance_image,
                       firms_fires, flight_status, generate_image, geoip, gmap_tile,
-                      haversine_km, iss_position, llamacpp_host, ollama_host, radio_stations,
+                      haversine_km, iss_position, llamacpp_host, ollama_host, overpass_query,
+                      radio_stations,
                       rain_radar, revgeo, sd_host, tomtom_tile, traffic_incidents,
                       voice_intent, webcams)
 
@@ -470,6 +471,12 @@ async def api_voice(payload: dict) -> JSONResponse:
 @app.get("/api/revgeo")
 async def api_revgeo(lat: float, lon: float) -> JSONResponse:
     return JSONResponse(await revgeo(lat, lon) or {})
+
+
+@app.post("/api/overpass")
+async def api_overpass(payload: dict) -> JSONResponse:
+    els = await overpass_query(payload.get("query", ""), payload.get("key", ""))
+    return JSONResponse({"elements": els})
 
 
 @app.post("/api/analyze")
