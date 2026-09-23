@@ -3856,6 +3856,29 @@
       '<circle cx="19" cy="19" r="15" fill="none" stroke="#ffd24a" stroke-width="1.5" stroke-dasharray="3 4"/>'+
       '<g fill="#ffd24a" stroke="#04101c" stroke-width="1"><circle cx="19" cy="12" r="3.4"/>'+
       '<path d="M19 15.5c-3 0-4 3-4 6.5v6h2.4v-5h3.2v5H23v-6c0-3.5-1-6.5-4-6.5z"/></g></svg>');
+    // Icono de coche TOP-DOWN pintado con el color real del vehículo, con forma por tipo.
+    const CAR_HEX={ negro:"#26292d", black:"#26292d", "gris oscuro":"#464b51", darkgray:"#464b51", "dark gray":"#464b51",
+      blanco:"#eceff2", white:"#eceff2", gris:"#878d94", gray:"#878d94", grey:"#878d94", plata:"#c3c8cd", silver:"#c3c8cd",
+      rojo:"#d23b3b", red:"#d23b3b", azul:"#2f6fd2", blue:"#2f6fd2", verde:"#2f9e57", green:"#2f9e57",
+      beige:"#d6c8a4", amarillo:"#e6c62f", yellow:"#e6c62f", naranja:"#e07f2f", orange:"#e07f2f",
+      marron:"#7d5638", "marrón":"#7d5638", brown:"#7d5638", dorado:"#c6a544", gold:"#c6a544", vino:"#7a2f38", maroon:"#7a2f38" };
+    function colorHex(name){ const n=String(name||"").toLowerCase().trim(); if(CAR_HEX[n]) return CAR_HEX[n];
+      for(const k in CAR_HEX){ if(k.includes(" ") && n.includes(k)) return CAR_HEX[k]; }   // "gris oscuro" antes que "gris"
+      for(const k in CAR_HEX){ if(n.includes(k)) return CAR_HEX[k]; } return "#9aa3ab"; }
+    function carType(make){ const m=String(make||"").toLowerCase();
+      if(/truck|pickup|f-?150|f-?250|silverado|sierra|\bram\b|tundra|tacoma|ranger|colorado|frontier/.test(m)) return "pickup";
+      if(/suv|tahoe|explorer|suburban|expedition|escalade|highlander|4runner|pilot|rav4|cr-?v|equinox|jeep|wrangler|cherokee|rogue|traverse/.test(m)) return "suv";
+      if(/van|transit|sprinter|caravan|odyssey|sienna/.test(m)) return "van"; return "sedan"; }
+    const _carIconCache=new Map();
+    function carIconFor(color, make){ const hex=colorHex(color), type=carType(make), key=type+"|"+hex;
+      if(_carIconCache.has(key)) return _carIconCache.get(key);
+      const win='fill="#0a1016" opacity=".72"';
+      let body;
+      if(type==="pickup") body=`<rect x="13" y="6" width="14" height="12" rx="4" fill="${hex}"/><rect x="12" y="17" width="16" height="17" rx="2" fill="${hex}"/><rect x="15" y="9" width="10" height="6" rx="1.5" ${win}/><rect x="14" y="19" width="12" height="13" rx="1" fill="#0a1016" opacity=".24"/>`;
+      else if(type==="suv"||type==="van") body=`<rect x="12" y="5" width="16" height="30" rx="4" fill="${hex}"/><rect x="14" y="8" width="12" height="6" rx="1.5" ${win}/><rect x="14" y="27" width="12" height="6" rx="1.5" ${win}/>`;
+      else body=`<rect x="13" y="6" width="14" height="28" rx="6" fill="${hex}"/><rect x="15" y="9" width="10" height="6" rx="1.5" ${win}/><rect x="15" y="25" width="10" height="6" rx="1.5" ${win}/>`;
+      const svg='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><g stroke="#0a1016" stroke-width="1">'+body+'</g></svg>');
+      _carIconCache.set(key,svg); return svg; }
     const wanderers={veh:null, person:null}, wanderTokens={veh:null, person:null};
     // --- geo helpers ---
     const hav=(la1,lo1,la2,lo2)=>{ const R=6371000,p1=la1*Math.PI/180,p2=la2*Math.PI/180,dp=(la2-la1)*Math.PI/180,dl=(lo2-lo1)*Math.PI/180;
@@ -4334,8 +4357,10 @@
         decisionAt: simTime + (SIMCFG.DECISION_MIN + srand()*(SIMCFG.DECISION_MAX-SIMCFG.DECISION_MIN)),
         tracked:false, info:genCarInfo() };
       car.ent=viewer.entities.add({ id, position:Cesium.Cartesian3.fromDegrees(car.lon,car.lat,0),
-        billboard:{ image:CAR_IMG, width:32, height:32, rotation:0, alignedAxis:Cesium.Cartesian3.ZERO,
-          scale:1, disableDepthTestDistance:Number.POSITIVE_INFINITY },
+        billboard:{ image:carIconFor(car.info&&car.info.color, car.info&&((car.info.make||"")+" "+(car.info.model||""))),
+          width:32, height:32, alignedAxis:Cesium.Cartesian3.ZERO, scale:1,
+          rotation:new Cesium.CallbackProperty(()=>((-(car.hd||0))*Math.PI/180)+viewer.camera.heading, false),   // apunta al rumbo real; compensa el giro de cámara (no gira en órbita)
+          disableDepthTestDistance:Number.POSITIVE_INFINITY },
         label:{ text:carLabel(car), font:"bold 9px monospace", pixelOffset:new Cesium.Cartesian2(0,-23),
           show:showCarLabels, fillColor:Cesium.Color.fromCssColorString("#5fe08a"), showBackground:true,
           backgroundColor:Cesium.Color.fromCssColorString("rgba(0,0,0,.6)"), disableDepthTestDistance:Number.POSITIVE_INFINITY,
@@ -4401,7 +4426,7 @@
             } else if(step>0){ c.lat+=(step*Math.cos(c.hd*Math.PI/180))/111320; c.lon+=(step*Math.sin(c.hd*Math.PI/180))/(111320*Math.cos(c.lat*Math.PI/180)||1e-6); } }
         }
         const hd=c.hd||0, p=offsetRight(c.lat,c.lon,hd,c.lane), pc=Cesium.Cartesian3.fromDegrees(p.lon,p.lat,0);
-        c.ent.position=pc; c.ent.billboard.rotation=Cesium.Math.toRadians(-hd);
+        c.ent.position=pc;   // la rotación la lleva la CallbackProperty (rumbo real, sin girar en órbita)
         c.ent.billboard.scale=carScaleFor(pc, c.tracked, _sp);   // tamaño real según distancia a la cámara
         // stats
         if(c.state==="PARKED") parked++; else if(c.speed<0.4) stopped++; else { moving++; sumspd+=c.speed; }
@@ -4436,9 +4461,9 @@
     }
     function styleCar(c, on){ if(!c||!c.ent) return;
       try{ c.ent.billboard.scale = carScaleFor(c.ent.position.getValue(viewer.clock.currentTime)||Cesium.Cartesian3.fromDegrees(c.lon,c.lat,0), on, carScaleParams()); }catch{}
-      c.ent.billboard.color = on?Cesium.Color.fromCssColorString("#ff5252"):Cesium.Color.WHITE;
+      c.ent.billboard.color = Cesium.Color.WHITE;   // muestra el color REAL del icono del coche
       c.ent.label.fillColor = Cesium.Color.fromCssColorString(on?"#ff9090":"#5fe08a"); c.ent.label.text=carLabel(c);
-      c.ent.label.show = (showCarLabels || on); }   // etiqueta visible solo si el toggle está activo o el coche está rastreado
+      c.ent.label.show = (showCarLabels || on); }   // el rastreado se distingue por tamaño y etiqueta roja
     // ---- Rastreo MÚLTIPLE de vehículos ----
     function trackCar(c){   // añade c al rastreo y lo ENFOCA (vídeo + datos)
       if(!c) return;
