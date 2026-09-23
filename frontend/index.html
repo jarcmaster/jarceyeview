@@ -371,10 +371,26 @@
     .satm-scan { position:absolute; left:0; right:0; height:22px; top:-22px;
       background:linear-gradient(rgba(127,211,255,.18), transparent); animation:satmscan 3.4s linear infinite; }
     @keyframes satmscan { 0%{top:-22px} 100%{top:150px} }
-    .satm-foot { display:flex; align-items:center; gap:8px; padding:6px 10px; font-size:10px; color:#bfe9ff;
-      background:linear-gradient(0deg, rgba(0,0,0,.4), transparent); }
-    .satm-foot .satm-dl { margin-left:auto; color:#5fe08a; }
-    .satm-foot b { color:#dff; }
+    /* Haz de descarga (satélite → objetivo) */
+    .satm-beam { position:absolute; left:50%; top:16px; width:2px; height:120px; transform-origin:top center; transform:translateX(-50%) rotate(2deg);
+      background:linear-gradient(#8fe3ff, rgba(95,224,138,.15) 70%, transparent); filter:blur(.4px); opacity:.55;
+      animation:satmbeam 2.2s ease-in-out infinite; mix-blend-mode:screen; }
+    @keyframes satmbeam { 0%,100%{opacity:.28; transform:translateX(-50%) rotate(1deg)} 50%{opacity:.75; transform:translateX(-50%) rotate(-2deg)} }
+    /* Retícula sobre el objetivo (base de la escena) */
+    .satm-cross { position:absolute; left:50%; bottom:14px; width:26px; height:26px; transform:translateX(-50%);
+      border:1px solid rgba(95,224,138,.6); border-radius:50%; box-shadow:0 0 8px rgba(95,224,138,.4); animation:satmpulse 1.6s ease-in-out infinite; }
+    .satm-tgt-dot { position:absolute; left:50%; top:50%; width:5px; height:5px; margin:-2.5px; border-radius:50%; background:#5fe08a; box-shadow:0 0 6px #5fe08a; }
+    @keyframes satmpulse { 0%,100%{transform:translateX(-50%) scale(.85); opacity:.6} 50%{transform:translateX(-50%) scale(1.15); opacity:1} }
+    /* Barras de señal */
+    .satm-bars { display:flex; align-items:flex-end; gap:2px; height:16px; padding:4px 10px 0; background:rgba(0,0,0,.35); }
+    .satm-bars i { flex:1; background:linear-gradient(#5fe08a,#2a7fbf); border-radius:1px; height:35%; transition:height .25s ease; opacity:.9; }
+    /* Telemetría en rejilla */
+    .satm-tel { display:grid; grid-template-columns:1fr 1fr; gap:2px 10px; padding:6px 10px 8px; font-size:9.5px; color:#bfe9ff;
+      background:linear-gradient(0deg, rgba(0,0,0,.45), transparent); }
+    .satm-tel .stel { display:flex; justify-content:space-between; gap:6px; white-space:nowrap; }
+    .satm-tel .stel.wide { grid-column:1 / -1; }
+    .satm-tel .stel span { color:#7fa8c4; }
+    .satm-tel .stel b { color:#dff; font-weight:600; }
 
     /* Seguimiento de personas (ventana izquierda) */
     #people-feed, #struct-feed, #veh-feed { position:absolute; z-index:33; width:236px; display:none;
@@ -1107,9 +1123,20 @@
           <circle class="satm-beacon" cx="22" cy="2" r="1.5" fill="#5fe08a"/>
         </svg>
       </div>
+      <div class="satm-beam"></div>
       <div class="satm-scan"></div>
+      <div class="satm-cross"><span class="satm-tgt-dot"></span></div>
     </div>
-    <div class="satm-foot"><span>ALT <b>512 km</b></span><span class="satm-dl">▼ DOWNLINK</span><span class="satm-gbps">28.4 Gbps</span></div>
+    <div class="satm-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="satm-tel">
+      <div class="stel"><span>ALT</span><b class="tel-alt">512.0 km</b></div>
+      <div class="stel"><span>▼ DOWNLINK</span><b class="tel-dl">28.4 Gbps</b></div>
+      <div class="stel"><span>SNR</span><b class="tel-snr">18.0 dB</b></div>
+      <div class="stel"><span>AZ / EL</span><b class="tel-azel">—</b></div>
+      <div class="stel"><span>BER</span><b class="tel-ber">1e-9</b></div>
+      <div class="stel"><span>LINK</span><b class="tel-link">● LOCK</b></div>
+      <div class="stel wide"><span>TGT</span><b class="tel-tgt">—</b></div>
+    </div>
   </div>
 
   <!-- Seguimiento de personas (ventana izquierda, mientras PERSONAS está activo) -->
@@ -3658,9 +3685,22 @@
       $("shots-modal").classList.toggle("below-sat", on);   // baja la galería para no solaparse
       if(on){ const idEl=document.querySelector(".satm-id"); if(idEl) idEl.textContent=`SPYEYE ${spyId}`;
         clearInterval(satMiniTimer);
-        satMiniTimer=setInterval(()=>{ const g=document.querySelector(".satm-gbps");
-          if(g) g.textContent=(22+Math.random()*14).toFixed(1)+" Gbps"; }, 700);
+        satMiniTimer=setInterval(updateSatTelemetry, 450); updateSatTelemetry();
       } else { clearInterval(satMiniTimer); satMiniTimer=null; }
+    }
+    function updateSatTelemetry(){
+      if(!$("sat-mini").classList.contains("on")) return;
+      const t=Date.now()/1000, set=(sel,v)=>{ const e=document.querySelector(sel); if(e) e.textContent=v; };
+      set(".tel-alt", (511+Math.sin(t*0.25)*3.5+Math.random()*0.5).toFixed(1)+" km");
+      set(".tel-dl", (22+Math.random()*14).toFixed(1)+" Gbps");
+      set(".tel-snr", (16+Math.sin(t*0.6)*3+Math.random()*1.2).toFixed(1)+" dB");
+      const az=Math.floor((t*11)%360), el=Math.floor(48+Math.sin(t*0.4)*20);
+      set(".tel-azel", az+"° / "+el+"°");
+      set(".tel-ber", (Math.random()<0.15?"3e-8":"1e-9"));
+      const lk=document.querySelector(".tel-link"); if(lk){ const ok=Math.random()>0.05; lk.textContent=ok?"● LOCK":"◌ SYNC"; lk.style.color=ok?"#5fe08a":"#e8c86a"; }
+      const car=trackedCarId&&trafficCars.get(trackedCarId);
+      set(".tel-tgt", car?(car.lat.toFixed(4)+", "+car.lon.toFixed(4)+"  ·  "+Math.round((car.speed||0)*3.6)+" km/h"):"— sin objetivo —");
+      document.querySelectorAll(".satm-bars i").forEach((b)=>{ b.style.height=(22+Math.random()*78).toFixed(0)+"%"; });
     }
     function setHover(on){
       hoverOn=on; $("tl-hover").classList.toggle("active",on);
@@ -4597,11 +4637,13 @@
       if(typeof showSatMini==="function") showSatMini(true);
       carOrbitHeading=viewer.camera.heading; carOrbitPitch=Math.min(viewer.camera.pitch, Cesium.Math.toRadians(-30));
       carOrbitRange=Math.max(80, Math.min(700, Cesium.Cartesian3.distance(viewer.camera.positionWC, pos)));
+      let smooth=Cesium.Cartesian3.clone(pos);   // objetivo suavizado: la posición del coche salta cada 120ms → lerp = sin shaking
       const tick=()=>{ if(!carOrbitOn) return; const car=trafficCars.get(trackedCarId);
         if(!car||!car.ent){ setCarFollowOff(); return; }
         const p=car.ent.position.getValue(viewer.clock.currentTime);
-        if(p){ if(carSpin) carOrbitHeading+=Cesium.Math.toRadians(0.18);
-          viewer.camera.lookAt(p, new Cesium.HeadingPitchRange(carOrbitHeading, carOrbitPitch, carOrbitRange)); }
+        if(p){ Cesium.Cartesian3.lerp(smooth, p, 0.09, smooth);   // suaviza el seguimiento (elimina el temblor)
+          if(carSpin) carOrbitHeading+=Cesium.Math.toRadians(0.16);
+          viewer.camera.lookAt(smooth, new Cesium.HeadingPitchRange(carOrbitHeading, carOrbitPitch, carOrbitRange)); }
         carOrbitRAF=requestAnimationFrame(tick); };
       tick();
     }
