@@ -4317,10 +4317,10 @@
         // llena las calles del círculo: por nº de nodos y por área, entre 40 y MAX_VEH
         // (varios coches por nodo + alta densidad por km² → permite miles en áreas grandes)
         trafficTargetN = Math.round(Math.max(40, Math.min(Math.min(MAX_VEH_LIMIT, SIMCFG.MAX_VEH), Math.min(trafficInner.length*4, areaKm2*250))) * dmul);
-      } else {   // sin calles (agua/campo o Overpass falló): SIN coches (solo circulan en calles/parqueos)
+      } else {   // sin calles (agua/campo o Overpass no respondió): tráfico libre MODERADO para que se vean
         trafficFree=true; trafficGraph=null; simLights.clear();
-        trafficTargetN = 0;
-        try{ logEvent("Sin calles cargadas en la zona: los vehículos solo circulan sobre calles/parqueos"); }catch{}
+        trafficTargetN = Math.round(Math.max(12, Math.min(Math.min(MAX_VEH_LIMIT, SIMCFG.MAX_VEH), Math.min(45, areaKm2*22))) * dmul);
+        try{ logEvent("Sin calles cargadas (Overpass): tráfico libre. Reintenta o usa una zona con calles en OSM."); }catch{}
       }
       for(let i=0;i<trafficTargetN;i++) spawnCar();   // aparecen cuando terminan de "cargar"
       $("surv-hud").classList.remove("scanning");
