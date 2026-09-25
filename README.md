@@ -57,6 +57,24 @@ Telegram (avisos)┘
 - **TomTom** (`TOMTOM_KEY`, proxied): **tráfico en vivo**, **nombres de calles**, **direcciones
   reales** (reverse-geocode) e **incidentes de tráfico** (accidentes/obras/cierres/atascos con
   descripción y retraso). Fuentes de mapa extra: **Google Normal** (2D) y **Street View**.
+- **🚗 Rastreo y simulación de vehículos**: miles de autos que circulan **sobre las calles reales**
+  (vías de OpenStreetMap/Overpass), con **tamaño real** por coche visible en vista oblicua y
+  altura muestreada de la superficie 3D (no flotan ni van off-road). Icono **fotorrealista
+  top-down** generado por ComfyUI según color/marca/año/tipo, con versión de **noche con faros**
+  y **animación de marcha**. Buscador por **placa/VIN**, seguimiento de **múltiples vehículos**,
+  cámara suavizada y **ORBITAL FEED** con telemetría en vivo. Toggle de etiquetas.
+- **🧠 IA local (privada, sin nube)**: voz, visión, chat de asistente y generación de imágenes
+  corren en tu máquina — **llama.cpp** o **Ollama** (texto/visión, autodetecta el modelo cargado)
+  y **ComfyUI**/**Stable Diffusion** (FLUX/SD/SDXL/SD3) para imágenes. Modo **solo local**
+  (`AI_LOCAL_ONLY=1`): nunca usa OpenAI; OpenAI queda solo como respaldo opcional.
+- **Asistente IA con contexto del mapa**: responde el estado y **ejecuta acciones** (volar a un
+  lugar, activar capas, cambiar preset/mapa, rastrear vuelo/vehículo, controlar el HUD).
+- **Voz — micro de escucha continua**: dicta comandos sin pulsar; lo no reconocido pasa al
+  asistente IA. Incluye comandos para el vehículo seguido y los controles del HUD.
+- **Calles fiables**: los nombres/geometría de calles se piden **por el backend** (sin CORS ni
+  rate-limit del navegador), con **caché en disco 30 días**, respaldo vía la **API principal de
+  OSM** y *circuit breaker*; los Overpass públicos quedan como último recurso. Soporta Overpass
+  local con `OVERPASS_URL`. En pantalla se ve el indicador **CALLES vs modo LIBRE**.
 
 ## 1. Requisitos
 
@@ -64,6 +82,46 @@ Telegram (avisos)┘
 - **API key de Google Maps Platform** con la **Map Tiles API** habilitada.
 - (Opcional pero recomendado) cuenta OpenSky para más cuota.
 - (Opcional) bot de Telegram para las notificaciones.
+
+Todo lo demás es **opcional**: cada servicio se activa solo si pones su clave. La app
+arranca sin ninguna clave (globo base de Cesium, aviones anónimos, IA local, etc.).
+
+## 1.1 Claves y tokens — dónde conseguir cada uno
+
+Todas las claves se leen de variables de entorno (`.env`) o se editan desde el panel
+(**<http://localhost:8000/panel>** → gestor de API keys). **Ninguna clave sale al navegador**:
+el backend hace de proxy. Las marcadas *(reinicio)* requieren reiniciar el servidor tras cambiarlas.
+
+| Servicio | Variable(s) | Para qué | Dónde obtenerla |
+|---|---|---|---|
+| **Google Maps** *(reinicio)* | `GOOGLE_MAPS_API_KEY` | Google 3D Tiles fotorrealistas, mapa 2D y Street View | <https://console.cloud.google.com/google/maps-apis> → habilita **Map Tiles API** (+ Maps JavaScript API para 2D/Street View) → *Credenciales → Crear clave de API* |
+| **Cesium Ion** *(reinicio)* | `CESIUM_ION_TOKEN` | Capas base / terreno de Cesium | <https://cesium.com/ion/tokens> (cuenta gratuita → *Access Tokens*) |
+| **OpenSky** *(reinicio)* | `OPENSKY_CLIENT_ID`, `OPENSKY_CLIENT_SECRET` | Más cuota de posiciones de aviones (evita HTTP 429) | <https://opensky-network.org/> → crea cuenta → *Account → API clients* → **Create OAuth2 client** |
+| **Telegram** *(reinicio)* | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Avisos de rastreo de vuelos | Habla con **@BotFather** → `/newbot` (token); el `chat_id` con el paso de la sección 4 |
+| **AviationStack** | `AVIATIONSTACK_KEY` | Estado de vuelo: terminal, gate, hora real, delays | <https://aviationstack.com/> → *Sign Up Free* → panel → *API Access Key* |
+| **Windy Webcams** | `WINDY_WEBCAMS_KEY` | Webcams en vivo cercanas al mapa | <https://api.windy.com/keys> (regístrate y crea una **Webcams API** key) |
+| **TomTom** | `TOMTOM_KEY` | Tráfico en vivo, nombres de calles, reverse-geocode e incidentes | <https://developer.tomtom.com/> → *Register* → *Dashboard → My Keys* |
+| **AISStream** *(reinicio)* | `AISSTREAM_KEY` | Barcos (AIS) en vivo por WebSocket | <https://aisstream.io/> → *Sign up* → *API Keys → Create* |
+| **NASA FIRMS** | `FIRMS_MAP_KEY` | Focos de incendios activos | <https://firms.modaps.eosdis.nasa.gov/api/map_key/> (introduce tu email → recibes el MAP_KEY) |
+| **OpenAI** *(respaldo)* | `OPENAI_API_KEY`, `OPENAI_MODEL` | Solo si NO usas IA local: voz, asistente e imágenes | <https://platform.openai.com/api-keys> → *Create new secret key* |
+
+### IA local (sin claves — solo host/modelo)
+
+No necesitan API key; son servicios que corren en tu equipo. Configúralos por host:
+
+| Servicio | Variable(s) | Por defecto |
+|---|---|---|
+| **Ollama** (texto/visión) | `OLLAMA_HOST`, `OLLAMA_MODEL`, `OLLAMA_VISION_MODEL` | `http://localhost:11434` (modelo: autodetectado) |
+| **llama.cpp** (llama-server) | `LLAMACPP_HOST` | `http://127.0.0.1:8080` |
+| **ComfyUI** (imágenes) | `COMFY_HOST` | `http://127.0.0.1:8188` |
+| **Stable Diffusion** (AUTOMATIC1111) | `SD_HOST` | `http://localhost:7860` |
+| **IA — modo solo local** | `AI_LOCAL_ONLY`, `AI_BACKEND` | `1` (no usa OpenAI); backend `auto` |
+
+### Servicios SIN clave (no hay que hacer nada)
+
+OpenSky anónimo (aviones), adsbdb (rutas), OpenStreetMap/Overpass/Nominatim (calles),
+Radio Browser (radios), USGS (terremotos), wheretheiss.at (ISS), RainViewer (lluvia),
+ArcGIS/OSM (mapas base) e ip-api.com (ubicación por IP).
 
 ## 2. Instalación
 
